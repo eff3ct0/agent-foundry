@@ -15,6 +15,7 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 - [`templates/`](templates/) - ticket, pull request, Definition of Done, ADR, spec, and agent runbook templates.
 - [`.github/`](.github/) - issue and pull request templates for GitHub.
 - [`init.py`](init.py) + [`placeholders.json`](placeholders.json) - Python 3 stdlib initializer that fills placeholders; `placeholders.json` is the single source of truth for project-level placeholders.
+- [`.github/labels.json`](.github/labels.json) + [`scripts/`](scripts/) - canonical GitHub labels, idempotent synchronization, and PR governance validation.
 
 ## How to use it
 1. **As a GitHub template:** mark this repo as a *Template repository* (Settings -> Template repository). Then use *Use this template -> Create a new repository* for each project.
@@ -26,6 +27,13 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 
 ## Persistence language
 The agent may converse in any language. All persisted project work uses `<REPO_LANGUAGE>`, which defaults to English and is configured in [`placeholders.json`](placeholders.json).
+
+## GitHub governance
+Issues use the forms in `.github/ISSUE_TEMPLATE/` and blank issues are disabled. A pull request must
+contain a closing reference such as `Closes #123`, have exactly one `type:*` label, and link an issue
+with the human-applied `status:approved` label. The governance workflow validates these rules without
+assigning approval. Labels are synchronized with:
+`python3 scripts/sync-github-labels.py --repo OWNER/REPO`.
 
 ## Delegated delivery
 Delegating a task authorizes its routine path without intermediate confirmation: update the tracker,

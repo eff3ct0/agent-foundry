@@ -16,9 +16,13 @@ not this repo's configuration.
 - **Loop contract:** `templates/agent-runbook.md`. **DoD:** `templates/definition-of-done.md`.
 
 ## Ticket types (labels)
+The canonical label catalog is [`.github/labels.json`](.github/labels.json); run
+`python3 scripts/sync-github-labels.py` to create or update labels idempotently.
+
 - `type:product` - template improvements or changes.
 - `type:dx-feedback` - friction found while USING the archetype (see `docs/smoke-test.md`).
 - `type:bug` - defect.
+- `status:approved` - explicit human approval; agents never assign it.
 
 ## Improvement cycle (one task per session)
 1. Take an actionable issue (prioritize `dx-feedback` when it blocks use). Announce `Working #<n>`.

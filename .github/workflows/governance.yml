@@ -1,0 +1,23 @@
+name: PR governance
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # pull_request_target has a read-only token; validate only trusted base-branch code.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Validate PR metadata
+        run: python3 scripts/check-pr-governance.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
