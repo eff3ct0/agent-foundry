@@ -280,6 +280,13 @@ def self_check():
         assert changes.get(fp) == 2, changes
         assert remaining(d, ["PROJECT_NAME", "OTHER"]) == {"OTHER": 1}, "per-key check"
 
+        dry_fp = os.path.join(d, "README.md")
+        with open(dry_fp, "w", encoding="utf-8") as f:
+            f.write("# <PROJECT_NAME>\n")
+        dry_changes = apply_values(d, {"PROJECT_NAME": "Example"}, dry_run=True)
+        assert dry_changes.get(dry_fp) == 1, dry_changes
+        assert open(dry_fp, encoding="utf-8").read() == "# <PROJECT_NAME>\n"
+
         d2 = tempfile.mkdtemp()
         try:
             os.makedirs(os.path.join(d2, "ci"))
