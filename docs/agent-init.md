@@ -107,6 +107,7 @@ match real languages and adjust commands if the project uses custom scripts.
 ## Step 6 - Verify before auto-cleanup
 - `python3 init.py --check` -> **0 pending** manifest placeholders (nonzero when any remain).
 - Base commands pass.
+- Run [`scripts/check-determinism.py`](../scripts/check-determinism.py) to verify offline dry-runs, binding/CI composition, bootstrap planning, label synchronization, startup, and governance checks.
 - Remember: local `templates/` tokens (`<TICKET_ID>`, `<CRITERION_1>`, ...) are intentional, not manifest placeholders.
 - Confirm persisted project content uses `<REPO_LANGUAGE>`.
 

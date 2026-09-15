@@ -74,8 +74,9 @@ def token(key):
 
 def iter_text_files(root):
     for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-        for name in filenames:
+        for name in sorted(filenames):
             if dirpath == root and name in SKIP_ROOT_FILES:
                 continue
             path = os.path.join(dirpath, name)
@@ -98,7 +99,7 @@ def apply_values(root, values, dry_run=False):
         for key, val in values.items():
             new = new.replace(token(key), val)
         changes[path] = n
-        if not dry_run:
+        if not dry_run and new != text:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(new)
     return changes
@@ -188,9 +189,16 @@ def compose_ci(root, stacks, ci_system, dry_run):
         return ok, unknown
     wf_dir = os.path.join(root, ".github", "workflows")
     os.makedirs(wf_dir, exist_ok=True)
-    with open(os.path.join(wf_dir, "ci.yml"), "w", encoding="utf-8") as f:
-        f.write(content)
-    print("CI composed: .github/workflows/ci.yml (jobs: %s)" % ok_str)
+    workflow = os.path.join(wf_dir, "ci.yml")
+    changed = not os.path.exists(workflow)
+    if not changed:
+        with open(workflow, encoding="utf-8") as f:
+            changed = f.read() != content
+    if changed:
+        with open(workflow, "w", encoding="utf-8") as f:
+            f.write(content)
+    print("CI %s: .github/workflows/ci.yml (jobs: %s)" % (
+        "composed" if changed else "already current", ok_str))
     return ok, unknown
 
 
@@ -239,9 +247,17 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False, code_i
             parts.append(f.read().rstrip() + "\n")
     docs_dir = os.path.join(root, "docs")
     os.makedirs(docs_dir, exist_ok=True)
-    with open(os.path.join(docs_dir, "bindings.md"), "w", encoding="utf-8") as f:
-        f.write("\n".join(parts))
-    print("Bindings composed: docs/bindings.md (tasks: %s, secrets: %s, code-intelligence: %s)" % (
+    bindings = os.path.join(docs_dir, "bindings.md")
+    content = "\n".join(parts)
+    changed = not os.path.exists(bindings)
+    if not changed:
+        with open(bindings, encoding="utf-8") as f:
+            changed = f.read() != content
+    if changed:
+        with open(bindings, "w", encoding="utf-8") as f:
+            f.write(content)
+    print("Bindings %s: docs/bindings.md (tasks: %s, secrets: %s, code-intelligence: %s)" % (
+        "composed" if changed else "already current",
         task_tracker, secrets_provider, code_intelligence))
     return used
 

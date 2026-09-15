@@ -32,7 +32,8 @@ and `org/<factory-repo>` exist:
 
 The tool requires authenticated `gh`, is idempotent (existing repositories are
 no-ops), never deletes, and requires consent for repository creation. It is
-separate from `init.py`.
+separate from `init.py`. See [`determinism.md`](determinism.md) for the complete
+repeat-run, rollback, and approval-boundary matrix.
 
 ## 2. Template + `FACTORY_SPEC` pin
 - The **template** is this repo (`<ORG>/factory-template`), marked as a *Template repository*.

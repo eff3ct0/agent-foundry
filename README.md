@@ -12,6 +12,7 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 - [`docs/bootstrap.md`](docs/bootstrap.md) - how to initialize a project from this template.
 - [`docs/agent-init.md`](docs/agent-init.md) - agent-mode initialization procedure.
 - [`docs/org-factory.md`](docs/org-factory.md) - organization layer (`.github` repo and `FACTORY_SPEC` pin).
+- [`docs/determinism.md`](docs/determinism.md) - repeat-run guarantees, limits, and focused checks.
 - [`templates/`](templates/) - ticket, pull request, Definition of Done, ADR, spec, and agent runbook templates.
 - [`.github/`](.github/) - issue and pull request templates for GitHub.
 - [`init.py`](init.py) + [`placeholders.json`](placeholders.json) - Python 3 stdlib initializer that fills placeholders; `placeholders.json` is the single source of truth for project-level placeholders.
