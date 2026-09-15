@@ -57,9 +57,13 @@ si el proyecto usa scripts propios (p. ej. `make test` en vez de los gates por d
 
 ## Paso 7 — Finalizar
 - Primer commit con conventional commits.
-- El script se **autolimpió** (`init.py`, `placeholders.json`, `factory_bootstrap.py`, `ci/` y `providers/`); el `ci.yml` y `docs/bindings.md` compuestos quedan.
+- El script se **autolimpió** (`init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `ci/` y `providers/`); el `ci.yml` y `docs/bindings.md` compuestos quedan.
 - No debe quedar ningún `<KEY>` del manifiesto sin resolver.
 
 ## Nota anti-error
 - **No** rellenes los tokens locales de plantilla; se completan al usar cada `templates/*.md`.
 - **No** borres `.git` salvo que quieras historial propio: `rm -rf .git && git init`.
+
+## Feedback al arquetipo
+Si al inicializar detectás una carencia o ambigüedad de la PLANTILLA de origen, abrí un issue
+`type:dx-feedback` en el repo del template (el de tu `FACTORY_SPEC`). El uso mejora el arquetipo.

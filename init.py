@@ -10,7 +10,7 @@ Uso:
   python3 init.py --check               # ¿quedan placeholders del manifiesto? (para CI, exit!=0 si sí)
   python3 init.py --dry-run             # muestra qué cambiaría, no escribe
   python3 init.py --self-check          # prueba interna del reemplazo
-Opciones: --no-clean (no borrar init.py/placeholders.json/ci/ al final),
+Opciones: --no-clean (no borrar init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/ al final),
           --no-ci (no componer el workflow de CI).
 
 Precedencia de valores: --set  >  --answers  >  prompt interactivo  >  default del manifiesto.
@@ -229,11 +229,16 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False):
 
 def cleanup(root):
     removed = []
-    for f in (SELF, "placeholders.json", "factory_bootstrap.py"):
+    for f in (SELF, "placeholders.json", "factory_bootstrap.py", "MAINTAINERS.md"):
         p = os.path.join(root, f)
         if os.path.exists(p):
             os.remove(p)
             removed.append(f)
+    # Fichero anidado de auto-gobernanza de ESTE repo; no viaja al downstream.
+    smoke = os.path.join(root, "docs", "smoke-test.md")
+    if os.path.exists(smoke):
+        os.remove(smoke)
+        removed.append("docs/smoke-test.md")
     for d in ("ci", "providers"):
         dp = os.path.join(root, d)
         if os.path.isdir(dp):

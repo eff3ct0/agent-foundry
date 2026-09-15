@@ -16,7 +16,7 @@ Dos caminos complementarios; la fuente única de qué placeholders existen es
   - Interactivo: `python3 init.py`
   - No interactivo: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...'`, o `--answers answers.json`, o `--defaults`.
   - `python3 init.py --dry-run` muestra qué cambiaría sin escribir. Al terminar, el script se **autolimpia**
-    (borra `init.py`, `placeholders.json`, `factory_bootstrap.py`, `ci/` y `providers/`); usá `--no-clean` para conservarlos.
+    (borra `init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `ci/` y `providers/`); usá `--no-clean` para conservarlos.
   - Una clave sin valor se deja como `<KEY>` (no se borra), para que el checklist la detecte.
 - **Agente:** corre el script para los valores mecánicos y resuelve los `kind: judgment`
   (`<BRANCHING_MODEL>`, `<TDD_POLICY>`, `<COVERAGE_TARGET>`, `<APPROVAL_GATED_ACTIONS>`) por entrevista o
