@@ -31,12 +31,18 @@ The agent may converse in any language. All persisted project work uses `<REPO_L
 ## GitHub governance
 Issues use the forms in `.github/ISSUE_TEMPLATE/` and blank issues are disabled. A pull request must
 contain a closing reference such as `Closes #123`, have exactly one `type:*` label, and link an issue
-with the human-applied `status:approved` label. The governance workflow validates these rules without
-assigning approval. Labels are synchronized with:
+with `status:approved`. The governance workflow validates these rules without assigning approval. The
+label may be added by an agent only through the fail-closed delegated-approval protocol: current direct
+instruction naming the exact issue and action, target-host maintainer/authorized-approver evidence,
+`MAINTAIN` or `ADMIN` actor capability, one exact add attempt, and target-host readback. Otherwise the
+human applies it directly. Labels are synchronized with:
 `python3 scripts/sync-github-labels.py --repo OWNER/REPO`.
 
 ## Delegated delivery
 Delegating a task authorizes its routine path without intermediate confirmation: update the tracker,
-implement, verify, commit, push, open the PR, and leave evidence. It does not authorize `status:approved`,
-review approval, merge, production deployment, destructive operations, or release publication. Check the
-contract with `python3 scripts/check-delivery-contract.py`.
+implement, verify, commit, push, open the PR, and leave evidence. It does not authorize review approval,
+merge, production deployment, destructive operations, or release publication. `status:approved` remains
+protected and is allowed only through the evidence-based protocol above; this change does not approve
+existing work. Check the contract with `python3 scripts/check-delivery-contract.py`.
+The offline delegated-approval cases can be run directly with
+`python3 scripts/check-delivery-contract.py --approval-self-check`; it performs no GitHub mutation.

@@ -3,7 +3,7 @@
 
 ## Ticket
 Closes #<TICKET_ID>
-<!-- guide: use a GitHub closing reference; the linked issue must carry the human status:approved label -->
+<!-- guide: use a GitHub closing reference; the linked issue must carry status:approved under its protected approval contract -->
 
 ## PR type
 - Add exactly one `type:*` label to this pull request.

@@ -22,7 +22,8 @@ The canonical label catalog is [`.github/labels.json`](.github/labels.json); run
 - `type:product` - template improvements or changes.
 - `type:dx-feedback` - friction found while USING the archetype (see `docs/smoke-test.md`).
 - `type:bug` - defect.
-- `status:approved` - explicit human approval; agents never assign it.
+- `status:approved` - protected approval; agents may assign it only through the
+  fail-closed delegated-approval protocol in `AGENT.md` and the bound task provider.
 
 ## Improvement cycle (one task per session)
 1. Take an actionable issue (prioritize `dx-feedback` when it blocks use). Announce `Working #<n>`.
