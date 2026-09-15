@@ -2,7 +2,7 @@
 
 Validate that a COLD agent, given only the repository and a minimal kickoff,
 initializes itself according to the contract. Every friction point becomes a
-`type:dx-feedback` issue in the template repository.
+[`type:dx-feedback` issue](../.github/ISSUE_TEMPLATE/dx-feedback.yml) in the template repository.
 
 ## 1. Create a project from the template
 ```
@@ -35,5 +35,6 @@ gh repo delete <YOUR_ACCOUNT>/factory-smoke-test --yes
 ```
 
 ## 5. Feedback (the improvement engine)
-Open a `type:dx-feedback` issue in `eff3ct0/factory-template` for every point
-where extra intervention was needed or `docs/agent-init.md` was ambiguous.
+Open a [`type:dx-feedback` issue](../.github/ISSUE_TEMPLATE/dx-feedback.yml) in
+`eff3ct0/factory-template` for every point where extra intervention was needed or
+`docs/agent-init.md` was ambiguous.

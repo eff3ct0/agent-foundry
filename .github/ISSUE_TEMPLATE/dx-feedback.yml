@@ -1,0 +1,44 @@
+name: DX feedback
+description: Report downstream usage friction
+title: "[DX feedback] "
+labels:
+  - type:dx-feedback
+body:
+  - type: textarea
+    id: friction
+    attributes:
+      label: Smallest reproduction / friction
+      description: Describe the smallest reliable reproduction or the exact point of friction.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the relevant version, platform, and configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: setup-workflow
+    attributes:
+      label: Setup / workflow context
+      description: Explain how the project was initialized and the workflow that exposed the friction.
+    validations:
+      required: true
