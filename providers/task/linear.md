@@ -1,5 +1,9 @@
 ## Linear
 
+> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
+> **Capacidad:** `task`
+> **Proveedor:** `linear`
+
 **Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en Linear (equipo/proyecto `<TRACKER_KEY>`). El agente DEBE crear, actualizar y transicionar issues ahí y NO puede usar otro tracker.
 
 **Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: crear issue, comentar, cambiar estado, asociar al proyecto/ciclo.

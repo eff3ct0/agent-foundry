@@ -1,5 +1,9 @@
 ## Jira
 
+> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
+> **Capacidad:** `task`
+> **Proveedor:** `jira`
+
 **Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en Jira (proyecto/tablero `<TRACKER_KEY>`). El agente DEBE crear, actualizar y transicionar sus tareas ahí y NO puede usar otro tracker.
 
 **Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API); da igual cuál. Opera sobre las operaciones semánticas de Jira: crear issue, comentar, transicionar de estado, enlazar al epic `<EPIC_ID>`.

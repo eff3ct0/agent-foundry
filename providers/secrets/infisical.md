@@ -13,3 +13,6 @@
 - NUNCA persistir, loguear ni commitear el valor de un secreto.
 - NO copiar secretos a `.env`, archivos de config ni al historial de la sesión.
 - NO usar otra fuente de secretos que no sea Infisical.
+> **Instancia del contrato:** [`_contract.md`](../providers/secrets/_contract.md)
+> **Capacidad:** `secrets`
+> **Proveedor:** `infisical`

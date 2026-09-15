@@ -1,5 +1,9 @@
 ## GitHub Projects
 
+> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
+> **Capacidad:** `task`
+> **Proveedor:** `github-projects`
+
 **Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en GitHub Projects v2 (tablero `<TRACKER_KEY>`). El agente DEBE crear/actualizar los ítems y mover su estado ahí, y NO puede usar otro tracker.
 
 **Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: crear ítem (o vincular una issue existente), fijar campos, cambiar el campo de estado.

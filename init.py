@@ -28,7 +28,9 @@ mapeando cada stack a su receta de ci/recipes.json (un job por lenguaje).
 
 Composición de bindings: TASK_TRACKER y SECRETS_PROVIDER (enums) seleccionan un
 fragmento del catálogo providers/ (task/ y secrets/) que se compone en
-docs/bindings.md — el contrato vinculante de proveedores del proyecto. Se compone
+docs/bindings.md — el contrato vinculante de proveedores del proyecto. La forma
+abstracta está en providers/task/_contract.md y providers/secrets/_contract.md;
+_contract.md nunca se selecciona. Se compone
 ANTES de apply_values para que los tokens (<TRACKER_KEY>, <SECRETS_PATH>, ...) se
 rellenen dentro del bindings.md recién escrito.
 """
@@ -56,6 +58,9 @@ BINDINGS_HEADER = (
     "# Bindings — proveedores obligatorios de este proyecto\n\n"
     "Estas vinculaciones son de cumplimiento obligatorio para cualquier agente, "
     "sea cual sea su harness.\n"
+    "La forma de cada instancia está definida por "
+    "providers/task/_contract.md y providers/secrets/_contract.md; "
+    "el harness aporta el acceso y el binding aporta las reglas.\n"
 )
 
 
@@ -192,9 +197,10 @@ def compose_ci(root, stacks, ci_system, dry_run):
 
 def _binding_fragment(root, capability, name):
     """Ruta al fragmento providers/<capability>/<name>.md; si no existe, avisa y
-    cae al custom.md de esa capacidad. Devuelve la ruta o None si no hay ninguno."""
+    cae al custom.md de esa capacidad. `_contract.md` nunca es seleccionable.
+    Devuelve la ruta o None si no hay ninguno."""
     frag = os.path.join(root, "providers", capability, "%s.md" % name)
-    if os.path.exists(frag):
+    if name != "_contract" and os.path.exists(frag):
         return frag
     fallback = os.path.join(root, "providers", capability, "custom.md")
     if os.path.exists(fallback):
@@ -288,8 +294,16 @@ def self_check():
             used = compose_bindings(d3, "foo", "none", dry_run=False)
             bind = open(os.path.join(d3, "docs", "bindings.md"), encoding="utf-8").read()
             assert "# Bindings — proveedores obligatorios de este proyecto" in bind, bind
+            assert "providers/task/_contract.md" in bind, bind
+            assert "providers/secrets/_contract.md" in bind, bind
             assert "Tareas en Foo." in bind and "Sin secretos reales." in bind, bind
             assert len(used) == 2, used
+
+            with open(os.path.join(d3, "providers", "task", "_contract.md"), "w", encoding="utf-8") as f:
+                f.write("NO DEBE COMPONERSE")
+            with open(os.path.join(d3, "providers", "task", "custom.md"), "w", encoding="utf-8") as f:
+                f.write("FALLBACK CUSTOM")
+            assert _binding_fragment(d3, "task", "_contract").endswith("custom.md")
         finally:
             shutil.rmtree(d3)
 

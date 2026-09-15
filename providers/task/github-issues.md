@@ -1,5 +1,9 @@
 ## GitHub Issues
 
+> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
+> **Capacidad:** `task`
+> **Proveedor:** `github-issues`
+
 **Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en GitHub Issues del repo (`<TRACKER_KEY>`). El agente DEBE crear, actualizar y cerrar issues ahí y NO puede usar otro tracker.
 
 **Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: abrir issue, comentar, aplicar/quitar labels, cerrar.
