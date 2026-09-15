@@ -57,6 +57,8 @@ No es específico de ningún lenguaje ni stack.
     default, no un override de lo específico del proyecto.
 11. **Plantillas de issues:** al crear una issue es OBLIGATORIO usar la plantilla correspondiente de
     `.github/ISSUE_TEMPLATE/` (`task` o `bug`); están prohibidas las issues en blanco o en formato libre.
+12. **Plantilla de PR:** al abrir un PR es OBLIGATORIO usar `.github/pull_request_template.md`; están
+   prohibidos los PRs sin su estructura. Con GitHub, rellená la plantilla y usá `gh pr create --body-file`.
 
 ## Bindings (contrato de proveedores)
 Las capacidades del proyecto están **vinculadas a proveedores concretos** en

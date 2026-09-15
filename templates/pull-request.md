@@ -6,6 +6,14 @@
 ## Ticket
 Cierra `<TICKET_ID>`.
 
+## Tipo de PR
+- [ ] Bug fix
+- [ ] Feature
+- [ ] Documentation only
+- [ ] Refactor
+- [ ] Maintenance/tooling
+- [ ] Breaking change
+
 ## Cambios
 - <CAMBIO_1>
 - <CAMBIO_2>
@@ -14,6 +22,7 @@ Cierra `<TICKET_ID>`.
 ```
 <TEST_CMD>
 <BUILD_CMD>
+<LINT_CMD>
 <TYPECHECK_CMD>
 ```
 Comprobación e2e: <PASOS_EN_ENV>
@@ -23,7 +32,9 @@ Comprobación e2e: <PASOS_EN_ENV>
 - Rollback: <CÓMO_REVERTIR>
 
 ## Definition of Done
-- [ ] Ver [`definition-of-done.md`](definition-of-done.md).
+- [ ] Ver la checklist completa en [`definition-of-done.md`](definition-of-done.md).
+- [ ] No quedan placeholders ni secretos.
+- [ ] Review aprobado.
 
 ## Capturas OPCIONAL
 <!-- guía: adjuntar si aplica; borrar la sección si no -->

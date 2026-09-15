@@ -35,7 +35,8 @@ estado externalizado, verificación-trinquete, paradas explícitas): no las repi
    blanco ni con un formato libre.
 3. **Ejecutar SOLO esa** tarea (nada de dispersión).
 4. **Verificar** con señales reales (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>` + e2e si aplica).
-5. **Cumplir** la [Definition of Done](definition-of-done.md) y mover a *Done* con evidencia.
+5. **Cumplir** la [Definition of Done](definition-of-done.md), entregar mediante un PR conforme a
+   `.github/pull_request_template.md` y mover a *Done* con evidencia.
 6. **Terminar** la sesión (una tarea = una sesión).
 
 ## Checkpoint antes de compactación (tarea a medias)
