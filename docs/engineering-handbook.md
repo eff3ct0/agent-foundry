@@ -32,6 +32,7 @@ Standards as checklists. Language-agnostic; fill `<UPPER_SNAKE>` during bootstra
 - [ ] Make module boundaries explicit.
 - [ ] Dependencies point toward the domain, not the reverse.
 - [ ] Record significant decisions as ADRs -> [`templates/adr.md`](../templates/adr.md).
+- [ ] For structural questions, prefer an available index over blind grep; keep code intelligence optional.
 
 ## Documentation
 - [ ] Update the README.

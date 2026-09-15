@@ -25,6 +25,7 @@ Values live in:
 - **Project coordinates** in [`AGENT.md`](../AGENT.md): `<PROJECT_NAME>`, `<REPO_URLS>`, `<LANGUAGES_AND_FRAMEWORKS>`, `<PACKAGE_MANAGER>`, `<REPO_LANGUAGE>`.
 - **Base commands:** `<BUILD_CMD>`, `<TEST_CMD>`, `<LINT_CMD>`, `<TYPECHECK_CMD>`, `<RUN_CMD>`.
 - **Tracker:** `<TRACKER>`, `<TRACKER_KEY>`, `<EPIC_ID>`.
+- **Code intelligence:** `<CODE_INTELLIGENCE>` (optional; defaults to `none`).
 - **Branches:** `<BRANCHING_MODEL>`, `<INTEGRATION_BRANCH>`, `<BRANCH_NAMING>`.
 - **Environments:** `<ENVIRONMENTS>`, `<ENV>`.
 - **Commit identity:** `<COMMIT_IDENTITY>`.

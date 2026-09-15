@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for project-level <KEY> placeholders. init.py consumes it for replacement and --check, and it guides the agent. It does not include local template tokens (TICKET_ID, CRITERION_1, DATE, NNN, ALTERNATIVE_1, SUBTASK_1, RISK, CHANGE_1, ENV_STEPS, ENV, CONSEQUENCE_*) filled when each template is used, or convention examples (PLACEHOLDER, UPPER_SNAKE). kind: mechanical=known value; judgment=requires a decision (a good candidate for agent reasoning or discussion). TASK_TRACKER and SECRETS_PROVIDER are enums: their values select the provider catalog fragments that init.py composes into docs/bindings.md.",
+  "_comment": "Single source of truth for project-level <KEY> placeholders. init.py consumes it for replacement and --check, and it guides the agent. It does not include local template tokens (TICKET_ID, CRITERION_1, DATE, NNN, ALTERNATIVE_1, SUBTASK_1, RISK, CHANGE_1, ENV_STEPS, ENV, CONSEQUENCE_*) filled when each template is used, or convention examples (PLACEHOLDER, UPPER_SNAKE). kind: mechanical=known value; judgment=requires a decision (a good candidate for agent reasoning or discussion). TASK_TRACKER, SECRETS_PROVIDER, and CODE_INTELLIGENCE are enums: their values select provider catalog fragments that init.py composes into docs/bindings.md.",
   "placeholders": [
     {"key": "PROJECT_NAME", "prompt": "Project name", "default": "", "kind": "mechanical", "required": true},
     {"key": "REPO_LANGUAGE", "prompt": "Persistence language (ISO code, e.g. en or es)", "default": "en", "kind": "judgment", "required": true},
@@ -14,6 +14,7 @@
     {"key": "EPIC_ID", "prompt": "Default epic or milestone ID (if applicable)", "default": "", "kind": "mechanical", "required": false},
     {"key": "TASK_TRACKER", "prompt": "Task provider", "default": "", "kind": "mechanical", "required": true, "enum": ["jira", "github-issues", "github-projects", "linear", "custom"]},
     {"key": "SECRETS_PROVIDER", "prompt": "Secrets manager", "default": "none", "kind": "mechanical", "required": false, "enum": ["infisical", "vault", "doppler", "none", "custom"]},
+    {"key": "CODE_INTELLIGENCE", "prompt": "Structural code intelligence provider", "default": "none", "kind": "mechanical", "required": false, "enum": ["none", "codegraph", "custom"]},
     {"key": "SECRETS_PATH", "prompt": "Secret path or mount in the manager (if applicable)", "default": "", "kind": "mechanical", "required": false},
     {"key": "BRANCHING_MODEL", "prompt": "Branching model (trunk-based / GitHub flow / ...)", "default": "trunk-based", "kind": "judgment", "required": false},
     {"key": "BRANCH_NAMING", "prompt": "Branch naming convention", "default": "<type>/<TICKET_ID>-<short-slug>", "kind": "mechanical", "required": false},

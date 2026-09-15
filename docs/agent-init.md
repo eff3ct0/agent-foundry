@@ -27,17 +27,21 @@ value; `judgment` = decision to justify).
 Fix the **bound capabilities** (provider contract) before filling values:
 - **Tasks:** `<TASK_TRACKER>` (`jira` / `github-issues` / `github-projects` / `linear` / `custom`) and board `<TRACKER_KEY>`.
 - **Secrets:** `<SECRETS_PROVIDER>` (`infisical` / `vault` / `doppler` / `none` / `custom`) and `<SECRETS_PATH>` when applicable.
+- **Code intelligence:** `<CODE_INTELLIGENCE>` (`none` / `codegraph` / `custom`), defaulting to `none` so the template adds no dependency unless selected.
 - **Brownfield:** infer from the repository - `.jira`/Jira config -> `jira`; `.github` issues or projects -> `github-issues`/`github-projects`; Linear -> `linear`; `infisical.json` -> `infisical`, `.vault`/config -> `vault`, `doppler.yaml` -> `doppler`; no real secrets -> `none`.
 
 The shape of each fragment is defined by the abstract capability contracts:
 [`providers/task/_contract.md`](../providers/task/_contract.md),
 [`providers/secrets/_contract.md`](../providers/secrets/_contract.md), and
+[`providers/code-intel/_contract.md`](../providers/code-intel/_contract.md) when
+code intelligence is selected, plus
 [`ci/_contract.md`](../ci/_contract.md). Concrete fragments are instances of
 those contracts; `_contract.md` is never a selectable provider.
 
 When `init.py` runs, these enums select catalog fragments from [`providers/`](../providers/)
 and compose [`docs/bindings.md`](bindings.md), whose header restates the shape
-source. The agent is then **bound by that contract** and must use it exclusively.
+source. The agent is then **bound by that contract** and must use it exclusively. Code intelligence is
+optional: `none` uses native repository tools and does not compose a provider fragment.
 
 ## Step 2a - Generate a custom binding
 
