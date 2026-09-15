@@ -1,4 +1,4 @@
-# project-archetype
+# <PROJECT_NAME>
 
 **Language-agnostic** repository template (any language/stack) defining how software development work is
 executed, written **for AI agents** and readable by humans. It is intended for use as a **GitHub template
@@ -34,3 +34,9 @@ contain a closing reference such as `Closes #123`, have exactly one `type:*` lab
 with the human-applied `status:approved` label. The governance workflow validates these rules without
 assigning approval. Labels are synchronized with:
 `python3 scripts/sync-github-labels.py --repo OWNER/REPO`.
+
+## Delegated delivery
+Delegating a task authorizes its routine path without intermediate confirmation: update the tracker,
+implement, verify, commit, push, open the PR, and leave evidence. It does not authorize `status:approved`,
+review approval, merge, production deployment, destructive operations, or release publication. Check the
+contract with `python3 scripts/check-delivery-contract.py`.

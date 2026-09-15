@@ -9,8 +9,9 @@
 MUST NOT use another tracker.
 
 **Agent interaction:** use the mechanism provided by the harness (MCP, CLI, or
-API). Semantic operations are opening issues, commenting, applying/removing
-labels, and closing.
+API). Semantic operations are reading, opening, updating, commenting on,
+labeling, and closing issues. GitHub CLI examples are acceptable when the
+harness does not provide a native operation.
 
 **Mandatory template:** every new issue MUST use the corresponding template in
 `.github/ISSUE_TEMPLATE/` (`task.yml` for product work or `bug.yml` for defects).
@@ -29,6 +30,8 @@ or `--label "type:bug"`. Do not use free-form `--body` or omit the body.
 - At start, mark the issue in progress and comment the plan; at close, reference the commit/PR.
 - Leave progress/checkpoint comments on the issue.
 - One issue = one unit of work. Every commit/PR references `#<number>`.
+- A delegated issue authorizes routine delivery without intermediate confirmation: update the issue, implement, verify, commit, push, open the PR, and comment the evidence.
+- The human must apply `status:approved`; agents never assign that label. Merge, production deployment, destructive operations, release publication, and review approval remain gated.
 
 **Prohibitions:**
 - Do not open tasks in Jira, Linear, or another system.

@@ -14,6 +14,7 @@ verification, not in the agent.
 3. **Verification ratchet.** A task is done only when its check / Definition of Done passes. Fix root causes rather than symptoms and add a regression when useful.
 4. **Explicit stops.** Stop when no actionable task remains or a step requires human judgment or approval (`<APPROVAL_GATED_ACTIONS>`). Mark it `BLOCKED` and hand control back. Never invent consent.
 5. **Persistence language.** Conversation language is independent. All persisted work (specs, docs, tickets, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
+6. **Delegated delivery.** A delegated task authorizes routine delivery without intermediate confirmation: update the tracker, implement, verify, commit, push, open the pull request, and leave evidence in the tracker. Approval gates remain explicit.
 
 ## Principle: the session is disposable
 **Durable state** lives in `<TRACKER>` and VCS, never only in session memory.
@@ -24,8 +25,21 @@ Each session takes one task to a durable point, leaves state, and ends.
 2. **Move** the task to *In Progress* and comment the plan. If a task must be created, using the corresponding issue template is MANDATORY; blank or free-form issues are prohibited.
 3. **Execute ONLY that** task (no scope drift).
 4. **Verify** with real signals (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>`, plus e2e when applicable).
-5. **Meet** the [Definition of Done](definition-of-done.md), deliver through a PR using `.github/pull_request_template.md`, and move the task to *Done* with evidence.
-6. **Finish** the session (one task = one session).
+5. **Deliver** the routine result without pausing for confirmation: create a conventional commit referencing `<TICKET_ID>`, push the ticket branch, open the PR with `.github/pull_request_template.md`, and update the ticket with the commit, PR, and verification evidence.
+6. **Close** only after the [Definition of Done](definition-of-done.md) passes; move the task to *Done* with evidence. Opening a PR is not merging it.
+7. **Finish** the session (one task = one session).
+
+### Approval boundaries
+- Routine delivery includes issue/project updates, implementation, verification, commit, push, and PR creation.
+- Human decisions remain gated: applying `status:approved`, approving review, merge, production deployment, destructive operations, and release publication.
+- When a routine flow reaches a gate, mark the task `BLOCKED: requires approval`, leave the exact next step in the tracker, and stop.
+
+### GitHub binding
+When the bound tracker is GitHub, create issues from the repository form (or a filled template with
+`gh issue create --body-file`), use a closing reference such as `Closes #<TICKET_ID>` in the PR, add
+exactly one `type:*` label to the PR, and require the human `status:approved` label on the linked issue.
+Use `gh pr create --body-file` for the PR. The governance workflow checks these rules; it never assigns
+approval or merges the PR.
 
 ## Checkpoint before compaction (unfinished task)
 - Commit WIP.
