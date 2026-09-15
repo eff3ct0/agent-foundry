@@ -4,6 +4,9 @@ Procedimiento para que un **agente** convierta esta plantilla en un proyecto rea
 rellenar los `<PLACEHOLDER>` con criterio, incluido el **mapeo del CI por stack**.
 Complementa [`bootstrap.md`](bootstrap.md) (visión general); acá va el paso a paso operativo.
 
+> Punto de entrada: `python3 start.py` rutea a este documento cuando detecta modo **SETUP**
+> (instancia sin inicializar). Es lo primero que corre un agente al abrir el repo.
+
 **Precondición:** leé [`AGENT.md`](../AGENT.md) y [`placeholders.json`](../placeholders.json).
 `placeholders.json` es la **fuente única** de qué placeholders existen y de su `kind`
 (`mechanical` = valor conocido; `judgment` = decisión a justificar).

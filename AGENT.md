@@ -4,6 +4,9 @@ Documento **principal** para agentes (y humanos) que trabajan en `<PROJECT_NAME>
 los `<PLACEHOLDER>` se rellenan al inicializar el proyecto (ver [`docs/bootstrap.md`](docs/bootstrap.md)).
 No es específico de ningún lenguaje ni stack.
 
+> **Lo PRIMERO al abrir este repo:** corré `python3 start.py` y seguí lo que indique. Detecta el modo
+> (inicializar vs. trabajar) e imprime el próximo paso; no ejecuta acciones por sí mismo.
+
 > Convención de placeholders: `<UPPER_SNAKE>` = valor a rellenar; `<!-- guía: … -->` = instrucción para
 > quien rellena; una sección marcada `OPCIONAL` se borra si no aplica.
 

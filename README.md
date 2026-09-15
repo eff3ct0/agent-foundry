@@ -6,6 +6,7 @@ como **GitHub template repository**: creás un repo nuevo a partir de esta estru
 `<PLACEHOLDER>`.
 
 ## Qué incluye
+- [`start.py`](start.py) — arranque: `python3 start.py` detecta el estado del repo (inicializar vs. trabajar) e imprime el próximo paso. Es lo primero que corre un agente; permanente (no se autolimpia).
 - [`AGENT.md`](AGENT.md) — entrypoint principal; reglas operativas y referencias al resto.
 - [`docs/workflow.md`](docs/workflow.md) — flujo de trabajo end-to-end.
 - [`docs/engineering-handbook.md`](docs/engineering-handbook.md) — estándares de ingeniería.
