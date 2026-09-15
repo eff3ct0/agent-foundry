@@ -25,6 +25,8 @@ issue to the project. Do not create blank or free-form issues.
 - When applicable, each item is backed by a linked repository issue for commit/PR references.
 - At start, move the item to *In Progress* and comment the plan on the linked issue; at close, move it to *Done*.
 - One card = one unit of work.
+- A delegated card authorizes routine delivery without intermediate confirmation: update the card and linked issue, implement, verify, commit, push, open the PR, and leave evidence.
+- The human must apply `status:approved`; agents never assign that label. Merge, production deployment, destructive operations, release publication, and review approval remain gated.
 
 **Prohibitions:**
 - Do not open tasks in Jira, Linear, or another board.
