@@ -6,6 +6,9 @@ No es específico de ningún lenguaje ni stack.
 
 > **Lo PRIMERO al abrir este repo:** corré `python3 start.py` y seguí lo que indique. Detecta el modo
 > (inicializar vs. trabajar) e imprime el próximo paso; no ejecuta acciones por sí mismo.
+>
+> Si el harness soporta hooks de sesión, [`hooks/README.md`](hooks/README.md) documenta una integración
+> opcional que delega en `start.py`; la regla manual anterior sigue siendo el fallback universal.
 
 > Convención de placeholders: `<UPPER_SNAKE>` = valor a rellenar; `<!-- guía: … -->` = instrucción para
 > quien rellena; una sección marcada `OPCIONAL` se borra si no aplica.
@@ -32,6 +35,7 @@ No es específico de ningún lenguaje ni stack.
 - [`docs/agent-init.md`](docs/agent-init.md) — **modo agente**: procedimiento para inicializar el proyecto desde la plantilla (detección de stack, bindings, verificación).
 - [`templates/`](templates/) — plantillas reutilizables: ticket, pull request, Definition of Done, ADR,
   y el runbook de agente, que es el **contrato de ejecución en loop** del proyecto (reglas de convergencia).
+- [`hooks/README.md`](hooks/README.md) — adapters opcionales de arranque por harness; siempre delegan en `start.py`.
 
 ## Reglas operativas (núcleo, agnóstico)
 1. **El estado durable vive fuera de la sesión:** en el tracker (`<TRACKER>`) y en el control de versiones.
