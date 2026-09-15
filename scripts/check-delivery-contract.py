@@ -54,6 +54,8 @@ def delegated_approval_errors(evidence, target_issue):
         errors.append("principal authority must come from the target host")
     if principal.get("role") not in ALLOWED_PRINCIPAL_ROLES:
         errors.append("principal lacks target-host maintainer authority")
+    if instruction.get("principal") != principal.get("subject"):
+        errors.append("instruction principal is not bound to target-host evidence")
     if actor.get("subject") != principal.get("subject"):
         errors.append("authenticated actor is not the authorized principal")
     if actor.get("capability") not in ALLOWED_ACTOR_CAPABILITIES:
@@ -79,7 +81,7 @@ def delegated_approval_allowed(evidence, target_issue):
 def approval_self_check():
     valid = {
         "instruction": {"source": "direct-human", "current": True, "issue": 32,
-                         "action": APPROVAL_ACTION},
+                         "action": APPROVAL_ACTION, "principal": "human-1"},
         "principal": {"evidence_source": "target-host", "subject": "human-1",
                        "role": "MAINTAINER"},
         "actor": {"subject": "human-1", "capability": "ADMIN"},
