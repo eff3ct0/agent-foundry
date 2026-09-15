@@ -8,6 +8,23 @@ ningún `<PLACEHOLDER>` sin resolver.
 - O copiar el contenido a un repo nuevo **sin el historial** de esta plantilla.
 
 ## 2. Rellenar todos los `<PLACEHOLDER>`
+
+Dos caminos complementarios; la fuente única de qué placeholders existen es
+[`placeholders.json`](../placeholders.json):
+
+- **Script (`init.py`, Python 3 stdlib):** rellena de forma determinista y repetible.
+  - Interactivo: `python3 init.py`
+  - No interactivo: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...'`, o `--answers answers.json`, o `--defaults`.
+  - `python3 init.py --dry-run` muestra qué cambiaría sin escribir. Al terminar, el script se **autolimpia**
+    (borra `init.py` y `placeholders.json`); usá `--no-clean` para conservarlos.
+  - Una clave sin valor se deja como `<KEY>` (no se borra), para que el checklist la detecte.
+- **Agente:** corre el script para los valores mecánicos y resuelve los `kind: judgment`
+  (`<BRANCHING_MODEL>`, `<TDD_POLICY>`, `<COVERAGE_TARGET>`, `<APPROVAL_GATED_ACTIONS>`) por entrevista o
+  infiriéndolos de un repositorio existente.
+
+> Los tokens **locales de plantilla** (`<TICKET_ID>`, `<CRITERIO_1>`, `<DATE>`, `<NNN>`, `<ALTERNATIVA_1>`…)
+> NO se rellenan aquí: se completan cada vez que copiás un `templates/*.md`. Por eso no están en el manifiesto.
+
 Dónde viven los valores a rellenar:
 - **Coordenadas del proyecto** en [`AGENT.md`](../AGENT.md): `<PROJECT_NAME>`, `<REPO_URLS>`, `<LANGUAGES_AND_FRAMEWORKS>`, `<PACKAGE_MANAGER>`.
 - **Comandos base**: `<BUILD_CMD>`, `<TEST_CMD>`, `<LINT_CMD>`, `<TYPECHECK_CMD>`, `<RUN_CMD>`.
@@ -41,7 +58,13 @@ Dónde viven los valores a rellenar:
 - [ ] `AGENT.md` coherente con el proyecto real.
 
 ### Detectar placeholders pendientes
-```
-grep -rn "<[A-Z_]\+>" . --include=*.md
-```
-(o con ripgrep: `rg "<[A-Z_]+>"`)
+- **Durante el bootstrap** (antes de la autolimpieza), canónico y apto como gate de CI (sale con código ≠0
+  si queda alguno del manifiesto):
+  ```
+  python3 init.py --check
+  ```
+- **En el proyecto ya inicializado** (init.py ya no está), verificación rápida — recordá que los tokens
+  locales en `templates/` son intencionales:
+  ```
+  rg "<[A-Z_]+>" .      # o: grep -rn "<[A-Z_]\+>" . --include=*.md
+  ```
