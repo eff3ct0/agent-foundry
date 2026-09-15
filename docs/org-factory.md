@@ -10,12 +10,27 @@ como **default** a cualquier repo de la org que no tenga los suyos. Sembralo cop
 de este arquetipo (`.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md`).
 - Alcance: solo esos ficheros concretos; NO propaga `AGENT.md`/`CLAUDE.md` — para eso, el pin de abajo.
 
+## Herramienta de bootstrap (idempotente)
+`factory_bootstrap.py` asegura que existan los repos de organización `org/.github` y `org/<factory-repo>`:
+
+- `python3 factory_bootstrap.py --org <ORG> --ensure` — interactivo: pregunta antes de crear lo que falte.
+- `--yes` — no interactivo (crea sin preguntar).
+- `--no-create` — solo reporta, nunca crea.
+- `--plan` — offline: imprime los targets y la intención, sin llamar a `gh`.
+- `--factory-repo <nombre>` — nombre del repo de la fábrica (default: `factory`).
+- `--visibility public|private` — visibilidad al crear (default: `private`).
+
+Nota: requiere `gh` autenticado; es idempotente (repos existentes → no-op); crear repos es una acción
+consentida (por eso `--yes`/prompt). No forma parte de `init.py`.
+
 ## 2. Template + pin `FACTORY_SPEC`
 - Marcá `org/factory` (este arquetipo) como **Template repository** y **etiquetá versiones** (`v1`, `v2`, …).
 - Cada proyecto se crea con *Use this template* y declara su baseline en [`AGENT.md`](../AGENT.md):
   `FACTORY_SPEC = org/factory@v1`.
 - Regla: el repo se rige por su `FACTORY_SPEC`; el contenido local del repo **sobreescribe** el baseline
   cuando difiere. Para adoptar una versión nueva del spec: re-pinnear `FACTORY_SPEC` y reconciliar cambios.
+- Política: el flag determinista `FACTORY_REQUIRED` (manifiesto) hace que `init.py` falle-cerrado si
+  `FACTORY_SPEC` está vacío. La *existencia* del repo la asegura `factory_bootstrap.py`, no `init.py` (que es offline).
 
 ## Evolución (no incluida en v1)
 - Defaults de proveedores fusionados (`factory.defaults.json` en `org/factory`, herencia org ← repo).

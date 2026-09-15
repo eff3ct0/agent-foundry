@@ -3,6 +3,7 @@
   "placeholders": [
     {"key": "PROJECT_NAME", "prompt": "Nombre del proyecto", "default": "", "kind": "mechanical", "required": true},
     {"key": "FACTORY_SPEC", "prompt": "Baseline de organizacion que rige el repo (org/factory@vX; vacio si no aplica)", "default": "", "kind": "mechanical", "required": false},
+    {"key": "FACTORY_REQUIRED", "prompt": "Pertenencia a la fabrica obligatoria? (true/false: si true, FACTORY_SPEC es obligatorio)", "default": "false", "kind": "mechanical", "required": false, "enum": ["true", "false"]},
     {"key": "INTEGRATION_BRANCH", "prompt": "Rama de integracion", "default": "main", "kind": "mechanical", "required": true},
     {"key": "REPO_URLS", "prompt": "URL(s) del/los repositorio(s)", "default": "", "kind": "mechanical", "required": false},
     {"key": "LANGUAGES_AND_FRAMEWORKS", "prompt": "Lenguajes y frameworks del stack", "default": "", "kind": "mechanical", "required": false},

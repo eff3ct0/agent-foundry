@@ -18,6 +18,10 @@ Solo se reemplazan las claves del MANIFIESTO. Los tokens locales de plantilla
 (<TICKET_ID>, <CRITERIO_1>, <DATE>, <NNN>, ...) se dejan para rellenar al usar cada template.
 Una clave sin valor NO se toca (queda como <KEY> y --check la marca), no se borra.
 
+Política FACTORY_REQUIRED: si FACTORY_REQUIRED=true, init.py falla-cerrado (determinista,
+offline) cuando FACTORY_SPEC está vacío. init.py NO verifica ni crea repos de org: el
+aprovisionamiento real lo hace `factory_bootstrap.py` (aparte, idempotente, usa `gh`).
+
 Composición de CI: si CI_SYSTEM es GitHub Actions y CI_STACKS trae ecosistemas
 (coma-separados: rust, typescript, python, go), se compone .github/workflows/ci.yml
 mapeando cada stack a su receta de ci/recipes.json (un job por lenguaje).
@@ -225,7 +229,7 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False):
 
 def cleanup(root):
     removed = []
-    for f in (SELF, "placeholders.json"):
+    for f in (SELF, "placeholders.json", "factory_bootstrap.py"):
         p = os.path.join(root, f)
         if os.path.exists(p):
             os.remove(p)
@@ -319,6 +323,9 @@ def main():
         return
 
     values = gather(ph, args)
+    # Prerrequisito determinista (offline): si la fabrica es obligatoria, FACTORY_SPEC no puede estar vacio.
+    if str(values.get("FACTORY_REQUIRED", "")).strip().lower() == "true" and not values.get("FACTORY_SPEC", "").strip():
+        sys.exit("FACTORY_REQUIRED=true pero FACTORY_SPEC esta vacio: declara el baseline de organizacion (p. ej. org/factory@v1) antes de inicializar.")
     task_tracker = values.get("TASK_TRACKER", "")
     if not values.get("TRACKER") and task_tracker:
         values["TRACKER"] = TRACKER_DISPLAY.get(task_tracker, task_tracker)
