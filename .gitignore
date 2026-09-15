@@ -1,0 +1,17 @@
+# Rellenar/ajustar según el stack elegido en el bootstrap (docs/bootstrap.md).
+# Defaults neutros:
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.idea/
+.vscode/
+# Dependencias / build (descomentar lo que aplique):
+# node_modules/
+# dist/
+# build/
+# target/
+# .venv/
+# __pycache__/
+# vendor/
