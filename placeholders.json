@@ -2,6 +2,7 @@
   "_comment": "Fuente única de verdad de los placeholders <KEY> a nivel proyecto. Lo consume init.py (rellenar y --check) y sirve de guía al agente. NO incluye los tokens locales de plantilla (TICKET_ID, CRITERIO_1, DATE, NNN, ALTERNATIVA_1, SUBTAREA_1, RIESGO, CAMBIO_1, PASOS_EN_ENV, ENV, CONSECUENCIA_*) que se rellenan al usar cada template, ni los ilustrativos de la convención (PLACEHOLDER, UPPER_SNAKE). kind: mechanical=valor conocido; judgment=requiere una decisión (buen candidato para que lo resuelva el agente o se discuta). TASK_TRACKER y SECRETS_PROVIDER son enums: su valor selecciona el fragmento del catálogo providers/ (task/ y secrets/) que init.py compone en docs/bindings.md.",
   "placeholders": [
     {"key": "PROJECT_NAME", "prompt": "Nombre del proyecto", "default": "", "kind": "mechanical", "required": true},
+    {"key": "FACTORY_SPEC", "prompt": "Baseline de organizacion que rige el repo (org/factory@vX; vacio si no aplica)", "default": "", "kind": "mechanical", "required": false},
     {"key": "INTEGRATION_BRANCH", "prompt": "Rama de integracion", "default": "main", "kind": "mechanical", "required": true},
     {"key": "REPO_URLS", "prompt": "URL(s) del/los repositorio(s)", "default": "", "kind": "mechanical", "required": false},
     {"key": "LANGUAGES_AND_FRAMEWORKS", "prompt": "Lenguajes y frameworks del stack", "default": "", "kind": "mechanical", "required": false},

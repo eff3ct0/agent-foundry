@@ -10,6 +10,7 @@ como **GitHub template repository**: creás un repo nuevo a partir de esta estru
 - [`docs/workflow.md`](docs/workflow.md) — flujo de trabajo end-to-end.
 - [`docs/engineering-handbook.md`](docs/engineering-handbook.md) — estándares de ingeniería.
 - [`docs/bootstrap.md`](docs/bootstrap.md) — cómo inicializar un proyecto con esta plantilla.
+- [`docs/org-factory.md`](docs/org-factory.md) — capa de organización (repo `.github` + pin `FACTORY_SPEC`).
 - [`templates/`](templates/) — ticket, pull request, Definition of Done, ADR, runbook de agente.
 - [`.github/`](.github/) — plantillas de issue y pull request para GitHub.
 - [`init.py`](init.py) + [`placeholders.json`](placeholders.json) — inicializador (Python 3 stdlib) que

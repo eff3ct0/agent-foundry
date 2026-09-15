@@ -14,6 +14,7 @@ No es específico de ningún lenguaje ni stack.
 - Estrategia de ramas: `<BRANCHING_MODEL>` (p. ej. trunk-based / GitHub flow) — rama de integración `<INTEGRATION_BRANCH>`
 - Comandos base: build `<BUILD_CMD>` · test `<TEST_CMD>` · lint `<LINT_CMD>` · typecheck `<TYPECHECK_CMD>` · run `<RUN_CMD>`
 - Entornos: `<ENVIRONMENTS>` (dev / staging / prod y cómo se despliega cada uno)
+- Baseline de organización (Factory OS): `<FACTORY_SPEC>` — spec de organización que rige este repo; el contenido local lo sobreescribe. Ver [`docs/org-factory.md`](docs/org-factory.md).
 
 ## Documentos de este archetype
 - [`docs/workflow.md`](docs/workflow.md) — **flujo de trabajo end-to-end**: intake → spec → tickets →
@@ -24,6 +25,7 @@ No es específico de ningún lenguaje ni stack.
   plantilla (rellenar placeholders, tooling, primer commit, checklist).
 - [`docs/bindings.md`](docs/bindings.md) — **contrato de proveedores**: a qué tracker de tareas y gestor de
   secretos está atado el proyecto (se compone al inicializar desde `providers/`). Uso obligatorio y exclusivo.
+- [`docs/org-factory.md`](docs/org-factory.md) — **capa de organización**: cómo referenciar el spec desde los repos de la org (repo `.github` + pin `FACTORY_SPEC`).
 - [`templates/`](templates/) — plantillas reutilizables: ticket, pull request, Definition of Done, ADR,
   runbook de agente (ejecución por sesiones/loop).
 
