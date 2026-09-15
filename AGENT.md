@@ -48,6 +48,7 @@ It is not tied to any language or stack.
 11. **Issue templates:** when creating an issue, it is MANDATORY to use the corresponding template in `.github/ISSUE_TEMPLATE/` (`task` or `bug`); blank or free-form issues are prohibited.
 12. **Pull request template:** when opening a PR, it is MANDATORY to use `.github/pull_request_template.md`; PRs without that structure are prohibited. With GitHub, fill the template and use `gh pr create --body-file`.
 13. **Persistence language:** the agent's conversational language is independent from the repository's persistence language. ALL persisted work (specs, docs, issues, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
+14. **Delegated delivery:** when a human delegates a specific task, that delegation authorizes the routine delivery flow for that task: tracker updates, implementation, verification, commit, push, pull request, and evidence updates. Do not ask for intermediate confirmation. It does not authorize `status:approved`, merge, production deployment, destructive operations, release publication, or other human approval decisions.
 
 ## Bindings (provider contract)
 Project capabilities are **bound to concrete providers** in [`docs/bindings.md`](docs/bindings.md): the task provider (`<TASK_TRACKER>`) and secrets manager (`<SECRETS_PROVIDER>`). Their use is **MANDATORY and EXCLUSIVE** for every agent; alternatives are not used.

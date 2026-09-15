@@ -26,3 +26,9 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 
 ## Persistence language
 The agent may converse in any language. All persisted project work uses `<REPO_LANGUAGE>`, which defaults to English and is configured in [`placeholders.json`](placeholders.json).
+
+## Delegated delivery
+Delegating a task authorizes its routine path without intermediate confirmation: update the tracker,
+implement, verify, commit, push, open the PR, and leave evidence. It does not authorize `status:approved`,
+review approval, merge, production deployment, destructive operations, or release publication. Check the
+contract with `python3 scripts/check-delivery-contract.py`.
