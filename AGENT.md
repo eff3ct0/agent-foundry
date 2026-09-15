@@ -50,3 +50,4 @@ No es específico de ningún lenguaje ni stack.
 ## Orden de lectura para un agente en frío
 1. Este `AGENT.md`. 2. `docs/workflow.md`. 3. El ticket activo en `<TRACKER>`. 4. `docs/engineering-handbook.md`
 para el estándar del cambio concreto. 5. `templates/agent-runbook.md` si operás en modo loop.
+6. [`docs/agent-init.md`](docs/agent-init.md) si vas a **inicializar** el proyecto desde la plantilla (modo init).

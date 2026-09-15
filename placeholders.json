@@ -19,6 +19,7 @@
     {"key": "ENVIRONMENTS", "prompt": "Entornos y como se despliega cada uno (dev/staging/prod)", "default": "", "kind": "mechanical", "required": false},
     {"key": "DEPLOY_METHOD", "prompt": "Metodo de despliegue", "default": "", "kind": "mechanical", "required": false},
     {"key": "CI_SYSTEM", "prompt": "Sistema de CI", "default": "GitHub Actions", "kind": "mechanical", "required": false},
+    {"key": "CI_STACKS", "prompt": "Ecosistemas para el CI, separados por coma (rust, typescript, python, go)", "default": "", "kind": "mechanical", "required": false},
     {"key": "FORMATTER", "prompt": "Formateador de codigo", "default": "", "kind": "mechanical", "required": false},
     {"key": "LINTER", "prompt": "Linter", "default": "", "kind": "mechanical", "required": false},
     {"key": "TEST_FRAMEWORK", "prompt": "Framework de test", "default": "", "kind": "mechanical", "required": false},

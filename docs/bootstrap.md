@@ -20,7 +20,8 @@ Dos caminos complementarios; la fuente única de qué placeholders existen es
   - Una clave sin valor se deja como `<KEY>` (no se borra), para que el checklist la detecte.
 - **Agente:** corre el script para los valores mecánicos y resuelve los `kind: judgment`
   (`<BRANCHING_MODEL>`, `<TDD_POLICY>`, `<COVERAGE_TARGET>`, `<APPROVAL_GATED_ACTIONS>`) por entrevista o
-  infiriéndolos de un repositorio existente.
+  infiriéndolos de un repositorio existente; ver [`agent-init.md`](agent-init.md) para el procedimiento detallado.
+  El CI se compone automáticamente desde `<CI_STACKS>` (un job por lenguaje, ver paso 5).
 
 > Los tokens **locales de plantilla** (`<TICKET_ID>`, `<CRITERIO_1>`, `<DATE>`, `<NNN>`, `<ALTERNATIVA_1>`…)
 > NO se rellenan aquí: se completan cada vez que copiás un `templates/*.md`. Por eso no están en el manifiesto.
@@ -45,7 +46,10 @@ Dónde viven los valores a rellenar:
 - Definir labels (`task`, `bug`, …) y estados (To Do / In Progress / Done).
 
 ## 5. Configurar CI
-- Pipeline en `<CI_SYSTEM>` con los gates del handbook: format, lint, typecheck, test, build.
+- Con GitHub Actions, `init.py` compone `.github/workflows/ci.yml` desde `<CI_STACKS>`
+  (un job por lenguaje, recetas en [`ci/recipes.json`](../ci/recipes.json)). Revisá que los jobs
+  correspondan al stack real y ajustá los comandos si el proyecto usa scripts propios.
+- Con otro `<CI_SYSTEM>`: pipeline manual con los gates del handbook: format, lint, typecheck, test, build.
 
 ## 6. Primer commit y protección de rama
 - Commit inicial con conventional commits.
