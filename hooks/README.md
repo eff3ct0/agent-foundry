@@ -41,5 +41,38 @@ not enabled.
 
 Official documentation: [Claude Code hooks](https://code.claude.com/docs/en/hooks).
 
-Adapters for other harnesses are intentionally separate follow-up work; do not
-add harness-specific detection here.
+## Pi
+
+The adapter is `hooks/pi/factory-start.ts`. Copy it to the project's
+`.pi/extensions/` directory so Pi discovers it automatically:
+
+```sh
+mkdir -p .pi/extensions
+cp hooks/pi/factory-start.ts .pi/extensions/factory-start.ts
+```
+
+It runs `python3 start.py` on `session_start`, then returns its stdout as the
+message from `before_agent_start`. Pi loads project-local extensions only after
+the project is trusted.
+
+Official documentation: [Pi extensions](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/docs/extensions.md).
+
+## OpenCode
+
+The adapter is `hooks/opencode/factory-start.ts`. Copy it to the project's
+`.opencode/plugins/` directory:
+
+```sh
+mkdir -p .opencode/plugins
+cp hooks/opencode/factory-start.ts .opencode/plugins/factory-start.ts
+```
+
+It runs `python3 start.py` when `session.created` fires and appends the stdout
+to the first `chat.message` as a text part. Local plugins are loaded
+automatically; no package dependency is required.
+
+Official documentation: [OpenCode plugins](https://opencode.ai/docs/plugins/).
+
+All three adapters are permanent template content and are not included in
+`init.py` cleanup. They remain opt-in, and the manual `python3 start.py` rule
+remains the universal fallback.
