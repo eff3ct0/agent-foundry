@@ -51,6 +51,18 @@ Dónde viven los valores a rellenar:
   correspondan al stack real y ajustá los comandos si el proyecto usa scripts propios.
 - Con otro `<CI_SYSTEM>`: pipeline manual con los gates del handbook: format, lint, typecheck, test, build.
 
+### Política de comandos en CI
+
+`CI_STACKS` selecciona siempre recetas canónicas por ecosistema en `ci/recipes.json`. Cada receta define los
+pasos, herramientas, versiones y gates del job de CI. Esta es la fuente de verdad del workflow generado.
+
+`<BUILD_CMD>`, `<TEST_CMD>`, `<LINT_CMD>` y `<TYPECHECK_CMD>` son comandos operativos del proyecto para el
+runbook y la verificación local; `init.py` no los interpola en el YAML. Así cada receta puede mantener un job
+coherente por stack y se evita insertar shell libre con quoting y mantenimiento frágiles.
+
+Si un proyecto necesita comandos propios, después del bootstrap revisá y ajustá el workflow generado. La
+composición automática sigue basándose en recetas, no en los comandos escalares del proyecto.
+
 ## 6. Primer commit y protección de rama
 - Commit inicial con conventional commits.
 - Proteger `<INTEGRATION_BRANCH>` (review requerido, CI en verde para mergear).
