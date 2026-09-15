@@ -27,13 +27,14 @@ No es específico de ningún lenguaje ni stack.
   secretos está atado el proyecto (se compone al inicializar desde `providers/`). Uso obligatorio y exclusivo.
 - [`docs/org-factory.md`](docs/org-factory.md) — **capa de organización**: cómo referenciar el spec desde los repos de la org (repo `.github` + pin `FACTORY_SPEC`).
 - [`templates/`](templates/) — plantillas reutilizables: ticket, pull request, Definition of Done, ADR,
-  runbook de agente (ejecución por sesiones/loop).
+  y el runbook de agente, que es el **contrato de ejecución en loop** del proyecto (reglas de convergencia).
 
 ## Reglas operativas (núcleo, agnóstico)
 1. **El estado durable vive fuera de la sesión:** en el tracker (`<TRACKER>`) y en el control de versiones.
    Nunca solo en la memoria de la sesión. Una sesión es desechable.
 2. **Una unidad de trabajo por sesión.** Tomás un ticket, lo llevás a un punto durable, dejás estado y
-   terminás. Detalle del ciclo (y del modo loop) en [`templates/agent-runbook.md`](templates/agent-runbook.md).
+   terminás. El **contrato de ejecución en loop** del proyecto (reglas de convergencia y detalle del ciclo)
+   es [`templates/agent-runbook.md`](templates/agent-runbook.md).
 3. **Anunciá siempre** en qué trabajás al empezar y al cerrar/checkpoint (`Trabajando/CHECKPOINT/Hecho <TICKET_ID>`).
 4. **Una sola ruta de implementación por cambio.** Nada de abstracciones especulativas (YAGNI). El diff
    más corto que resuelve el problema entendido, no el más corto sin entenderlo.
