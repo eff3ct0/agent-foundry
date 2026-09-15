@@ -4,7 +4,7 @@
 <!-- guide: what changes and why, in 2-3 lines -->
 
 ## Ticket
-Closes `<TICKET_ID>`.
+Closes #<TICKET_ID>
 
 ## PR type
 - [ ] Bug fix

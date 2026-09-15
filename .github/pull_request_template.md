@@ -2,7 +2,7 @@
 <!-- guide: what changes and why, in 2-3 lines -->
 
 ## Ticket
-Closes `<TICKET_ID>`.
+Closes #<TICKET_ID>
 <!-- guide: use a GitHub closing reference; the linked issue must carry status:approved under its protected approval contract -->
 
 ## PR type
