@@ -9,6 +9,10 @@ correspondiente de `.github/ISSUE_TEMPLATE/` (`task` o `bug`). Con `gh`, usá un
 rellenado con esa estructura mediante `gh issue create --body-file <plantilla-rellena>` y después
 vinculá la issue al proyecto; no crees issues en blanco o en formato libre.
 
+**Pull requests:** todo PR DEBE usar `.github/pull_request_template.md`. Con `gh`, rellená esa estructura
+en un archivo y abrilo con `gh pr create --body-file <plantilla-rellena>`; no abras PRs sin la plantilla ni
+con un cuerpo libre.
+
 **Reglas y ciclo:**
 - Estado por el campo del tablero: *To Do* → *In Progress* → *Done*.
 - Cada ítem se respalda en una issue vinculada del repo cuando aplique, para referenciarla desde commits/PR.

@@ -12,6 +12,10 @@ con `gh issue create --repo <OWNER>/<REPO> --title "<título>" --label "type:pro
 o `--label "type:bug"`, según corresponda.
 No uses `gh issue create` con `--body` libre ni sin cuerpo.
 
+**Pull requests:** todo PR DEBE usar la plantilla `.github/pull_request_template.md`. Con `gh`, rellená
+esa estructura en un archivo y abrilo con `gh pr create --body-file <plantilla-rellena>`; no abras PRs sin
+la plantilla ni con un cuerpo libre.
+
 **Reglas y ciclo:**
 - Tipo por label: `task` para trabajo, `bug` para defectos.
 - Estado por labels (p. ej. `status:in-progress`) o por el estado nativo abierto/cerrado; usá el que el repo ya tenga.
