@@ -31,6 +31,8 @@ estado externalizado, verificación-trinquete, paradas explícitas): no las repi
 1. **Elegir** la siguiente tarea accionable: primero *In Progress*, luego *To Do* en orden.
    Anunciar `Trabajando <TICKET_ID>`.
 2. **Mover** la tarea a *In Progress* y comentar el plan.
+   Si hay que crear una tarea, es OBLIGATORIO usar la plantilla de issue correspondiente; no crearla en
+   blanco ni con un formato libre.
 3. **Ejecutar SOLO esa** tarea (nada de dispersión).
 4. **Verificar** con señales reales (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>` + e2e si aplica).
 5. **Cumplir** la [Definition of Done](definition-of-done.md) y mover a *Done* con evidencia.

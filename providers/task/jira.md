@@ -4,6 +4,10 @@
 
 **Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API); da igual cuál. Opera sobre las operaciones semánticas de Jira: crear issue, comentar, transicionar de estado, enlazar al epic `<EPIC_ID>`.
 
+**Plantilla obligatoria:** al crear una issue es OBLIGATORIO usar la plantilla de issue correspondiente
+definida por el proyecto/proveedor y su tipo (`task` o `bug`); están prohibidas las issues en blanco o
+en formato libre.
+
 **Reglas y ciclo:**
 - Estados: *To Do* → *In Progress* → *Done* (mapeá el equivalente real del tablero si difiere).
 - Al empezar, mové la issue a *In Progress* y comentá el plan; al cerrar, a *Done*.

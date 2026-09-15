@@ -4,6 +4,11 @@
 
 **Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: crear ítem (o vincular una issue existente), fijar campos, cambiar el campo de estado.
 
+**Plantilla obligatoria:** una issue nueva vinculada al tablero DEBE crearse usando la plantilla
+correspondiente de `.github/ISSUE_TEMPLATE/` (`task` o `bug`). Con `gh`, usá un cuerpo previamente
+rellenado con esa estructura mediante `gh issue create --body-file <plantilla-rellena>` y después
+vinculá la issue al proyecto; no crees issues en blanco o en formato libre.
+
 **Reglas y ciclo:**
 - Estado por el campo del tablero: *To Do* → *In Progress* → *Done*.
 - Cada ítem se respalda en una issue vinculada del repo cuando aplique, para referenciarla desde commits/PR.
