@@ -6,6 +6,14 @@
 ## Ticket
 Cierra `<TICKET_ID>`.
 
+## Tipo de PR
+- [ ] Bug fix
+- [ ] Feature
+- [ ] Documentation only
+- [ ] Refactor
+- [ ] Maintenance/tooling
+- [ ] Breaking change
+
 ## Cambios
 - <CAMBIO_1>
 - <CAMBIO_2>
