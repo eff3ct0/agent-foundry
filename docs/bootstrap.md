@@ -17,6 +17,7 @@ is the single source of truth for project-level placeholders:
   - Non-interactive: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...'`, `--answers answers.json`, or `--defaults`.
   - `python3 init.py --dry-run` shows changes without writing. By default the script cleans itself up (removes `init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `ci/`, and `providers/`); use `--no-clean` to keep them.
   - An empty value remains `<KEY>` (it is not deleted), so the checklist can detect it.
+  - Repeatability and generated-file timestamp guarantees are checked by [`scripts/check-determinism.py`](../scripts/check-determinism.py).
 - **Agent:** run the script for mechanical values and resolve `judgment` values (`<BRANCHING_MODEL>`, `<TDD_POLICY>`, `<COVERAGE_TARGET>`, `<APPROVAL_GATED_ACTIONS>`) by interview or repository evidence; see [`agent-init.md`](agent-init.md). CI is composed automatically from `<CI_STACKS>` (one job per language; see step 5).
 
 > Local template tokens (`<TICKET_ID>`, `<CRITERION_1>`, `<DATE>`, `<NNN>`, and similar) are NOT filled here. Fill them whenever a `templates/*.md` file is used; they are not manifest placeholders.
@@ -74,6 +75,10 @@ During bootstrap, use this canonical CI gate (nonzero when manifest keys remain)
 ```
 python3 init.py --check
 ```
+
+For the complete repeat-run, network, approval, and rollback matrix, see
+[`docs/determinism.md`](determinism.md). The audit is offline and safe to run
+before or after initialization.
 
 In an initialized project, use a quick scan (local template tokens in
 `templates/` are intentional):
