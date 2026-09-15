@@ -1,4 +1,4 @@
-# project-archetype
+# <PROJECT_NAME>
 
 **Language-agnostic** repository template (any language/stack) defining how software development work is
 executed, written **for AI agents** and readable by humans. It is intended for use as a **GitHub template
