@@ -1,0 +1,14 @@
+{
+  "labels": [
+    {"name": "type:product", "color": "1D76DB", "description": "Template or product improvement"},
+    {"name": "type:bug", "color": "D73A4A", "description": "Reproducible defect"},
+    {"name": "type:dx-feedback", "color": "5319E7", "description": "Friction found while using the archetype"},
+    {"name": "type:feature", "color": "A2EEEF", "description": "Feature delivery"},
+    {"name": "type:docs", "color": "0075CA", "description": "Documentation-only change"},
+    {"name": "type:refactor", "color": "C5DEF5", "description": "Refactoring without behavior change"},
+    {"name": "type:maintenance", "color": "BFDADC", "description": "Maintenance or tooling change"},
+    {"name": "status:approved", "color": "0E8A16", "description": "Human approval has been granted"},
+    {"name": "status:in-progress", "color": "FBCA04", "description": "Work is actively being executed"},
+    {"name": "status:blocked", "color": "B60205", "description": "Work is blocked by a dependency or approval gate"}
+  ]
+}
