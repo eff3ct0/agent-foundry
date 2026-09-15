@@ -37,6 +37,58 @@ Al correr `init.py`, estos enums seleccionan el fragmento del catálogo [`provid
 y componen [`docs/bindings.md`](bindings.md), cuya cabecera vuelve a declarar la
 fuente de la forma. A partir de ahí el agente queda **obligado por ese contrato** (uso exclusivo).
 
+## Paso 2 bis — Generar un binding custom
+
+Si el proveedor elegido no está en el catálogo, no inventes un binding desde la
+memoria del modelo ni lo mapees silenciosamente a otro proveedor. Seleccioná
+`custom` y generá la instancia en la capa de agente, antes de correr `init.py`:
+
+1. Copiá la forma del contrato de la capacidad (`task` o `secrets`) y
+   completá `providers/<capability>/custom.md` en el proyecto destino.
+2. Groundeá cada afirmación operativa en documentación oficial del proveedor
+   y, si existe, en una skill oficial. Registrá la URL o identificador exacto,
+   versión o fecha de la fuente y fecha de consulta; no cites una fuente que no
+   hayas consultado.
+3. Añadí al fragmento una cabecera de procedencia y estado:
+
+   ```markdown
+   ## Estado y procedencia
+
+   - Estado: `DRAFT`
+   - Proveedor: `<PROVIDER>`
+   - Fuente: `<OFFICIAL_DOC_URL_OR_ID>` (versión/fecha: `<VERSION_OR_DATE>`)
+   - Skill: `<OFFICIAL_SKILL_OR_NONE>` (versión/fecha: `<VERSION_OR_DATE>`)
+   - Consultado: `<YYYY-MM-DD>`
+   - Review humano: pendiente
+   ```
+
+4. Verificá el borrador contra [`_contract.md`](../providers/task/_contract.md)
+   o el contrato de su capacidad: identidad, vinculación, mecanismo del
+   harness frente a reglas semánticas, lectura/creación/actualización y
+   comentarios, ciclo de estados, referencias y prohibiciones. Para secretos,
+   verificá además que el fragmento nunca contenga valores secretos.
+5. Ejecutá una prueba segura del proveedor (sandbox, cuenta de prueba o
+   simulación documentada) y dejá la evidencia junto al cambio. El flujo de
+   prueba no debe crear, borrar ni modificar datos reales.
+6. Hacé un dry-run del ensamblaje sin aprobar todavía el binding:
+
+   ```
+   python3 init.py --dry-run --no-clean --defaults --set PROJECT_NAME=Example --set TASK_TRACKER=custom
+   ```
+
+   Confirmá que `init.py` solo anuncia la composición de `custom.md`, no cambia
+   `init.py` ni añade red o dependencias. El dry-run no convierte el fragmento
+   `DRAFT` en un contrato activo.
+7. Solicitá review humano. Hasta su aprobación, el proveedor custom queda
+   bloqueado para uso operativo. Tras aprobarlo, actualizá el estado a
+   `VERIFIED`, registrá revisor y fecha, y recién entonces corré `init.py` para
+   componer `docs/bindings.md`; esa instancia pasa a ser el binding obligatorio
+   y exclusivo del proyecto.
+
+Este flujo solo produce el fragmento; no agrega fetching, autenticación,
+dependencias ni lógica de proveedores a `init.py`. Los proveedores catalogados
+siguen usando el fast path curado y no pasan por este proceso.
+
 ## Paso 3 — Rellenar los mecánicos
 Corré el script con los `kind: mechanical` (incluí `TASK_TRACKER`, `SECRETS_PROVIDER`, `CI_STACKS` y `CI_SYSTEM`):
 
