@@ -1,6 +1,6 @@
 ## Jira
 
-> **Contract instance:** [`_contract.md`](../providers/task/_contract.md)
+> **Contract instance:** [`_contract.md`](./_contract.md)
 > **Capability:** `task`
 > **Provider:** `jira`
 
@@ -22,6 +22,16 @@ issues are prohibited.
 - Leave progress/checkpoint comments on the issue; durable state lives there, not in the session.
 - One issue = one unit of work (one session).
 - Every commit/PR references the issue key (`<TRACKER_KEY>-NNN`).
+
+**Protected `status:approved` gate:** the provider MUST keep this gate fail
+closed. A current direct human instruction must name the exact issue and the
+exact action `add status:approved`; target-host evidence must bind that
+principal to maintainer or authorized-approver authority; the authenticated
+actor must have `MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must
+be followed by target-host readback. Any mismatch, stale or ambiguous
+instruction, insufficient permission, failed or unknown mutation, or readback
+mismatch stops the operation without retrying or broadening scope. Without
+this evidence, the human applies the label directly.
 
 **Prohibitions:**
 - Do not open tasks in GitHub Issues, Linear, or another system.

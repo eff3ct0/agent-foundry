@@ -1,6 +1,6 @@
 ## Infisical
 
-> **Contract instance:** [`_contract.md`](../providers/secrets/_contract.md)
+> **Contract instance:** [`_contract.md`](./_contract.md)
 > **Capability:** `secrets`
 > **Provider:** `infisical`
 
