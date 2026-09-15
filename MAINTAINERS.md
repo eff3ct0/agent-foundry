@@ -1,35 +1,36 @@
-# MAINTAINERS — auto-gobernanza del arquetipo
+# MAINTAINERS - archetype self-governance
 
-Este repo (`eff3ct0/factory-template`) se desarrolla bajo su PROPIA doctrina (dogfooding). Esta capa es
-concreta y está SEPARADA del **producto** (el contenido de la plantilla con `<PLACEHOLDER>`).
+This repo (`eff3ct0/factory-template`) follows its OWN doctrine (dogfooding).
+This layer is concrete and SEPARATE from the **product** (the template content
+containing `<PLACEHOLDER>` values).
 
-## Regla dura
-NO ejecutar `init.py` sobre este repo: se auto-consumiría (rellenaría sus placeholders y borraría el
-andamiaje). `init.py`, `placeholders.json`, `providers/`, `ci/`, `factory_bootstrap.py` y las plantillas
-son el PRODUCTO, no la config de este repo.
+## Hard rule
+Do NOT run `init.py` on this repo: it would consume itself, fill its
+placeholders, and remove its scaffolding. `init.py`, `placeholders.json`,
+`providers/`, `ci/`, `factory_bootstrap.py`, and the templates are the PRODUCT,
+not this repo's configuration.
 
-## Bindings de este repo
-- **Tareas:** GitHub Issues + GitHub Projects (v2) de `eff3ct0/factory-template`. (El tablero Projects aún
-  no existe → crearlo es un ticket `type:product`.)
-- **Secretos:** ninguno (template público; sin secretos reales).
-- **Contrato de loop:** `templates/agent-runbook.md`. **DoD:** `templates/definition-of-done.md`.
+## Bindings for this repo
+- **Tasks:** GitHub Issues + GitHub Projects (v2) for `eff3ct0/factory-template`.
+- **Secrets:** none (public template; no real secrets).
+- **Loop contract:** `templates/agent-runbook.md`. **DoD:** `templates/definition-of-done.md`.
 
-## Tipos de ticket (labels)
-- `type:product` — mejoras/cambios del template.
-- `type:dx-feedback` — fricción real detectada al USAR el arquetipo (ver `docs/smoke-test.md`).
-- `type:bug` — defecto.
+## Ticket types (labels)
+- `type:product` - template improvements or changes.
+- `type:dx-feedback` - friction found while USING the archetype (see `docs/smoke-test.md`).
+- `type:bug` - defect.
 
-## Ciclo de mejora (una tarea por sesión)
-1. Tomar un issue accionable (dx-feedback primero si bloquea uso). Anunciar `Trabajando #<n>`.
-2. In Progress → cambio mínimo → **verificar** (trinquete): `python3 init.py --self-check`,
-   `python3 init.py --check`, un dry-run happy-path, y la auditoría de coherencia cuando se toca estructura.
-3. Cumplir la DoD → cerrar el issue con evidencia (commit/PR).
-4. Cuando aterriza una tanda coherente → **tag nuevo** (`v1.x` / `v2`) y push.
+## Improvement cycle (one task per session)
+1. Take an actionable issue (prioritize `dx-feedback` when it blocks use). Announce `Working #<n>`.
+2. In Progress -> minimal change -> **verify**: `python3 init.py --self-check`, `python3 init.py --check`, a happy-path dry-run, and a coherence audit when structure changes.
+3. Meet the DoD -> close the issue with evidence (commit/PR).
+4. When a coherent batch lands -> create and push a new tag (`v1.x` / `v2`).
 
-## Bucle "mejorar mientras se usa"
-Cada proyecto bootstrapeado desde el template que pegue con una carencia abre un issue aquí con
-`type:dx-feedback` (su `FACTORY_SPEC` registra la procedencia). El uso alimenta el backlog.
+## Improve while using
+Every project bootstrapped from the template that finds a gap opens a
+`type:dx-feedback` issue here (its `FACTORY_SPEC` records provenance). Usage
+feeds the backlog.
 
-## Propagación
-`MAINTAINERS.md` y `docs/smoke-test.md` son de ESTE repo; `init.py` los autolimpia en un proyecto
-instanciado (no viajan al downstream).
+## Propagation
+`MAINTAINERS.md` and `docs/smoke-test.md` belong to THIS repo; `init.py` removes
+them from an initialized project (they do not travel downstream).

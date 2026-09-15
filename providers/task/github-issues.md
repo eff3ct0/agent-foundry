@@ -1,33 +1,36 @@
 ## GitHub Issues
 
-> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
-> **Capacidad:** `task`
-> **Proveedor:** `github-issues`
+> **Contract instance:** [`_contract.md`](../providers/task/_contract.md)
+> **Capability:** `task`
+> **Provider:** `github-issues`
 
-**Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en GitHub Issues del repo (`<TRACKER_KEY>`). El agente DEBE crear, actualizar y cerrar issues ahí y NO puede usar otro tracker.
+**Binding:** Project tasks live EXCLUSIVELY in the repository's GitHub Issues
+(`<TRACKER_KEY>`). The agent MUST create, update, and close issues there and
+MUST NOT use another tracker.
 
-**Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: abrir issue, comentar, aplicar/quitar labels, cerrar.
+**Agent interaction:** use the mechanism provided by the harness (MCP, CLI, or
+API). Semantic operations are opening issues, commenting, applying/removing
+labels, and closing.
 
-**Plantilla obligatoria:** toda issue nueva DEBE seguir la plantilla correspondiente de
-`.github/ISSUE_TEMPLATE/` (`task.yml` para trabajo del producto o `bug.yml` para defectos). En la web,
-usá el formulario correspondiente. El cuerpo debe incluir contexto/problema, criterios de aceptación,
-alcance y verificación. Con `gh`, rellená primero esa estructura equivalente y creá la issue
-con `gh issue create --repo <OWNER>/<REPO> --title "<título>" --label "type:product" --body-file <plantilla-rellena>`
-o `--label "type:bug"`, según corresponda.
-No uses `gh issue create` con `--body` libre ni sin cuerpo.
+**Mandatory template:** every new issue MUST use the corresponding template in
+`.github/ISSUE_TEMPLATE/` (`task.yml` for product work or `bug.yml` for defects).
+In the web UI, use the corresponding form. The body must include context/problem,
+acceptance criteria, scope, and verification. With `gh`, fill the equivalent
+structure first and create it with:
+`gh issue create --repo <OWNER>/<REPO> --title "<title>" --label "type:product" --body-file <filled-template>`
+or `--label "type:bug"`. Do not use free-form `--body` or omit the body.
 
-**Pull requests:** todo PR DEBE usar la plantilla `.github/pull_request_template.md`. Con `gh`, rellená
-esa estructura en un archivo y abrilo con `gh pr create --body-file <plantilla-rellena>`; no abras PRs sin
-la plantilla ni con un cuerpo libre.
+**Pull requests:** every PR MUST use `.github/pull_request_template.md`. With
+`gh`, fill that structure in a file and use `gh pr create --body-file <filled-template>`.
 
-**Reglas y ciclo:**
-- Tipo por label: `task` para trabajo, `bug` para defectos.
-- Estado por labels (p. ej. `status:in-progress`) o por el estado nativo abierto/cerrado; usá el que el repo ya tenga.
-- Al empezar, marcá la issue en progreso y comentá el plan; al cerrar, cerrala referenciando el commit/PR.
-- Comentarios de progreso/checkpoint en la propia issue.
-- Una issue = una unidad de trabajo. Cada commit/PR referencia `#<número>`.
+**Rules and lifecycle:**
+- Type is selected by label: `task` for work, `bug` for defects.
+- Status uses labels (e.g. `status:in-progress`) or native open/closed state; use the repository's existing convention.
+- At start, mark the issue in progress and comment the plan; at close, reference the commit/PR.
+- Leave progress/checkpoint comments on the issue.
+- One issue = one unit of work. Every commit/PR references `#<number>`.
 
-**Prohibiciones:**
-- NO abrir tareas en Jira, Linear ni otro sistema.
-- NO cerrar con verificación pendiente o fallida.
-- NO usar solo la memoria de la sesión como estado.
+**Prohibitions:**
+- Do not open tasks in Jira, Linear, or another system.
+- Do not close with pending or failed verification.
+- Do not keep state only in session memory.

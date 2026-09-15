@@ -1,37 +1,39 @@
-# Smoke test del factory (dogfood repetible)
+# Factory smoke test (repeatable dogfood)
 
-Valida que un agente EN FRÍO, con solo el repo + un empujón mínimo, se auto-inicialice siguiendo el
-contrato. Toda fricción → issue `type:dx-feedback` en el repo del template.
+Validate that a COLD agent, given only the repository and a minimal kickoff,
+initializes itself according to the contract. Every friction point becomes a
+`type:dx-feedback` issue in the template repository.
 
-## 1. Crear un proyecto desde el template
+## 1. Create a project from the template
 ```
-gh repo create <TU_CUENTA>/factory-smoke-test --template eff3ct0/factory-template --private --clone
+gh repo create <YOUR_ACCOUNT>/factory-smoke-test --template eff3ct0/factory-template --private --clone
 cd factory-smoke-test
 ```
-(o por UI: "Use this template").
 
-## 2. Kickoff mínimo (sesión de agente NUEVA dentro del repo)
-> Sos un agente en frío en este repo, recién creado desde una plantilla de fábrica. Leé CLAUDE.md y
-> AGENT.md y seguí docs/agent-init.md para inicializar: rellená los placeholders con init.py (usá
-> `--no-clean` para poder verificar), componé bindings y CI, y verificá. Preguntame lo que no puedas
-> inferir (nombre, stack, tracker, secretos). No hagas acciones hacia afuera sin mi OK.
+## 2. Minimal kickoff (NEW agent session inside the repo)
+> You are a cold agent in this newly created factory-template project. Read
+> CLAUDE.md and AGENT.md and follow docs/agent-init.md: fill placeholders with
+> init.py (use `--no-clean` for verification), compose bindings and CI, and
+> verify. Ask me what you cannot infer (name, stack, tracker, secrets, and
+> persistence language). Do not take outward actions without my approval.
 
-Nota: `eff3ct0/factory` (la instancia org) aún no existe → dejá `FACTORY_SPEC` vacío y `FACTORY_REQUIRED=false`.
+Note: `eff3ct0/factory` (the org instance) does not exist yet, so leave
+`FACTORY_SPEC` empty and set `FACTORY_REQUIRED=false`.
 
-## 3. Criterios de éxito
-- [ ] Arrancó solo con el kickoff mínimo (no hubo que explicarle el proceso).
-- [ ] `python3 init.py --check` → 0 placeholders del manifiesto (por eso `--no-clean`).
-- [ ] `docs/bindings.md` compuesto con el tracker + secretos elegidos.
-- [ ] `.github/workflows/ci.yml` con un job por lenguaje del stack.
-- [ ] Sin `--no-clean`: desaparecen `init.py`, `placeholders.json`, `ci/`, `providers/`,
-      `factory_bootstrap.py`, `MAINTAINERS.md` y `docs/smoke-test.md` → repo de proyecto limpio.
-- [ ] El agente respeta el contrato de loop (una tarea/sesión, estado al tracker, checkpoint, DoD).
+## 3. Success criteria
+- [ ] The kickoff was sufficient; no process explanation was needed.
+- [ ] `python3 init.py --check` -> zero manifest placeholders (keep `--no-clean` for this).
+- [ ] `docs/bindings.md` contains the selected task and secrets providers.
+- [ ] `.github/workflows/ci.yml` has one job per stack language.
+- [ ] Without `--no-clean`, `init.py`, `placeholders.json`, `ci/`, `providers/`, `factory_bootstrap.py`, `MAINTAINERS.md`, and `docs/smoke-test.md` disappear.
+- [ ] The agent follows the loop contract (one task/session, tracker state, checkpoint, DoD).
+- [ ] Persisted project content uses the configured `<REPO_LANGUAGE>`.
 
-## 4. Limpieza
+## 4. Cleanup
 ```
-gh repo delete <TU_CUENTA>/factory-smoke-test --yes
+gh repo delete <YOUR_ACCOUNT>/factory-smoke-test --yes
 ```
 
-## 5. Feedback (el motor de mejora)
-Cualquier punto donde tuviste que intervenir de más, o ambigüedad de `docs/agent-init.md`, abrilo como
-issue `type:dx-feedback` en `eff3ct0/factory-template`.
+## 5. Feedback (the improvement engine)
+Open a `type:dx-feedback` issue in `eff3ct0/factory-template` for every point
+where extra intervention was needed or `docs/agent-init.md` was ambiguous.

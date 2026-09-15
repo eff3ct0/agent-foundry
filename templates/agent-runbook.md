@@ -1,59 +1,43 @@
-# Runbook de agente — ejecución por sesiones (loop)
+# Agent runbook - session-based execution loop
 
-Cómo ejecuta un agente el trabajo en `<PROJECT_NAME>`. Neutro y agnóstico.
+How an agent executes work in `<PROJECT_NAME>`. Neutral and language-agnostic.
 
-## Por qué esto es un contrato (no un runner)
-El bucle lo ejecuta el harness del agente (agnóstico: /loop, un `while`, cron, un orquestador). Aquí
-viven las REGLAS que hacen converger a un agente no determinista, no el mecanismo. La reproducibilidad
-vive en el spec y en la verificación, no en el agente.
+## Why this is a contract, not a runner
+The agent harness executes the loop (`/loop`, a `while` loop, cron, or an
+orchestrator). This document contains the RULES that make a nondeterministic
+agent converge, not the mechanism. Reproducibility lives in the spec and
+verification, not in the agent.
 
-### Reglas de convergencia
-1. **Una tarea por iteración.** Monolítico y secuencial; nunca dos escritores en paralelo sobre el mismo
-   trabajo. Una tarea = una sesión.
-2. **Estado externalizado.** El estado durable vive en el tracker vinculado (ver `docs/bindings.md` /
-   `<TRACKER>`) + el control de versiones. La iteración LEE el estado al arrancar y lo ACTUALIZA al
-   cerrar o al hacer checkpoint. Nunca en la memoria de la sesión.
-3. **Verificación como trinquete.** Una tarea está "hecha" solo cuando su check / Definition of Done
-   pasa. Ante un fallo, resolvé la causa raíz para que no reaparezca (no parchear el síntoma); si aporta,
-   dejá una regresión que lo fije.
-4. **Paradas explícitas.** El loop se detiene cuando no queda tarea accionable, o cuando un paso exige
-   una decisión humana o una acción con aprobación (`<APPROVAL_GATED_ACTIONS>`): marcá `BLOQUEADA` y
-   cedé el control. No inventes consentimiento.
+### Convergence rules
+1. **One task per iteration.** Monolithic and sequential; never two writers on the same work. One task = one session.
+2. **Externalized state.** Durable state lives in the bound tracker (see `docs/bindings.md` / `<TRACKER>`) and VCS. Read it at startup and update it at close or checkpoint. Never rely on session memory.
+3. **Verification ratchet.** A task is done only when its check / Definition of Done passes. Fix root causes rather than symptoms and add a regression when useful.
+4. **Explicit stops.** Stop when no actionable task remains or a step requires human judgment or approval (`<APPROVAL_GATED_ACTIONS>`). Mark it `BLOCKED` and hand control back. Never invent consent.
+5. **Persistence language.** Conversation language is independent. All persisted work (specs, docs, tickets, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
 
-## Principio: la sesión es desechable
-El **estado durable** vive en `<TRACKER>` + VCS, nunca solo en la memoria de la sesión.
-Cada sesión toma una tarea, la lleva a un punto durable, deja estado y termina.
+## Principle: the session is disposable
+**Durable state** lives in `<TRACKER>` and VCS, never only in session memory.
+Each session takes one task to a durable point, leaves state, and ends.
 
-## Ciclo de sesión
-Cada paso operacionaliza las [Reglas de convergencia](#reglas-de-convergencia) de arriba (una tarea,
-estado externalizado, verificación-trinquete, paradas explícitas): no las repite, las aplica.
+## Session cycle
+1. **Choose** the next actionable task: first *In Progress*, then *To Do* in order. Announce `Working <TICKET_ID>`.
+2. **Move** the task to *In Progress* and comment the plan. If a task must be created, using the corresponding issue template is MANDATORY; blank or free-form issues are prohibited.
+3. **Execute ONLY that** task (no scope drift).
+4. **Verify** with real signals (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>`, plus e2e when applicable).
+5. **Meet** the [Definition of Done](definition-of-done.md), deliver through a PR using `.github/pull_request_template.md`, and move the task to *Done* with evidence.
+6. **Finish** the session (one task = one session).
 
-1. **Elegir** la siguiente tarea accionable: primero *In Progress*, luego *To Do* en orden.
-   Anunciar `Trabajando <TICKET_ID>`.
-2. **Mover** la tarea a *In Progress* y comentar el plan.
-   Si hay que crear una tarea, es OBLIGATORIO usar la plantilla de issue correspondiente; no crearla en
-   blanco ni con un formato libre.
-3. **Ejecutar SOLO esa** tarea (nada de dispersión).
-4. **Verificar** con señales reales (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>` + e2e si aplica).
-5. **Cumplir** la [Definition of Done](definition-of-done.md), entregar mediante un PR conforme a
-   `.github/pull_request_template.md` y mover a *Done* con evidencia.
-6. **Terminar** la sesión (una tarea = una sesión).
-
-## Checkpoint antes de compactación (tarea a medias)
+## Checkpoint before compaction (unfinished task)
 - Commit WIP.
-- Comentar en el ticket: estado, qué falta, rama, último commit, siguiente paso.
-- Anunciar `CHECKPOINT <TICKET_ID>`.
-- Terminar.
+- Comment on the ticket: status, remaining work, branch, last commit, and next step.
+- Announce `CHECKPOINT <TICKET_ID>`.
+- Finish.
 
-> Doctrina inspirada en la técnica del *Ralph loop* (agentes no deterministas → convergencia por
-> disciplina y verificación, no por el runner).
+## Guardrails
+- **Human approval:** never auto-execute `<APPROVAL_GATED_ACTIONS>`; mark `BLOCKED: requires approval` and continue with another task.
+- **Infinite-loop prevention:** after two failures for the same reason, mark the task `BLOCKED` and move to the next task.
+- **No scope drift:** one task per session.
 
-## Guardarraíles
-- **Aprobación humana:** las acciones de `<APPROVAL_GATED_ACTIONS>` no se auto-ejecutan;
-  marcar `BLOQUEADA: requiere aprobación` y seguir.
-- **Anti-bucle infinito:** 2 fallos por el mismo motivo → marcar `BLOQUEADA` y pasar a la siguiente.
-- **Sin dispersión:** una sola tarea por sesión.
-
-## Cómo lanzarlo
-- **Loop por CLI:** un comando por iteración, cada iteración = sesión nueva.
-- **Manual:** ejecutar el ciclo a mano, una tarea por vez.
+## How to launch it
+- **CLI loop:** one command per iteration; each iteration is a new session.
+- **Manual:** execute the cycle by hand, one task at a time.

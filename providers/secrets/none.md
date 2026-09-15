@@ -1,14 +1,18 @@
-## Sin gestor de secretos
+## No secrets manager
 
-**Vinculación:** Este proyecto NO gestiona secretos reales. Usar solo `.env.example` con valores ficticios; PROHIBIDO introducir secretos reales en el repo o en el entorno del agente.
+> **Contract instance:** [`_contract.md`](../providers/secrets/_contract.md)
+> **Capability:** `secrets`
+> **Provider:** `none`
 
-**Reglas y ciclo:**
-- `.env.example` documenta las variables esperadas con valores de ejemplo, nunca reales.
-- Si en algún momento hacen falta secretos reales, primero se elige un gestor (Infisical / Vault / Doppler) y se actualiza este binding.
+**Binding:** This project does NOT manage real secrets. Use only `.env.example`
+with fictional values. Introducing real secrets into the repository or agent
+environment is PROHIBITED.
 
-**Prohibiciones:**
-- NUNCA commitear un `.env` con valores reales.
-- NO pegar credenciales reales en código, config ni en la sesión del agente.
-> **Instancia del contrato:** [`_contract.md`](../providers/secrets/_contract.md)
-> **Capacidad:** `secrets`
-> **Proveedor:** `none`
+**Agent resolution:** no secret lookup or injection is available.
+
+**Usage rules:** if real secrets become necessary, first choose a secrets manager
+(Infisical / Vault / Doppler) and update this binding.
+
+**Prohibitions:**
+- Do not paste real credentials into code, configuration, or the agent session.
+- Do not use an alternate secrets provider.

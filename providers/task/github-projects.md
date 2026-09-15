@@ -1,29 +1,32 @@
 ## GitHub Projects
 
-> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
-> **Capacidad:** `task`
-> **Proveedor:** `github-projects`
+> **Contract instance:** [`_contract.md`](../providers/task/_contract.md)
+> **Capability:** `task`
+> **Provider:** `github-projects`
 
-**Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en GitHub Projects v2 (tablero `<TRACKER_KEY>`). El agente DEBE crear/actualizar los ítems y mover su estado ahí, y NO puede usar otro tracker.
+**Binding:** Project tasks live EXCLUSIVELY in GitHub Projects v2 (board
+`<TRACKER_KEY>`). The agent MUST create/update items and move their status there
+and MUST NOT use another tracker.
 
-**Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: crear ítem (o vincular una issue existente), fijar campos, cambiar el campo de estado.
+**Agent interaction:** use the mechanism provided by the harness (MCP, CLI, or
+API). Semantic operations are creating an item (or linking an existing issue),
+setting fields, and changing status.
 
-**Plantilla obligatoria:** una issue nueva vinculada al tablero DEBE crearse usando la plantilla
-correspondiente de `.github/ISSUE_TEMPLATE/` (`task` o `bug`). Con `gh`, usá un cuerpo previamente
-rellenado con esa estructura mediante `gh issue create --body-file <plantilla-rellena>` y después
-vinculá la issue al proyecto; no crees issues en blanco o en formato libre.
+**Mandatory template:** a new issue linked to the board MUST use the
+corresponding `.github/ISSUE_TEMPLATE/` (`task` or `bug`). With `gh`, fill that
+structure via `gh issue create --body-file <filled-template>`, then link the
+issue to the project. Do not create blank or free-form issues.
 
-**Pull requests:** todo PR DEBE usar `.github/pull_request_template.md`. Con `gh`, rellená esa estructura
-en un archivo y abrilo con `gh pr create --body-file <plantilla-rellena>`; no abras PRs sin la plantilla ni
-con un cuerpo libre.
+**Pull requests:** every PR MUST use `.github/pull_request_template.md`; with
+`gh`, fill it in a file and use `gh pr create --body-file <filled-template>`.
 
-**Reglas y ciclo:**
-- Estado por el campo del tablero: *To Do* → *In Progress* → *Done*.
-- Cada ítem se respalda en una issue vinculada del repo cuando aplique, para referenciarla desde commits/PR.
-- Al empezar, mové el ítem a *In Progress* y comentá el plan en la issue vinculada; al cerrar, a *Done*.
-- Una tarjeta = una unidad de trabajo.
+**Rules and lifecycle:**
+- Board status: *To Do* -> *In Progress* -> *Done*.
+- When applicable, each item is backed by a linked repository issue for commit/PR references.
+- At start, move the item to *In Progress* and comment the plan on the linked issue; at close, move it to *Done*.
+- One card = one unit of work.
 
-**Prohibiciones:**
-- NO abrir tareas en Jira, Linear ni un tablero distinto.
-- NO cerrar con verificación pendiente o fallida.
-- NO dejar el estado solo en la sesión.
+**Prohibitions:**
+- Do not open tasks in Jira, Linear, or another board.
+- Do not close with pending or failed verification.
+- Do not leave status only in the session.

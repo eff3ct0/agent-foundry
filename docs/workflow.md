@@ -1,51 +1,58 @@
-# Flujo de trabajo end-to-end
+# End-to-end workflow
 
-Cómo se ejecuta el trabajo de desarrollo en `<PROJECT_NAME>`, del objetivo a la entrega.
-Agnóstico de lenguaje/stack. Placeholders `<UPPER_SNAKE>` se rellenan en el bootstrap.
+How development work in `<PROJECT_NAME>` moves from objective to delivery.
+Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 
-## 1. Intake y especificación
-- Capturar el **objetivo** (qué problema y para quién).
-- Definir **criterios de aceptación** verificables.
-- Fijar el **alcance**: qué entra (in) y qué queda fuera (out).
-- Registrar supuestos y dependencias.
+## 1. Intake and specification
+- Capture the **objective** (what problem, for whom).
+- Define verifiable **acceptance criteria**.
+- Set the **scope**: what is in and what is out.
+- Record assumptions and dependencies.
 
-## 2. Descomposición en tickets
-- Descomponer en tickets dentro de `<TRACKER>`, el tracker **vinculado** en [`bindings.md`](bindings.md) (compuesto por init.py)
-  (uso obligatorio y exclusivo: no elegir otro).
-- **Un ticket = una unidad de trabajo** (una sesión de agente).
-- Enlazar cada ticket a su epic `<EPIC_ID>`.
-- Usar la plantilla [`templates/ticket.md`](../templates/ticket.md).
+## 2. Ticket decomposition
+- Decompose work into tickets in `<TRACKER>`, the **bound** tracker in [`bindings.md`](bindings.md) (compliance is mandatory; do not choose another).
+- **One ticket = one unit of work** (one agent session).
+- Link each ticket to its default epic `<EPIC_ID>`.
+- Use [`templates/ticket.md`](../templates/ticket.md).
 
-## 3. Ramas
-- Modelo: `<BRANCHING_MODEL>`.
-- **Una rama por ticket** desde `<INTEGRATION_BRANCH>`.
-- Naming: `<BRANCH_NAMING>` (p. ej. `<TICKET_ID>-descripcion-corta`).
+## 3. Branches
+- Model: `<BRANCHING_MODEL>`.
+- **One branch per ticket** from `<INTEGRATION_BRANCH>`.
+- Naming: `<BRANCH_NAMING>` (e.g. `<TICKET_ID>-<short-description>`).
 
-## 4. Ejecución por sesiones (loop)
-- Ver el ciclo completo en [`templates/agent-runbook.md`](../templates/agent-runbook.md).
-- **Una tarea por sesión**; nada de dispersión.
-- Anunciar al empezar: `Trabajando <TICKET_ID>`.
-- Mover el ticket a *In Progress* y comentar el plan.
+## 4. Session execution loop
+- See the complete cycle in [`templates/agent-runbook.md`](../templates/agent-runbook.md).
+- **One task per session**; no scope drift.
+- Announce at start: `Working <TICKET_ID>`.
+- Move the ticket to *In Progress* and comment the plan.
 
-## 5. Verificación
-- `<TEST_CMD>`, `<BUILD_CMD>` y `<TYPECHECK_CMD>` en verde.
-- Comprobación **e2e real** contra `<ENV>` cuando el cambio lo amerite.
-- **Implementado ≠ verificado**: sin señal real, no está hecho.
+## 5. Verification
+- `<TEST_CMD>`, `<BUILD_CMD>`, and `<TYPECHECK_CMD>` pass.
+- Perform a **real e2e check** against `<ENV>` when warranted.
+- **Implemented != verified**: without a real signal, work is not done.
 
 ## 6. Review
-- **Self-review** del diff (leerlo entero antes de pedir review).
-- Segundo par / **review adversarial**.
-- Checklist: alcance respetado, tests significativos, sin secretos, sin placeholders, contrato retrocompatible.
+- **Self-review** the complete diff before requesting review.
+- Get a second pair of eyes / **adversarial review**.
+- Check scope, meaningful tests, no secrets, no unresolved placeholders, and backward-compatible contracts.
 
 ## 7. Definition of Done
-- Contrato de cierre en [`templates/definition-of-done.md`](../templates/definition-of-done.md).
-- No se marca "hecho" con verificación pendiente o fallida.
+- Closeout contract: [`templates/definition-of-done.md`](../templates/definition-of-done.md).
+- Do not mark work done with pending or failed verification.
 
 ## 8. Handoff / checkpoint
-- Antes de terminar o de una compactación, dejar **estado durable** en tracker + VCS.
-- Commit (WIP si hace falta) + comentario en el ticket: qué falta, rama, último commit, siguiente paso.
-- Anunciar `CHECKPOINT <TICKET_ID>`.
+- Before ending or compacting, leave **durable state** in the tracker and VCS.
+- Commit (WIP if needed) and comment on the ticket: remaining work, branch, last commit, next step.
+- Announce `CHECKPOINT <TICKET_ID>`.
 
-## 9. Integración y despliegue
-- `<INTEGRATION_BRANCH>` → `<ENVIRONMENTS>` (dev → staging → prod).
-- Puertas de aprobación: `<APPROVAL_GATED_ACTIONS>` no se auto-ejecutan sin OK explícito.
+## 9. Integration and deployment
+- `<INTEGRATION_BRANCH>` -> `<ENVIRONMENTS>` (dev -> staging -> prod).
+- Approval gates: do not execute `<APPROVAL_GATED_ACTIONS>` without explicit human approval.
+
+## 10. Persistence language
+- The agent's conversation language is independent of `<REPO_LANGUAGE>`.
+- Specs, docs, tickets, tasks, code, comments, commits, and pull requests MUST use `<REPO_LANGUAGE>` (default: English).
+
+## Structural code intelligence
+- For structural, dependency, or impact questions, prefer an available structural index over blind grep when the repository provides one.
+- The capability is optional: without a configured provider, use native repository tools.

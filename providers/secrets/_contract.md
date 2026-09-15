@@ -1,34 +1,26 @@
-# Contrato abstracto: proveedor de secretos
+# Abstract contract: secrets provider
 
-Este archivo define la forma obligatoria de una instancia de `secrets`. No es
-un proveedor seleccionable y nunca se compone en `docs/bindings.md`.
+This file defines the required shape of a `secrets` instance. It is not a
+selectable provider and is never composed into `docs/bindings.md`.
 
-Todo fragmento `providers/secrets/<proveedor>.md` debe incluir estos campos:
+Every `providers/secrets/<provider>.md` fragment must include these fields:
 
-## Identidad
+## Identity
+- `Contract instance`: reference to this file.
+- `Capability`: `secrets`.
+- `Provider`: name of the bound secrets manager.
 
-- `Instancia del contrato`: referencia a este archivo.
-- `Capacidad`: `secrets`.
-- `Proveedor`: nombre del sistema vinculado o `none`.
+## Binding
+State where secrets live and which project path, mount, or environment is used.
 
-## Vinculación
+## How the agent resolves secrets
+Distinguish the harness mechanism (MCP, CLI, or API) from the binding's rules.
+Explain how to locate, read, and mount or inject a secret without exposing its value.
 
-Debe indicar dónde viven los secretos y qué ruta, proyecto o mount usa el
-proyecto cuando corresponda. Debe dejar claro que el proveedor es obligatorio
-y exclusivo, o que no hay secretos reales (`none`).
+## Usage rules
+State when the agent may read a secret, how commands receive it, and which
+durable configuration or reference the project must retain.
 
-## Cómo resuelve el agente
-
-Debe distinguir el mecanismo que aporta el harness (MCP, CLI o API) de las
-reglas del binding, y explicar cómo localizar, leer y montar o inyectar un
-secreto sin exponer su valor.
-
-## Reglas de uso
-
-Debe indicar cuándo puede leer el agente, cómo se usan los secretos en los
-comandos y qué configuración o referencia durable debe dejarse en el proyecto.
-
-## Prohibiciones
-
-Debe prohibir secretos en el código, logs, commits, memoria persistente y
-proveedores alternativos.
+## Prohibitions
+Secrets must not appear in code, logs, commits, persistent memory, or prompts.
+Do not use alternate providers or materialize secret values on disk.
