@@ -4,6 +4,14 @@
 
 **Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: abrir issue, comentar, aplicar/quitar labels, cerrar.
 
+**Plantilla obligatoria:** toda issue nueva DEBE seguir la plantilla correspondiente de
+`.github/ISSUE_TEMPLATE/` (`task.yml` para trabajo del producto o `bug.yml` para defectos). En la web,
+usá el formulario correspondiente. El cuerpo debe incluir contexto/problema, criterios de aceptación,
+alcance y verificación. Con `gh`, rellená primero esa estructura equivalente y creá la issue
+con `gh issue create --repo <OWNER>/<REPO> --title "<título>" --label "type:product" --body-file <plantilla-rellena>`
+o `--label "type:bug"`, según corresponda.
+No uses `gh issue create` con `--body` libre ni sin cuerpo.
+
 **Reglas y ciclo:**
 - Tipo por label: `task` para trabajo, `bug` para defectos.
 - Estado por labels (p. ej. `status:in-progress`) o por el estado nativo abierto/cerrado; usá el que el repo ya tenga.

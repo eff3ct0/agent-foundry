@@ -55,6 +55,8 @@ No es específico de ningún lenguaje ni stack.
    automática de IA. Identidad de commit: `<COMMIT_IDENTITY>`.
 10. **Seguí las reglas del repo destino** (`<REPO_CONVENTIONS_FILE>`) cuando existan; este archetype es el
     default, no un override de lo específico del proyecto.
+11. **Plantillas de issues:** al crear una issue es OBLIGATORIO usar la plantilla correspondiente de
+    `.github/ISSUE_TEMPLATE/` (`task` o `bug`); están prohibidas las issues en blanco o en formato libre.
 
 ## Bindings (contrato de proveedores)
 Las capacidades del proyecto están **vinculadas a proveedores concretos** en
