@@ -69,6 +69,15 @@ def validate_event(event, repository, token):
 
 
 def self_check():
+    root = Path(__file__).resolve().parents[1]
+    for template in (
+        root / ".github" / "pull_request_template.md",
+        root / "templates" / "pull-request.md",
+    ):
+        text = template.read_text(encoding="utf-8")
+        assert "Closes #<TICKET_ID>" in text
+        assert "Closes `<TICKET_ID>`" not in text
+
     valid = {
         "body": "Summary\n\nCloses #42.",
         "labels": [{"name": "type:product"}],
