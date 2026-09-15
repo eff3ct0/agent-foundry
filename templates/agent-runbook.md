@@ -31,13 +31,15 @@ Each session takes one task to a durable point, leaves state, and ends.
 
 ### Approval boundaries
 - Routine delivery includes issue/project updates, implementation, verification, commit, push, and PR creation.
-- Human decisions remain gated: applying `status:approved`, approving review, merge, production deployment, destructive operations, and release publication.
-- When a routine flow reaches a gate, mark the task `BLOCKED: requires approval`, leave the exact next step in the tracker, and stop.
+- Human decisions remain gated: approving review, merge, production deployment, destructive operations, and release publication. Applying `status:approved` is also gated, but the bound task provider may define a fail-closed delegated-approval protocol.
+- Under that protocol, the agent may add `status:approved` only when a current direct human instruction names the exact issue and `add status:approved`, target-host evidence binds the principal to maintainer/authorized-approver authority, the authenticated actor has `MAINTAIN` or `ADMIN`, and exactly one add attempt is followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation.
+- Without that evidence, mark the task `BLOCKED: requires approval`, tell the human to apply the label directly, leave the exact next step in the tracker, and stop. This contract change does not grant approval for existing work.
 
 ### GitHub binding
 When the bound tracker is GitHub, create issues from the repository form (or a filled template with
 `gh issue create --body-file`), use a closing reference such as `Closes #<TICKET_ID>` in the PR, add
-exactly one `type:*` label to the PR, and require the human `status:approved` label on the linked issue.
+exactly one `type:*` label to the PR, and require `status:approved` on the linked issue. Apply that label
+only through the protected delegated-approval protocol above; otherwise the human applies it directly.
 Use `gh pr create --body-file` for the PR. The governance workflow checks these rules; it never assigns
 approval or merges the PR.
 
