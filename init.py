@@ -21,6 +21,12 @@ Una clave sin valor NO se toca (queda como <KEY> y --check la marca), no se borr
 Composición de CI: si CI_SYSTEM es GitHub Actions y CI_STACKS trae ecosistemas
 (coma-separados: rust, typescript, python, go), se compone .github/workflows/ci.yml
 mapeando cada stack a su receta de ci/recipes.json (un job por lenguaje).
+
+Composición de bindings: TASK_TRACKER y SECRETS_PROVIDER (enums) seleccionan un
+fragmento del catálogo providers/ (task/ y secrets/) que se compone en
+docs/bindings.md — el contrato vinculante de proveedores del proyecto. Se compone
+ANTES de apply_values para que los tokens (<TRACKER_KEY>, <SECRETS_PATH>, ...) se
+rellenen dentro del bindings.md recién escrito.
 """
 import argparse
 import json
@@ -34,6 +40,19 @@ MANIFEST = os.path.join(ROOT, "placeholders.json")
 SELF = os.path.basename(__file__)
 SKIP_DIRS = {".git"}
 SKIP_ROOT_FILES = {SELF, "placeholders.json"}
+
+TRACKER_DISPLAY = {
+    "jira": "Jira",
+    "github-issues": "GitHub Issues",
+    "github-projects": "GitHub Projects",
+    "linear": "Linear",
+    "custom": "(personalizado)",
+}
+BINDINGS_HEADER = (
+    "# Bindings — proveedores obligatorios de este proyecto\n\n"
+    "Estas vinculaciones son de cumplimiento obligatorio para cualquier agente, "
+    "sea cual sea su harness.\n"
+)
 
 
 def load_manifest():
@@ -118,6 +137,9 @@ def gather(ph, args):
             except EOFError:
                 raw = ""
             val = raw if raw else default
+        enum = p.get("enum")
+        if enum and val and val not in enum:
+            sys.exit("Valor invalido para %s: %s. Opciones: %s" % (key, val, ", ".join(enum)))
         values[key] = val
     missing = [p["key"] for p in ph if p.get("required") and not values.get(p["key"])]
     if missing:
@@ -164,6 +186,43 @@ def compose_ci(root, stacks, ci_system, dry_run):
     return ok, unknown
 
 
+def _binding_fragment(root, capability, name):
+    """Ruta al fragmento providers/<capability>/<name>.md; si no existe, avisa y
+    cae al custom.md de esa capacidad. Devuelve la ruta o None si no hay ninguno."""
+    frag = os.path.join(root, "providers", capability, "%s.md" % name)
+    if os.path.exists(frag):
+        return frag
+    fallback = os.path.join(root, "providers", capability, "custom.md")
+    if os.path.exists(fallback):
+        print("Sin fragmento providers/%s/%s.md; uso custom.md como fallback." % (capability, name))
+        return fallback
+    return None
+
+
+def compose_bindings(root, task_tracker, secrets_provider, dry_run=False):
+    """Compone docs/bindings.md = encabezado + fragmento del proveedor de tareas +
+    fragmento del gestor de secretos, tomados del catálogo providers/. Devuelve la
+    lista de fragmentos usados (testable)."""
+    secrets_provider = secrets_provider or "none"
+    if dry_run:
+        print("Compondría docs/bindings.md (tareas: %s, secretos: %s)" % (task_tracker, secrets_provider))
+        return []
+    used, parts = [], [BINDINGS_HEADER]
+    for capability, name in (("task", task_tracker), ("secrets", secrets_provider)):
+        frag = _binding_fragment(root, capability, name)
+        if not frag:
+            sys.exit("No hay fragmento providers/%s/%s.md ni custom.md de fallback." % (capability, name))
+        used.append(frag)
+        with open(frag, encoding="utf-8") as f:
+            parts.append(f.read().rstrip() + "\n")
+    docs_dir = os.path.join(root, "docs")
+    os.makedirs(docs_dir, exist_ok=True)
+    with open(os.path.join(docs_dir, "bindings.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(parts))
+    print("Bindings compuesto: docs/bindings.md (tareas: %s, secretos: %s)" % (task_tracker, secrets_provider))
+    return used
+
+
 def cleanup(root):
     removed = []
     for f in (SELF, "placeholders.json"):
@@ -171,10 +230,11 @@ def cleanup(root):
         if os.path.exists(p):
             os.remove(p)
             removed.append(f)
-    ci_dir = os.path.join(root, "ci")
-    if os.path.isdir(ci_dir):
-        shutil.rmtree(ci_dir)
-        removed.append("ci/")
+    for d in ("ci", "providers"):
+        dp = os.path.join(root, d)
+        if os.path.isdir(dp):
+            shutil.rmtree(dp)
+            removed.append(d + "/")
     return removed
 
 
@@ -206,6 +266,23 @@ def self_check():
             assert unknown == ["cc"], unknown
         finally:
             shutil.rmtree(d2)
+
+        d3 = tempfile.mkdtemp()
+        try:
+            for cap, name, body in (
+                ("task", "foo", "## Foo\nTareas en Foo."),
+                ("secrets", "none", "## Sin gestor\nSin secretos reales."),
+            ):
+                os.makedirs(os.path.join(d3, "providers", cap), exist_ok=True)
+                with open(os.path.join(d3, "providers", cap, "%s.md" % name), "w", encoding="utf-8") as f:
+                    f.write(body)
+            used = compose_bindings(d3, "foo", "none", dry_run=False)
+            bind = open(os.path.join(d3, "docs", "bindings.md"), encoding="utf-8").read()
+            assert "# Bindings — proveedores obligatorios de este proyecto" in bind, bind
+            assert "Tareas en Foo." in bind and "Sin secretos reales." in bind, bind
+            assert len(used) == 2, used
+        finally:
+            shutil.rmtree(d3)
 
         print("self-check OK")
     finally:
@@ -242,6 +319,15 @@ def main():
         return
 
     values = gather(ph, args)
+    task_tracker = values.get("TASK_TRACKER", "")
+    if not values.get("TRACKER") and task_tracker:
+        values["TRACKER"] = TRACKER_DISPLAY.get(task_tracker, task_tracker)
+    # Componer ANTES de apply_values para que rellene los tokens dentro del bindings.md recién escrito.
+    if task_tracker:
+        compose_bindings(ROOT, task_tracker, values.get("SECRETS_PROVIDER", ""), args.dry_run)
+    stacks = parse_stacks(values.get("CI_STACKS", ""))
+    if not args.no_ci and stacks:
+        compose_ci(ROOT, stacks, values.get("CI_SYSTEM", ""), args.dry_run)
     nonempty = {k: v for k, v in values.items() if v}
     changes = apply_values(ROOT, nonempty, dry_run=args.dry_run)
     total = sum(changes.values())
@@ -252,9 +338,6 @@ def main():
     rem = remaining(ROOT, keys)
     if rem:
         print("Aún sin resolver (vacíos u omitidos): %s" % ", ".join(sorted(rem)))
-    stacks = parse_stacks(values.get("CI_STACKS", ""))
-    if not args.no_ci and stacks:
-        compose_ci(ROOT, stacks, values.get("CI_SYSTEM", ""), args.dry_run)
     if args.dry_run:
         print("(dry-run: no se escribió nada)")
         return

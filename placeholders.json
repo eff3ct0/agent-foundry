@@ -1,5 +1,5 @@
 {
-  "_comment": "Fuente única de verdad de los placeholders <KEY> a nivel proyecto. Lo consume init.py (rellenar y --check) y sirve de guía al agente. NO incluye los tokens locales de plantilla (TICKET_ID, CRITERIO_1, DATE, NNN, ALTERNATIVA_1, SUBTAREA_1, RIESGO, CAMBIO_1, PASOS_EN_ENV, ENV, CONSECUENCIA_*) que se rellenan al usar cada template, ni los ilustrativos de la convención (PLACEHOLDER, UPPER_SNAKE). kind: mechanical=valor conocido; judgment=requiere una decisión (buen candidato para que lo resuelva el agente o se discuta).",
+  "_comment": "Fuente única de verdad de los placeholders <KEY> a nivel proyecto. Lo consume init.py (rellenar y --check) y sirve de guía al agente. NO incluye los tokens locales de plantilla (TICKET_ID, CRITERIO_1, DATE, NNN, ALTERNATIVA_1, SUBTAREA_1, RIESGO, CAMBIO_1, PASOS_EN_ENV, ENV, CONSECUENCIA_*) que se rellenan al usar cada template, ni los ilustrativos de la convención (PLACEHOLDER, UPPER_SNAKE). kind: mechanical=valor conocido; judgment=requiere una decisión (buen candidato para que lo resuelva el agente o se discuta). TASK_TRACKER y SECRETS_PROVIDER son enums: su valor selecciona el fragmento del catálogo providers/ (task/ y secrets/) que init.py compone en docs/bindings.md.",
   "placeholders": [
     {"key": "PROJECT_NAME", "prompt": "Nombre del proyecto", "default": "", "kind": "mechanical", "required": true},
     {"key": "INTEGRATION_BRANCH", "prompt": "Rama de integracion", "default": "main", "kind": "mechanical", "required": true},
@@ -9,6 +9,9 @@
     {"key": "TRACKER", "prompt": "Tracker de tareas (Jira / GitHub Issues / Linear / ...)", "default": "GitHub Issues", "kind": "mechanical", "required": false},
     {"key": "TRACKER_KEY", "prompt": "Proyecto o tablero dentro del tracker", "default": "", "kind": "mechanical", "required": false},
     {"key": "EPIC_ID", "prompt": "ID del epic/hito por defecto (si aplica)", "default": "", "kind": "mechanical", "required": false},
+    {"key": "TASK_TRACKER", "prompt": "Proveedor de tareas", "default": "", "kind": "mechanical", "required": true, "enum": ["jira", "github-issues", "github-projects", "linear", "custom"]},
+    {"key": "SECRETS_PROVIDER", "prompt": "Gestor de secretos", "default": "none", "kind": "mechanical", "required": false, "enum": ["infisical", "vault", "doppler", "none", "custom"]},
+    {"key": "SECRETS_PATH", "prompt": "Ruta/mount del secreto en el gestor (si aplica)", "default": "", "kind": "mechanical", "required": false},
     {"key": "BRANCHING_MODEL", "prompt": "Modelo de ramas (trunk-based / GitHub flow / ...)", "default": "trunk-based", "kind": "judgment", "required": false},
     {"key": "BRANCH_NAMING", "prompt": "Convencion de nombre de rama", "default": "<tipo>/<TICKET_ID>-<slug-corto>", "kind": "mechanical", "required": false},
     {"key": "BUILD_CMD", "prompt": "Comando de build", "default": "", "kind": "mechanical", "required": false},

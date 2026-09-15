@@ -10,7 +10,8 @@ Agnóstico de lenguaje/stack. Placeholders `<UPPER_SNAKE>` se rellenan en el boo
 - Registrar supuestos y dependencias.
 
 ## 2. Descomposición en tickets
-- Descomponer en tickets dentro de `<TRACKER>`.
+- Descomponer en tickets dentro de `<TRACKER>`, el tracker **vinculado** en [`bindings.md`](bindings.md)
+  (uso obligatorio y exclusivo: no elegir otro).
 - **Un ticket = una unidad de trabajo** (una sesión de agente).
 - Enlazar cada ticket a su epic `<EPIC_ID>`.
 - Usar la plantilla [`templates/ticket.md`](../templates/ticket.md).

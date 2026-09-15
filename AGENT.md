@@ -22,6 +22,8 @@ No es específico de ningún lenguaje ni stack.
   testing, seguridad, CI/CD, arquitectura, documentación, observabilidad.
 - [`docs/bootstrap.md`](docs/bootstrap.md) — **cómo inicializar** un proyecto nuevo a partir de esta
   plantilla (rellenar placeholders, tooling, primer commit, checklist).
+- [`docs/bindings.md`](docs/bindings.md) — **contrato de proveedores**: a qué tracker de tareas y gestor de
+  secretos está atado el proyecto (se compone al inicializar desde `providers/`). Uso obligatorio y exclusivo.
 - [`templates/`](templates/) — plantillas reutilizables: ticket, pull request, Definition of Done, ADR,
   runbook de agente (ejecución por sesiones/loop).
 
@@ -47,7 +49,15 @@ No es específico de ningún lenguaje ni stack.
 10. **Seguí las reglas del repo destino** (`<REPO_CONVENTIONS_FILE>`) cuando existan; este archetype es el
     default, no un override de lo específico del proyecto.
 
+## Bindings (contrato de proveedores)
+Las capacidades del proyecto están **vinculadas a proveedores concretos** en
+[`docs/bindings.md`](docs/bindings.md): el proveedor de tareas (`<TASK_TRACKER>`) y el gestor de secretos
+(`<SECRETS_PROVIDER>`). Su uso es **OBLIGATORIO y EXCLUSIVO** para cualquier agente; no se usan alternativas.
+El **harness** aporta el mecanismo de acceso (MCP / CLI / API); el **spec** aporta el proveedor y sus reglas.
+Ese contrato manda sobre cualquier preferencia del agente o del harness.
+
 ## Orden de lectura para un agente en frío
-1. Este `AGENT.md`. 2. `docs/workflow.md`. 3. El ticket activo en `<TRACKER>`. 4. `docs/engineering-handbook.md`
-para el estándar del cambio concreto. 5. `templates/agent-runbook.md` si operás en modo loop.
-6. [`docs/agent-init.md`](docs/agent-init.md) si vas a **inicializar** el proyecto desde la plantilla (modo init).
+1. Este `AGENT.md`. 2. [`docs/bindings.md`](docs/bindings.md) (proveedores obligatorios). 3. `docs/workflow.md`.
+4. El ticket activo en `<TRACKER>`. 5. `docs/engineering-handbook.md` para el estándar del cambio concreto.
+6. `templates/agent-runbook.md` si operás en modo loop.
+7. [`docs/agent-init.md`](docs/agent-init.md) si vas a **inicializar** el proyecto desde la plantilla (modo init).
