@@ -13,3 +13,6 @@
 - NUNCA persistir, loguear ni commitear el valor de un secreto.
 - NO exportar el entorno de Doppler a un `.env` versionado.
 - NO usar otra fuente de secretos que no sea Doppler.
+> **Instancia del contrato:** [`_contract.md`](../providers/secrets/_contract.md)
+> **Capacidad:** `secrets`
+> **Proveedor:** `doppler`

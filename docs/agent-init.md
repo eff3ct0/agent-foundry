@@ -27,8 +27,15 @@ Fijá las **capacidades vinculadas** (contrato de proveedores) antes de rellenar
 - **Secretos:** `<SECRETS_PROVIDER>` (`infisical` / `vault` / `doppler` / `none` / `custom`) y su ruta `<SECRETS_PATH>` si aplica.
 - **Brownfield:** inferí del repo — `.jira`/config de Jira → `jira`; `.github` (issues o projects) → `github-issues`/`github-projects`; Linear → `linear`; `infisical.json` → `infisical`, `.vault`/config → `vault`, `doppler.yaml` → `doppler`; sin secretos reales → `none`.
 
+La forma de cada fragmento la define el contrato abstracto de su capacidad:
+[`providers/task/_contract.md`](../providers/task/_contract.md),
+[`providers/secrets/_contract.md`](../providers/secrets/_contract.md) y
+[`ci/_contract.md`](../ci/_contract.md) para CI. Los fragmentos concretos son
+instancias de esos contratos; `_contract.md` nunca es un proveedor seleccionable.
+
 Al correr `init.py`, estos enums seleccionan el fragmento del catálogo [`providers/`](../providers/) (task/ y secrets/)
-y componen [`docs/bindings.md`](bindings.md). A partir de ahí el agente queda **obligado por ese contrato** (uso exclusivo).
+y componen [`docs/bindings.md`](bindings.md), cuya cabecera vuelve a declarar la
+fuente de la forma. A partir de ahí el agente queda **obligado por ese contrato** (uso exclusivo).
 
 ## Paso 3 — Rellenar los mecánicos
 Corré el script con los `kind: mechanical` (incluí `TASK_TRACKER`, `SECRETS_PROVIDER`, `CI_STACKS` y `CI_SYSTEM`):
@@ -49,7 +56,9 @@ Cada uno con **una frase de justificación**; en brownfield, alineados con lo qu
 ## Paso 5 — CI
 Al correr `init.py` se compone `.github/workflows/ci.yml` desde `<CI_STACKS>`
 (mapeando cada stack a su receta en [`ci/recipes.json`](../ci/recipes.json): un job por lenguaje).
-Revisá que los jobs correspondan a los lenguajes reales del proyecto y **ajustá los comandos**
+Cada receta es una instancia de [`ci/_contract.md`](../ci/_contract.md); el
+archivo de contrato no es una receta y queda fuera de la selección. Revisá que
+los jobs correspondan a los lenguajes reales del proyecto y **ajustá los comandos**
 si el proyecto usa scripts propios (p. ej. `make test` en vez de los gates por defecto).
 
 ## Paso 6 — Verificar ANTES de la autolimpieza

@@ -9,3 +9,6 @@
 **Prohibiciones:**
 - NUNCA commitear un `.env` con valores reales.
 - NO pegar credenciales reales en código, config ni en la sesión del agente.
+> **Instancia del contrato:** [`_contract.md`](../providers/secrets/_contract.md)
+> **Capacidad:** `secrets`
+> **Proveedor:** `none`

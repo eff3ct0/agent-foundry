@@ -13,3 +13,6 @@
 - NUNCA persistir, loguear ni commitear el valor de un secreto.
 - NO copiar secretos a `.env` ni a archivos de config.
 - NO usar otra fuente de secretos que no sea Vault.
+> **Instancia del contrato:** [`_contract.md`](../providers/secrets/_contract.md)
+> **Capacidad:** `secrets`
+> **Proveedor:** `vault`
