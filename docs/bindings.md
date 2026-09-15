@@ -13,3 +13,14 @@ The shape of bindings is defined by the abstract capability contracts:
 During initialization, `init.py` replaces this content with the selected task and
 secrets instances, plus the optional code-intelligence instance when selected.
 `_contract.md` files define shape; they are not selectable providers or recipes.
+
+## Protected `status:approved` gate
+The bound task provider may support delegated approval only through its
+fail-closed protocol: a current direct human instruction must name the exact
+issue and `add status:approved`; target-host evidence must bind that principal
+to maintainer/authorized-approver authority; the authenticated actor must have
+`MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must be followed by
+target-host readback. Any mismatch, stale/ambiguous/missing instruction,
+insufficient permission, failed/unknown mutation, or readback mismatch stops
+the operation. Without that evidence, the human applies the label directly.
+This contract change does not approve existing work.

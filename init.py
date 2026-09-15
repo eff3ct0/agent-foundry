@@ -59,7 +59,17 @@ BINDINGS_HEADER = (
     "These bindings are mandatory for every agent, regardless of harness.\n"
     "The shape of each instance is defined by providers/task/_contract.md, "
     "providers/secrets/_contract.md, and providers/code-intel/_contract.md when selected; "
-    "the harness provides access and the binding provides the rules.\n"
+    "the harness provides access and the binding provides the rules.\n\n"
+    "## Protected status:approved gate\n"
+    "The bound task provider may support delegated approval only through its "
+    "fail-closed protocol: a current direct human instruction must name the exact "
+    "issue and add status:approved; target-host evidence must bind that principal "
+    "to maintainer/authorized-approver authority; the authenticated actor must "
+    "have MAINTAIN or ADMIN; and exactly one scoped add attempt must be followed "
+    "by target-host readback. Any mismatch, stale/ambiguous/missing instruction, "
+    "insufficient permission, failed/unknown mutation, or readback mismatch stops "
+    "the operation. Without that evidence, the human applies the label directly. "
+    "This contract change does not approve existing work.\n"
 )
 
 
