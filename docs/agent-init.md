@@ -57,7 +57,7 @@ si el proyecto usa scripts propios (p. ej. `make test` en vez de los gates por d
 
 ## Paso 7 — Finalizar
 - Primer commit con conventional commits.
-- El script se **autolimpió** (`init.py`, `placeholders.json`, `ci/` y `providers/`); el `ci.yml` y `docs/bindings.md` compuestos quedan.
+- El script se **autolimpió** (`init.py`, `placeholders.json`, `factory_bootstrap.py`, `ci/` y `providers/`); el `ci.yml` y `docs/bindings.md` compuestos quedan.
 - No debe quedar ningún `<KEY>` del manifiesto sin resolver.
 
 ## Nota anti-error

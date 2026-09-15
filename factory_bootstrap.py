@@ -12,7 +12,7 @@ Uso:
   python3 factory_bootstrap.py --org <ORG> --yes        # no interactivo: crea sin preguntar
   python3 factory_bootstrap.py --org <ORG> --no-create  # solo reporta, nunca crea
   python3 factory_bootstrap.py --plan --org <ORG>       # OFFLINE: imprime el plan, sin llamar a gh
-  Opciones: --factory-repo <nombre> (default: factory), --visibility public|private (default: private).
+  Opciones: --factory-repo <nombre> (default: factory), --visibility public|internal|private (default: private).
 
 Requiere `gh` autenticado (salvo --plan). Idempotente: repos existentes -> no-op. NUNCA borra.
 """

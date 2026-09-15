@@ -26,6 +26,7 @@ No es específico de ningún lenguaje ni stack.
 - [`docs/bindings.md`](docs/bindings.md) — **contrato de proveedores**: a qué tracker de tareas y gestor de
   secretos está atado el proyecto (se compone al inicializar desde `providers/`). Uso obligatorio y exclusivo.
 - [`docs/org-factory.md`](docs/org-factory.md) — **capa de organización**: cómo referenciar el spec desde los repos de la org (repo `.github` + pin `FACTORY_SPEC`).
+- [`docs/agent-init.md`](docs/agent-init.md) — **modo agente**: procedimiento para inicializar el proyecto desde la plantilla (detección de stack, bindings, verificación).
 - [`templates/`](templates/) — plantillas reutilizables: ticket, pull request, Definition of Done, ADR,
   y el runbook de agente, que es el **contrato de ejecución en loop** del proyecto (reglas de convergencia).
 

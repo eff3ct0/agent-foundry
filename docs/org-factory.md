@@ -18,7 +18,7 @@ de este arquetipo (`.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md
 - `--no-create` — solo reporta, nunca crea.
 - `--plan` — offline: imprime los targets y la intención, sin llamar a `gh`.
 - `--factory-repo <nombre>` — nombre del repo de la fábrica (default: `factory`).
-- `--visibility public|private` — visibilidad al crear (default: `private`).
+- `--visibility public|internal|private` — visibilidad al crear (default: `private`).
 
 Nota: requiere `gh` autenticado; es idempotente (repos existentes → no-op); crear repos es una acción
 consentida (por eso `--yes`/prompt). No forma parte de `init.py`.
