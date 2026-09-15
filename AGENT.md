@@ -17,6 +17,7 @@ It is not tied to any language or stack.
 - Name: `<PROJECT_NAME>` - Repositories: `<REPO_URLS>`
 - Stack: `<LANGUAGES_AND_FRAMEWORKS>` - Package manager: `<PACKAGE_MANAGER>`
 - Task tracker: `<TRACKER>` (project/board `<TRACKER_KEY>`)
+- Code intelligence: `<CODE_INTELLIGENCE>` (optional structural index; `none` by default)
 - Persistence language: `<REPO_LANGUAGE>` (conversation language is independent)
 - Branching strategy: `<BRANCHING_MODEL>` (e.g. trunk-based / GitHub flow) - integration branch `<INTEGRATION_BRANCH>`
 - Base commands: build `<BUILD_CMD>` - test `<TEST_CMD>` - lint `<LINT_CMD>` - typecheck `<TYPECHECK_CMD>` - run `<RUN_CMD>`

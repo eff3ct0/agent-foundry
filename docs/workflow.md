@@ -54,5 +54,5 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 - Specs, docs, tickets, tasks, code, comments, commits, and pull requests MUST use `<REPO_LANGUAGE>` (default: English).
 
 ## Structural code intelligence
-- For structural, dependency, or impact questions, prefer an available structural index over blind grep when the repository provides one.
-- The capability is optional: without a configured provider, use native repository tools.
+- For structural, dependency, or impact questions, prefer an available structural index over blind grep.
+- The capability is optional and defaults to `none`; without a configured provider, use native repository tools.

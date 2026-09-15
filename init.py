@@ -28,10 +28,11 @@ by mapping each stack to its ci/recipes.json recipe (one job per language).
 
 Binding composition: TASK_TRACKER and SECRETS_PROVIDER (enums) select catalog
 fragments from providers/ (task/ and secrets/) and compose docs/bindings.md, the
-project's binding contract. The abstract shape is in providers/task/_contract.md
-and providers/secrets/_contract.md; _contract.md is never selected. Composition
-happens BEFORE apply_values so tokens (<TRACKER_KEY>, <SECRETS_PATH>, ...) are
-filled inside the newly written bindings.md.
+project's binding contract. CODE_INTELLIGENCE is optional and defaults to none;
+when selected, its provider fragment is composed too. The abstract shapes are in
+the relevant providers/*/_contract.md files; _contract.md is never selected.
+Composition happens BEFORE apply_values so tokens (<TRACKER_KEY>,
+<SECRETS_PATH>, ...) are filled inside the newly written bindings.md.
 """
 import argparse
 import json
@@ -56,8 +57,8 @@ TRACKER_DISPLAY = {
 BINDINGS_HEADER = (
     "# Bindings - mandatory project providers\n\n"
     "These bindings are mandatory for every agent, regardless of harness.\n"
-    "The shape of each instance is defined by "
-    "providers/task/_contract.md and providers/secrets/_contract.md; "
+    "The shape of each instance is defined by providers/task/_contract.md, "
+    "providers/secrets/_contract.md, and providers/code-intel/_contract.md when selected; "
     "the harness provides access and the binding provides the rules.\n"
 )
 
@@ -206,12 +207,20 @@ def _binding_fragment(root, capability, name):
     return None
 
 
-def compose_bindings(root, task_tracker, secrets_provider, dry_run=False):
-    """Compose docs/bindings.md from the header and task/secrets provider
-    fragments in providers/. Return the list of used fragments (testable)."""
+def compose_bindings(root, task_tracker, secrets_provider, dry_run=False, code_intelligence=None):
+    """Compose docs/bindings.md from selected provider fragments.
+
+    Code intelligence is optional; ``none`` leaves no provider fragment in the
+    generated contract so projects do not acquire an implicit dependency.
+    """
     secrets_provider = secrets_provider or "none"
+    code_intelligence = code_intelligence or "none"
     if dry_run:
-        print("Would compose docs/bindings.md (tasks: %s, secrets: %s)" % (task_tracker, secrets_provider))
+        message = "Would compose docs/bindings.md (tasks: %s, secrets: %s)" % (
+            task_tracker, secrets_provider)
+        if code_intelligence != "none":
+            message = message[:-1] + ", code-intelligence: %s)" % code_intelligence
+        print(message)
         return []
     used, parts = [], [BINDINGS_HEADER]
     for capability, name in (("task", task_tracker), ("secrets", secrets_provider)):
@@ -221,11 +230,19 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False):
         used.append(frag)
         with open(frag, encoding="utf-8") as f:
             parts.append(f.read().rstrip() + "\n")
+    if code_intelligence != "none":
+        frag = _binding_fragment(root, "code-intel", code_intelligence)
+        if not frag:
+            sys.exit("No providers/code-intel/%s.md fragment or custom.md fallback exists." % code_intelligence)
+        used.append(frag)
+        with open(frag, encoding="utf-8") as f:
+            parts.append(f.read().rstrip() + "\n")
     docs_dir = os.path.join(root, "docs")
     os.makedirs(docs_dir, exist_ok=True)
     with open(os.path.join(docs_dir, "bindings.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(parts))
-    print("Bindings composed: docs/bindings.md (tasks: %s, secrets: %s)" % (task_tracker, secrets_provider))
+    print("Bindings composed: docs/bindings.md (tasks: %s, secrets: %s, code-intelligence: %s)" % (
+        task_tracker, secrets_provider, code_intelligence))
     return used
 
 
@@ -283,6 +300,7 @@ def self_check():
             for cap, name, body in (
                 ("task", "foo", "## Foo\nTasks in Foo."),
                 ("secrets", "none", "## No manager\nNo real secrets."),
+                ("code-intel", "codegraph", "## CodeGraph\nStructural index."),
             ):
                 os.makedirs(os.path.join(d3, "providers", cap), exist_ok=True)
                 with open(os.path.join(d3, "providers", cap, "%s.md" % name), "w", encoding="utf-8") as f:
@@ -294,6 +312,11 @@ def self_check():
             assert "providers/secrets/_contract.md" in bind, bind
             assert "Tasks in Foo." in bind and "No real secrets." in bind, bind
             assert len(used) == 2, used
+
+            used = compose_bindings(d3, "foo", "none", dry_run=False, code_intelligence="codegraph")
+            bind = open(os.path.join(d3, "docs", "bindings.md"), encoding="utf-8").read()
+            assert "Structural index." in bind, bind
+            assert len(used) == 3, used
 
             with open(os.path.join(d3, "providers", "task", "_contract.md"), "w", encoding="utf-8") as f:
                 f.write("MUST NOT BE COMPOSED")
@@ -346,7 +369,13 @@ def main():
         values["TRACKER"] = TRACKER_DISPLAY.get(task_tracker, task_tracker)
     # Compose BEFORE apply_values so tokens in the newly written bindings.md are filled.
     if task_tracker:
-        compose_bindings(ROOT, task_tracker, values.get("SECRETS_PROVIDER", ""), args.dry_run)
+        compose_bindings(
+            ROOT,
+            task_tracker,
+            values.get("SECRETS_PROVIDER", ""),
+            dry_run=args.dry_run,
+            code_intelligence=values.get("CODE_INTELLIGENCE", "none"),
+        )
     stacks = parse_stacks(values.get("CI_STACKS", ""))
     if not args.no_ci and stacks:
         compose_ci(ROOT, stacks, values.get("CI_SYSTEM", ""), args.dry_run)
