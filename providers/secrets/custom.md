@@ -1,16 +1,21 @@
-## Gestor de secretos personalizado
+## Custom secrets provider
 
-Gestor de secretos personalizado: definí aquí las reglas — nombre, dónde viven los secretos, cómo se inyectan (lectura efímera en tiempo de comando) y prohibiciones.
+> **Contract instance:** [`_contract.md`](../providers/secrets/_contract.md)
+> **Capability:** `secrets`
+> **Provider:** `custom`
+
+Custom secrets manager: define the rules here - name, secret location, ephemeral
+command-time injection, and prohibitions.
 
 <SECRETS_PROVIDER_CUSTOM_RULES>
-> **Instancia del contrato:** [`_contract.md`](../providers/secrets/_contract.md)
-> **Capacidad:** `secrets`
-> **Proveedor:** `custom`
 
-**Vinculación:** Definí dónde viven los secretos y la ruta o mount del proyecto.
+**Binding:** Define where secrets live and the project path or mount.
 
-**Cómo resuelve el agente:** el harness aporta MCP, CLI o API; definí cómo localizar, leer y montar o inyectar secretos sin exponer sus valores.
+**Agent resolution:** the harness provides MCP, CLI, or API; define how to locate,
+read, and mount or inject secrets without exposing their values.
 
-**Reglas de uso:** Definí cómo se usan los secretos en los comandos y qué referencia durable queda en el proyecto.
+**Usage rules:** define how commands receive secrets and which durable project
+reference remains.
 
-**Prohibiciones:** no guardes secretos en código, logs, commits ni memoria persistente; no uses proveedores alternativos.
+**Prohibitions:** never store secrets in code, logs, commits, or persistent
+memory; never use alternate providers.

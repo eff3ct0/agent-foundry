@@ -1,26 +1,26 @@
-# <TICKET_ID> — <TÍTULO>
+# <TICKET_ID> - <TITLE>
 
-## Contexto / problema
-<!-- guía: qué problema resuelve y por qué importa -->
+## Context / problem
+<!-- guide: what problem this solves and why it matters -->
 
-## Alcance
-- In: <QUÉ_ENTRA>
-- Out: <QUÉ_QUEDA_FUERA>
+## Scope
+- In: <WHAT_IS_IN>
+- Out: <WHAT_IS_OUT>
 
-## Criterios de aceptación
-- [ ] <CRITERIO_1>
-- [ ] <CRITERIO_2>
+## Acceptance criteria
+- [ ] <CRITERION_1>
+- [ ] <CRITERION_2>
 
-## Plan / subtareas
-- [ ] <SUBTAREA_1>
-- [ ] <SUBTAREA_2>
+## Plan / subtasks
+- [ ] <SUBTASK_1>
+- [ ] <SUBTASK_2>
 
-## Verificación
-- Comandos: `<TEST_CMD>` · `<BUILD_CMD>` · `<TYPECHECK_CMD>`
-- Comprobación e2e: <CÓMO_EN_ENV>
+## Verification
+- Commands: `<TEST_CMD>` - `<BUILD_CMD>` - `<TYPECHECK_CMD>`
+- E2e check: <HOW_IN_ENV>
 
 ## Definition of Done
-Ver [`definition-of-done.md`](definition-of-done.md).
+See [`definition-of-done.md`](definition-of-done.md).
 
-## Handoff / estado
-<!-- guía: rama, último commit, qué falta, siguiente paso -->
+## Handoff / status
+<!-- guide: branch, last commit, remaining work, next step -->

@@ -1,18 +1,18 @@
-# ADR-<NNN>: <TÍTULO>
+# ADR-<NNN>: <TITLE>
 
-- Estado: <proposed | accepted | superseded>
-- Fecha: <DATE>
+- Status: <proposed | accepted | superseded>
+- Date: <DATE>
 
-## Contexto
-<!-- guía: fuerzas, restricciones y problema a decidir -->
+## Context
+<!-- guide: forces, constraints, and problem to decide -->
 
-## Decisión
-<!-- guía: qué se decide, en presente y afirmativo -->
+## Decision
+<!-- guide: what is decided, in the present and affirmative -->
 
-## Alternativas consideradas
-- <ALTERNATIVA_1> — <por qué no>
-- <ALTERNATIVA_2> — <por qué no>
+## Alternatives considered
+- <ALTERNATIVE_1> - <why not>
+- <ALTERNATIVE_2> - <why not>
 
-## Consecuencias
-- Positivas: <CONSECUENCIA_POSITIVA>
-- Negativas / trade-offs: <CONSECUENCIA_NEGATIVA>
+## Consequences
+- Positive: <POSITIVE_CONSEQUENCE>
+- Negative / trade-offs: <NEGATIVE_CONSEQUENCE>

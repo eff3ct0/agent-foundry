@@ -1,25 +1,29 @@
 ## Jira
 
-> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
-> **Capacidad:** `task`
-> **Proveedor:** `jira`
+> **Contract instance:** [`_contract.md`](../providers/task/_contract.md)
+> **Capability:** `task`
+> **Provider:** `jira`
 
-**Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en Jira (proyecto/tablero `<TRACKER_KEY>`). El agente DEBE crear, actualizar y transicionar sus tareas ahí y NO puede usar otro tracker.
+**Binding:** Project tasks live EXCLUSIVELY in Jira (project/board
+`<TRACKER_KEY>`). The agent MUST create, update, and transition tasks there and
+MUST NOT use another tracker.
 
-**Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API); da igual cuál. Opera sobre las operaciones semánticas de Jira: crear issue, comentar, transicionar de estado, enlazar al epic `<EPIC_ID>`.
+**Agent interaction:** use the harness mechanism (MCP, CLI, or API). Semantic
+operations are creating an issue, commenting, transitioning status, and linking
+to epic `<EPIC_ID>`.
 
-**Plantilla obligatoria:** al crear una issue es OBLIGATORIO usar la plantilla de issue correspondiente
-definida por el proyecto/proveedor y su tipo (`task` o `bug`); están prohibidas las issues en blanco o
-en formato libre.
+**Mandatory template:** creating an issue MUST use the project/provider's
+corresponding issue template for its type (`task` or `bug`); blank or free-form
+issues are prohibited.
 
-**Reglas y ciclo:**
-- Estados: *To Do* → *In Progress* → *Done* (mapeá el equivalente real del tablero si difiere).
-- Al empezar, mové la issue a *In Progress* y comentá el plan; al cerrar, a *Done*.
-- Dejá comentarios de progreso/checkpoint en la propia issue: el estado durable vive ahí, no en la sesión.
-- Una issue = una unidad de trabajo (una sesión).
-- Cada commit/PR referencia la clave de la issue (`<TRACKER_KEY>-NNN`).
+**Rules and lifecycle:**
+- Statuses: *To Do* -> *In Progress* -> *Done* (map to the board's actual equivalents when different).
+- At start, move the issue to *In Progress* and comment the plan; at close, move it to *Done*.
+- Leave progress/checkpoint comments on the issue; durable state lives there, not in the session.
+- One issue = one unit of work (one session).
+- Every commit/PR references the issue key (`<TRACKER_KEY>-NNN`).
 
-**Prohibiciones:**
-- NO abrir tareas en GitHub Issues, Linear ni ningún otro sistema.
-- NO marcar *Done* con verificación pendiente o fallida.
-- NO dejar el estado solo en la sesión: si no está en Jira, no existe.
+**Prohibitions:**
+- Do not open tasks in GitHub Issues, Linear, or another system.
+- Do not mark *Done* with pending or failed verification.
+- Do not leave state only in Jira: if it is not there, it does not exist.

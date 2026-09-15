@@ -1,50 +1,51 @@
-# Manual de ingeniería
+# Engineering handbook
 
-Estándares como checklists. Agnóstico; rellenar `<UPPER_SNAKE>` en el bootstrap.
+Standards as checklists. Language-agnostic; fill `<UPPER_SNAKE>` during bootstrap.
 
-## Código
-- [ ] Formateo con `<FORMATTER>` y lint con `<LINTER>` en verde.
-- [ ] Naming consistente y descriptivo.
-- [ ] Archivos y funciones acotados (una responsabilidad clara).
-- [ ] Comentarios explican el **porqué**, no el qué.
+## Code
+- [ ] Format with `<FORMATTER>` and lint with `<LINTER>` successfully.
+- [ ] Use consistent, descriptive naming.
+- [ ] Keep files and functions focused (one clear responsibility).
+- [ ] Comments explain **why**, not what.
 
 ## Testing
 - [ ] Framework: `<TEST_FRAMEWORK>`.
-- [ ] Pirámide: muchos unitarios, algunos de integración, pocos e2e.
-- [ ] Política TDD: `<TDD_POLICY>`.
-- [ ] Cobertura objetivo: `<COVERAGE_TARGET>`.
-- [ ] Al menos **un check runnable** por lógica no trivial (rama, loop, parser, dinero, seguridad).
+- [ ] Pyramid: many unit tests, some integration tests, few e2e tests.
+- [ ] TDD policy: `<TDD_POLICY>`.
+- [ ] Coverage target: `<COVERAGE_TARGET>`.
+- [ ] At least **one runnable check** for every non-trivial logic (branch, loop, parser, money, security).
 
-## Seguridad
-- [ ] Validar entradas en las **fronteras de confianza**.
-- [ ] Secretos fuera del repo (variables de entorno / gestor de secretos).
-- [ ] Dependencias auditadas con `<SCA_TOOL>`.
-- [ ] Authz en cada endpoint/acción sensible.
-- [ ] Revisar OWASP para el tipo de cambio.
-- [ ] **Nunca** loguear secretos ni PII.
+## Security
+- [ ] Validate inputs at **trust boundaries**.
+- [ ] Keep secrets out of the repository (environment variables / secrets manager).
+- [ ] Audit dependencies with `<SCA_TOOL>`.
+- [ ] Enforce authorization on every endpoint/sensitive action.
+- [ ] Review OWASP guidance for the change type.
+- [ ] **Never** log secrets or PII.
 
 ## CI/CD
-- [ ] `<CI_SYSTEM>` con gates: format, lint, typecheck, test, build.
-- [ ] Merge bloqueado si algún gate falla.
-- [ ] Despliegue vía `<DEPLOY_METHOD>`.
+- [ ] `<CI_SYSTEM>` with format, lint, typecheck, test, and build gates.
+- [ ] Block merge when any gate fails.
+- [ ] Deploy through `<DEPLOY_METHOD>`.
 
-## Arquitectura
-- [ ] Límites de módulos explícitos.
-- [ ] Dependencias apuntan hacia el dominio (no al revés).
-- [ ] Decisiones significativas registradas como ADR → [`templates/adr.md`](../templates/adr.md).
+## Architecture
+- [ ] Make module boundaries explicit.
+- [ ] Dependencies point toward the domain, not the reverse.
+- [ ] Record significant decisions as ADRs -> [`templates/adr.md`](../templates/adr.md).
 
-## Documentación
-- [ ] README actualizado.
-- [ ] Changelog al día.
-- [ ] ADRs para decisiones relevantes.
-- [ ] Comentarios de intención donde el código no se explica solo.
+## Documentation
+- [ ] Update the README.
+- [ ] Keep the changelog current.
+- [ ] Use ADRs for relevant decisions.
+- [ ] Add intent comments where the code is not self-explanatory.
+- [ ] Write all persisted content in `<REPO_LANGUAGE>`; agent conversation language is independent.
 
-## Observabilidad
+## Observability
 - [ ] Stack: `<OBSERVABILITY_STACK>`.
-- [ ] Logs útiles, con contexto y sin ruido.
-- [ ] Métricas/alertas para lo que importa.
+- [ ] Useful logs with context and no noise.
+- [ ] Metrics/alerts for what matters.
 
-## Datos y migraciones
-- [ ] Aditivas y reversibles.
-- [ ] Retrocompatibles con datos existentes.
-- [ ] **Requieren aprobación humana** (`<APPROVAL_GATED_ACTIONS>`).
+## Data and migrations
+- [ ] Additive and reversible.
+- [ ] Backward-compatible with existing data.
+- [ ] **Require human approval** (`<APPROVAL_GATED_ACTIONS>`).

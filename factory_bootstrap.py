@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""factory_bootstrap.py — aprovisionamiento idempotente de los repos de organización.
+"""Idempotently provision organization repositories.
 
-Verifica (y crea los que falten) los repos base de una organización de GitHub:
-`<org>/.github` (defaults de salud comunitaria) y `<org>/<factory-repo>` (el template
-de la fábrica). Usa el CLI `gh`. Es SEPARADO de init.py (que es determinista/offline):
-init.py solo declara/impone la política FACTORY_REQUIRED; la existencia real de los
-repos la asegura esta herramienta.
+Verify and create missing base repositories in a GitHub organization:
+`<org>/.github` (community health defaults) and `<org>/<factory-repo>` (the
+factory template). Uses the `gh` CLI and is SEPARATE from init.py, which is
+deterministic and offline. init.py only declares/enforces FACTORY_REQUIRED;
+this tool ensures that repositories actually exist.
 
-Uso:
-  python3 factory_bootstrap.py --org <ORG> --ensure     # verifica y crea lo que falte (pregunta antes)
-  python3 factory_bootstrap.py --org <ORG> --yes        # no interactivo: crea sin preguntar
-  python3 factory_bootstrap.py --org <ORG> --no-create  # solo reporta, nunca crea
-  python3 factory_bootstrap.py --plan --org <ORG>       # OFFLINE: imprime el plan, sin llamar a gh
-  Opciones: --factory-repo <nombre> (default: factory), --visibility public|internal|private (default: private).
+Usage:
+  python3 factory_bootstrap.py --org <ORG> --ensure     # verify/create missing repos (asks first)
+  python3 factory_bootstrap.py --org <ORG> --yes        # non-interactive create
+  python3 factory_bootstrap.py --org <ORG> --no-create  # report only, never create
+  python3 factory_bootstrap.py --plan --org <ORG>       # OFFLINE plan, no gh calls
+  Options: --factory-repo <name> (default: factory), --visibility public|internal|private (default: private).
 
-Requiere `gh` autenticado (salvo --plan). Idempotente: repos existentes -> no-op. NUNCA borra.
+Requires authenticated `gh` (except --plan). Idempotent: existing repositories
+are no-ops. NEVER deletes.
 """
 import argparse
 import sys
 
-# nota: crear repos en una organización es una acción hacia afuera y consentida (por eso --yes / prompt); esta herramienta NO se corre desde init.py.
+# Creating organization repositories is an approved outward action, so this tool
+# requires --yes or an interactive prompt; init.py never invokes it.
 
 
 def targets(org, factory_repo):
@@ -27,10 +29,10 @@ def targets(org, factory_repo):
 
 
 def plan(org, factory_repo):
-    """OFFLINE: imprime los targets y la intención. No importa ni llama a subprocess."""
-    print("Plan (offline) para org %s:" % org)
-    for t in targets(org, factory_repo):
-        print("  verificaria/aseguraria %s (idempotente; requiere gh autenticado)" % t)
+    """Print targets and intent offline without importing or calling subprocess."""
+    print("Offline plan for org %s:" % org)
+    for target in targets(org, factory_repo):
+        print("  verify/ensure %s (idempotent; requires authenticated gh)" % target)
     return 0
 
 
@@ -38,9 +40,9 @@ def _preflight():
     import shutil
     import subprocess
     if not shutil.which("gh"):
-        sys.exit("gh no esta en PATH: instala GitHub CLI (https://cli.github.com) y corre `gh auth login`.")
+        sys.exit("gh is not in PATH: install GitHub CLI (https://cli.github.com) and run `gh auth login`.")
     if subprocess.run(["gh", "auth", "status"], capture_output=True).returncode != 0:
-        sys.exit("gh no esta autenticado: corre `gh auth login` antes de aprovisionar repos de org.")
+        sys.exit("gh is not authenticated: run `gh auth login` before provisioning organization repositories.")
 
 
 def _gh(*args):
@@ -50,57 +52,57 @@ def _gh(*args):
 
 def _consent(target):
     try:
-        return input("Crear %s? [y/N] " % target).strip().lower() in ("y", "yes")
+        return input("Create %s? [y/N] " % target).strip().lower() in ("y", "yes")
     except EOFError:
-        return False  # no interactivo sin --yes => no se crea (fail-closed hacia afuera)
+        return False  # non-interactive without --yes: fail closed toward external actions
 
 
 def ensure(org, factory_repo, visibility, no_create, yes):
     _preflight()
-    existentes, creados, omitidos, faltantes = [], [], [], []
-    for t in targets(org, factory_repo):
-        if _gh("repo", "view", t).returncode == 0:
-            print("ok: %s ya existe" % t)
-            existentes.append(t)
+    existing, created, skipped, missing = [], [], [], []
+    for target in targets(org, factory_repo):
+        if _gh("repo", "view", target).returncode == 0:
+            print("ok: %s already exists" % target)
+            existing.append(target)
             continue
         if no_create:
-            print("falta: %s (no se crea)" % t)
-            faltantes.append(t)
+            print("missing: %s (not created)" % target)
+            missing.append(target)
             continue
-        if not (yes or _consent(t)):
-            print("omitido: %s" % t)
-            omitidos.append(t)
+        if not (yes or _consent(target)):
+            print("skipped: %s" % target)
+            skipped.append(target)
             continue
-        res = _gh("repo", "create", t, "--%s" % visibility)
-        if res.returncode == 0:
-            print("creado: %s" % t)
-            creados.append(t)
-        elif "already exists" in (res.stderr or "").lower():
-            print("ok: %s ya existe" % t)  # idempotente: create sobre repo existente = no-op
-            existentes.append(t)
+        result = _gh("repo", "create", target, "--%s" % visibility)
+        if result.returncode == 0:
+            print("created: %s" % target)
+            created.append(target)
+        elif "already exists" in (result.stderr or "").lower():
+            print("ok: %s already exists" % target)
+            existing.append(target)
         else:
-            print("error: %s (fallo al crear: %s)" % (t, (res.stderr or "").strip()))
-            faltantes.append(t)
-    print("Resumen: existentes=%d creados=%d omitidos=%d faltantes=%d" % (
-        len(existentes), len(creados), len(omitidos), len(faltantes)))
-    return 0 if not (omitidos or faltantes) else 1
+            print("error: %s (creation failed: %s)" % (target, (result.stderr or "").strip()))
+            missing.append(target)
+    print("Summary: existing=%d created=%d skipped=%d missing=%d" % (
+        len(existing), len(created), len(skipped), len(missing)))
+    return 0 if not (skipped or missing) else 1
 
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="Asegura (idempotente) los repos de organización <org>/.github y <org>/<factory-repo> via gh.")
-    ap.add_argument("--org", help="nombre de la organización (requerido salvo --plan/--help)")
-    ap.add_argument("--factory-repo", default="factory", help="nombre del repo de la fábrica (default: factory)")
-    ap.add_argument("--ensure", action="store_true", help="verifica y crea los que falten (acción por defecto)")
-    ap.add_argument("--no-create", action="store_true", help="solo reporta, nunca crea")
-    ap.add_argument("--yes", action="store_true", help="no interactivo: crea sin preguntar")
-    ap.add_argument("--visibility", default="private", choices=["public", "private", "internal"],
-                    help="visibilidad al crear (default: private)")
-    ap.add_argument("--plan", action="store_true", help="OFFLINE: imprime el plan sin llamar a gh ni a la red")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(
+        description="Idempotently ensure organization repositories <org>/.github and <org>/<factory-repo> via gh.")
+    parser.add_argument("--org", help="organization name (required except with --plan/--help)")
+    parser.add_argument("--factory-repo", default="factory", help="factory repository name (default: factory)")
+    parser.add_argument("--ensure", action="store_true", help="verify and create missing repositories (default action)")
+    parser.add_argument("--no-create", action="store_true", help="report only; never create")
+    parser.add_argument("--yes", action="store_true", help="non-interactive; create without asking")
+    parser.add_argument("--visibility", default="private", choices=["public", "private", "internal"],
+                        help="creation visibility (default: private)")
+    parser.add_argument("--plan", action="store_true", help="print offline plan without calling gh or the network")
+    args = parser.parse_args()
 
     if not args.plan and not args.org:
-        ap.error("--org es requerido (salvo --plan)")
+        parser.error("--org is required except with --plan")
 
     if args.plan:
         sys.exit(plan(args.org, args.factory_repo))

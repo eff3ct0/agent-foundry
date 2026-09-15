@@ -1,14 +1,15 @@
 # Definition of Done
 
-Contrato de cierre de cada ticket. No se marca "hecho" con algún ítem sin cumplir.
+Closeout contract for every ticket. Do not mark work done with any unchecked item.
 
-- [ ] Criterios de aceptación cumplidos.
-- [ ] Tests añadidos y en verde.
-- [ ] Build + lint + typecheck en verde.
-- [ ] Verificado e2e en `<ENV>`.
-- [ ] Docs / ADR actualizados.
-- [ ] Contrato retrocompatible, o migración + aprobación.
-- [ ] Ticket actualizado (estado y evidencia).
-- [ ] PR abierto usando `.github/pull_request_template.md` y vinculado al ticket.
-- [ ] Sin placeholders sin resolver ni secretos en el diff.
-- [ ] Review aprobado.
+- [ ] Acceptance criteria met.
+- [ ] Tests added and green.
+- [ ] Build, lint, and typecheck green.
+- [ ] E2e verification completed in `<ENV>`.
+- [ ] Docs / ADRs updated.
+- [ ] Contract backward-compatible, or migration and approval documented.
+- [ ] Ticket updated with status and evidence.
+- [ ] PR opened using `.github/pull_request_template.md` and linked to the ticket.
+- [ ] No unresolved placeholders or secrets in the diff.
+- [ ] Review approved.
+- [ ] Persisted content uses `<REPO_LANGUAGE>`.

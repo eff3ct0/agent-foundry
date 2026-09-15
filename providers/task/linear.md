@@ -1,24 +1,28 @@
 ## Linear
 
-> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
-> **Capacidad:** `task`
-> **Proveedor:** `linear`
+> **Contract instance:** [`_contract.md`](../providers/task/_contract.md)
+> **Capability:** `task`
+> **Provider:** `linear`
 
-**Vinculación:** Las tareas de este proyecto viven EXCLUSIVAMENTE en Linear (equipo/proyecto `<TRACKER_KEY>`). El agente DEBE crear, actualizar y transicionar issues ahí y NO puede usar otro tracker.
+**Binding:** Project tasks live EXCLUSIVELY in Linear (team/project
+`<TRACKER_KEY>`). The agent MUST create, update, and transition issues there and
+MUST NOT use another tracker.
 
-**Cómo interactúa el agente:** vía el mecanismo que provea su harness (MCP / CLI / API). Operaciones semánticas: crear issue, comentar, cambiar estado, asociar al proyecto/ciclo.
+**Agent interaction:** use the harness mechanism (MCP, CLI, or API). Semantic
+operations are creating an issue, commenting, changing status, and associating
+the issue with the project/cycle.
 
-**Plantilla obligatoria:** al crear una issue es OBLIGATORIO usar la plantilla de issue correspondiente
-definida por el proyecto/proveedor y su tipo (`task` o `bug`); están prohibidas las issues en blanco o
-en formato libre.
+**Mandatory template:** creating an issue MUST use the project/provider's
+corresponding issue template for its type (`task` or `bug`); blank or free-form
+issues are prohibited.
 
-**Reglas y ciclo:**
-- Ciclo de estados de Linear: *Backlog/Todo* → *In Progress* → *Done* (usá los estados reales del equipo).
-- Al empezar, mové la issue a *In Progress* y comentá el plan; al cerrar, a *Done*.
-- Comentarios de progreso/checkpoint en la propia issue.
-- Una issue = una unidad de trabajo. Cada commit/PR referencia el identificador (`<TRACKER_KEY>-NNN`).
+**Rules and lifecycle:**
+- Linear status cycle: *Backlog/Todo* -> *In Progress* -> *Done* (use the team's actual statuses).
+- At start, move the issue to *In Progress* and comment the plan; at close, move it to *Done*.
+- Leave progress/checkpoint comments on the issue.
+- One issue = one unit of work. Every commit/PR references the identifier (`<TRACKER_KEY>-NNN`).
 
-**Prohibiciones:**
-- NO abrir tareas en Jira, GitHub ni otro sistema.
-- NO cerrar con verificación pendiente o fallida.
-- NO dejar el estado solo en la sesión.
+**Prohibitions:**
+- Do not open tasks in Jira, GitHub, or another system.
+- Do not close with pending or failed verification.
+- Do not leave status only in the session.

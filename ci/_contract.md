@@ -1,36 +1,30 @@
-# Contrato abstracto: receta de CI
+# Abstract contract: CI recipe
 
-Este archivo define la forma obligatoria de una instancia de CI. No es una
-receta ni un job seleccionable: `init.py` solo selecciona claves de
-`ci/recipes.json`, por lo que este archivo nunca se compone en el workflow.
+This file defines the required shape of a CI instance. It is not a recipe or a
+selectable job: `init.py` selects only keys from `ci/recipes.json`, so this file
+is never composed into a workflow.
 
-Cada receta de `ci/recipes.json` debe producir un job YAML autocontenido y
-marcado como instancia de este contrato.
+Every recipe in `ci/recipes.json` must produce a self-contained YAML job and be
+marked as an instance of this contract.
 
-## Identidad
+## Identity
+- `Contract instance`: reference to this file in the recipe comment.
+- `Capability`: `ci`.
+- `Ecosystem`: the stack or language covered by the recipe.
 
-- `Instancia del contrato`: referencia a este archivo en el comentario de la receta.
-- `Capacidad`: `ci`.
-- `Ecosistema`: stack o lenguaje que cubre la receta.
+## Execution
+Declare a reproducible job on a supported runner, check out the code, and pin
+the tools or versions required to run it.
 
-## Ejecución
+## Required gates
+Cover the ecosystem's applicable format, lint, typecheck, test, and build gates.
+When one does not apply, explicitly omit it using the ecosystem convention; do
+not replace it with an arbitrary command.
 
-Debe declarar un job reproducible sobre un runner soportado, hacer checkout del
-código y fijar las herramientas o versiones necesarias para ejecutarlo.
+## Failures and traceability
+Commands must propagate errors and the job must provide a verification signal
+for merging. The recipe key and ecosystem must be identifiable in the generated
+workflow.
 
-## Gates obligatorios
-
-Debe cubrir los gates aplicables al ecosistema: formato, lint, typecheck, test
-y build. Si uno no aplica, la receta debe omitirlo de forma explícita mediante
-la convención del ecosistema, no sustituirlo por un comando arbitrario.
-
-## Fallos y trazabilidad
-
-Los comandos deben propagar errores y el job debe ser una señal de verificación
-para el merge. La clave de la receta y el ecosistema deben ser identificables en
-el workflow generado.
-
-## Exclusión
-
-`_contract.md` no es una clave de `recipes.json` y no puede convertirse en un
-job.
+## Exclusion
+`_contract.md` is not a key in `recipes.json` and cannot become a job.

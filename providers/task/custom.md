@@ -1,17 +1,20 @@
-## Proveedor de tareas personalizado
+## Custom task provider
 
-> **Instancia del contrato:** [`_contract.md`](../providers/task/_contract.md)
-> **Capacidad:** `task`
-> **Proveedor:** `custom`
+> **Contract instance:** [`_contract.md`](../providers/task/_contract.md)
+> **Capability:** `task`
+> **Provider:** `custom`
 
-Proveedor de tareas personalizado: definí aquí las reglas — nombre, dónde viven las tareas, ciclo de estados y prohibiciones.
+Custom task provider: define the rules here - name, task location, status
+lifecycle, and prohibitions.
 
 <TASK_TRACKER_CUSTOM_RULES>
 
-**Vinculación:** Las tareas viven exclusivamente en el sistema declarado por el proyecto.
+**Binding:** Tasks live exclusively in the system declared by the project.
 
-**Cómo interactúa el agente:** el harness aporta MCP, CLI o API; estas reglas deben indicar cómo leer, crear, actualizar y comentar tareas.
+**Agent interaction:** the harness provides MCP, CLI, or API; these rules must
+explain how to read, create, update, and comment on tasks.
 
-**Reglas y ciclo:** definí el ciclo de estados y cómo referenciar las tareas en commits/PRs y checkpoints.
+**Rules and lifecycle:** define the status cycle and how to reference tasks in
+commits/PRs and checkpoints.
 
-**Prohibiciones:** no uses trackers alternativos ni cierres una tarea sin verificación.
+**Prohibitions:** do not use alternate trackers or close a task without verification.

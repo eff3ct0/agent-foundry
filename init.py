@@ -1,38 +1,37 @@
 #!/usr/bin/env python3
-"""Inicializador del archetype: rellena los <PLACEHOLDER> a partir de un
-manifiesto (placeholders.json). Python 3, solo stdlib.
+"""Archetype initializer: fills <PLACEHOLDER> values from the manifest
+(placeholders.json). Python 3, stdlib only.
 
-Uso:
-  python3 init.py                       # interactivo (pregunta cada placeholder)
-  python3 init.py --defaults            # usa los defaults del manifiesto, no pregunta
+Usage:
+  python3 init.py                       # interactive (asks for each placeholder)
+  python3 init.py --defaults            # use manifest defaults, do not ask
   python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='pytest -q'
   python3 init.py --answers answers.json
-  python3 init.py --check               # ¿quedan placeholders del manifiesto? (para CI, exit!=0 si sí)
-  python3 init.py --dry-run             # muestra qué cambiaría, no escribe
-  python3 init.py --self-check          # prueba interna del reemplazo
-Opciones: --no-clean (no borrar init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/ al final),
-          --no-ci (no componer el workflow de CI).
+  python3 init.py --check               # check for remaining manifest placeholders (CI; nonzero if any)
+  python3 init.py --dry-run             # show changes without writing
+  python3 init.py --self-check          # internal replacement test
+Options: --no-clean (do not remove init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/ at the end),
+         --no-ci (do not compose the CI workflow).
 
-Precedencia de valores: --set  >  --answers  >  prompt interactivo  >  default del manifiesto.
-Solo se reemplazan las claves del MANIFIESTO. Los tokens locales de plantilla
-(<TICKET_ID>, <CRITERIO_1>, <DATE>, <NNN>, ...) se dejan para rellenar al usar cada template.
-Una clave sin valor NO se toca (queda como <KEY> y --check la marca), no se borra.
+Value precedence: --set  >  --answers  >  interactive prompt  >  manifest default.
+Only manifest keys are replaced. Local template tokens (<TICKET_ID>, <CRITERION_1>,
+<DATE>, <NNN>, ...) remain for filling when each template is used. A key without
+a value is NOT touched (it remains <KEY> and --check reports it), not deleted.
 
-Política FACTORY_REQUIRED: si FACTORY_REQUIRED=true, init.py falla-cerrado (determinista,
-offline) cuando FACTORY_SPEC está vacío. init.py NO verifica ni crea repos de org: el
-aprovisionamiento real lo hace `factory_bootstrap.py` (aparte, idempotente, usa `gh`).
+FACTORY_REQUIRED policy: when FACTORY_REQUIRED=true, init.py fails closed (deterministic,
+offline) if FACTORY_SPEC is empty. init.py does NOT verify or create org repositories:
+actual provisioning is handled separately by `factory_bootstrap.py` (idempotent, uses `gh`).
 
-Composición de CI: si CI_SYSTEM es GitHub Actions y CI_STACKS trae ecosistemas
-(coma-separados: rust, typescript, python, go), se compone .github/workflows/ci.yml
-mapeando cada stack a su receta de ci/recipes.json (un job por lenguaje).
+CI composition: when CI_SYSTEM is GitHub Actions and CI_STACKS contains ecosystems
+(comma-separated: rust, typescript, python, go), compose .github/workflows/ci.yml
+by mapping each stack to its ci/recipes.json recipe (one job per language).
 
-Composición de bindings: TASK_TRACKER y SECRETS_PROVIDER (enums) seleccionan un
-fragmento del catálogo providers/ (task/ y secrets/) que se compone en
-docs/bindings.md — el contrato vinculante de proveedores del proyecto. La forma
-abstracta está en providers/task/_contract.md y providers/secrets/_contract.md;
-_contract.md nunca se selecciona. Se compone
-ANTES de apply_values para que los tokens (<TRACKER_KEY>, <SECRETS_PATH>, ...) se
-rellenen dentro del bindings.md recién escrito.
+Binding composition: TASK_TRACKER and SECRETS_PROVIDER (enums) select catalog
+fragments from providers/ (task/ and secrets/) and compose docs/bindings.md, the
+project's binding contract. The abstract shape is in providers/task/_contract.md
+and providers/secrets/_contract.md; _contract.md is never selected. Composition
+happens BEFORE apply_values so tokens (<TRACKER_KEY>, <SECRETS_PATH>, ...) are
+filled inside the newly written bindings.md.
 """
 import argparse
 import json
@@ -52,15 +51,14 @@ TRACKER_DISPLAY = {
     "github-issues": "GitHub Issues",
     "github-projects": "GitHub Projects",
     "linear": "Linear",
-    "custom": "(personalizado)",
+     "custom": "(custom)",
 }
 BINDINGS_HEADER = (
-    "# Bindings — proveedores obligatorios de este proyecto\n\n"
-    "Estas vinculaciones son de cumplimiento obligatorio para cualquier agente, "
-    "sea cual sea su harness.\n"
-    "La forma de cada instancia está definida por "
-    "providers/task/_contract.md y providers/secrets/_contract.md; "
-    "el harness aporta el acceso y el binding aporta las reglas.\n"
+    "# Bindings - mandatory project providers\n\n"
+    "These bindings are mandatory for every agent, regardless of harness.\n"
+    "The shape of each instance is defined by "
+    "providers/task/_contract.md and providers/secrets/_contract.md; "
+    "the harness provides access and the binding provides the rules.\n"
 )
 
 
@@ -88,8 +86,8 @@ def iter_text_files(root):
 
 
 def apply_values(root, values, dry_run=False):
-    """Reemplaza <KEY> por su valor en cada archivo de texto. `values` trae solo
-    claves con valor no vacío. Devuelve {path: nº de tokens reemplazados}."""
+    """Replace <KEY> with its value in every text file. `values` contains only
+    non-empty values. Return {path: number of tokens replaced}."""
     changes = {}
     for path, text in iter_text_files(root):
         n = sum(text.count(token(k)) for k in values)
@@ -119,7 +117,7 @@ def gather(ph, args):
     cli = {}
     for pair in args.set or []:
         if "=" not in pair:
-            sys.exit("--set espera KEY=VALUE, recibí: %r" % pair)
+            sys.exit("--set expects KEY=VALUE, received: %r" % pair)
         k, v = pair.split("=", 1)
         cli[k.strip()] = v
     answers = {}
@@ -138,7 +136,7 @@ def gather(ph, args):
             val = default
         else:
             kind = p.get("kind", "")
-            shown = default if default else "(vacío)"
+            shown = default if default else "(empty)"
             prompt = "%s%s\n  %s\n  [%s] > " % (
                 key, (" [%s]" % kind if kind else ""), p.get("prompt", ""), shown)
             try:
@@ -148,25 +146,25 @@ def gather(ph, args):
             val = raw if raw else default
         enum = p.get("enum")
         if enum and val and val not in enum:
-            sys.exit("Valor invalido para %s: %s. Opciones: %s" % (key, val, ", ".join(enum)))
+            sys.exit("Invalid value for %s: %s. Options: %s" % (key, val, ", ".join(enum)))
         values[key] = val
     missing = [p["key"] for p in ph if p.get("required") and not values.get(p["key"])]
     if missing:
-        sys.exit("Faltan placeholders obligatorios: %s" % ", ".join(missing))
+        sys.exit("Missing required placeholders: %s" % ", ".join(missing))
     return values
 
 
 def parse_stacks(value):
-    """Valor de CI_STACKS (string coma-separado) -> lista lowercased sin vacíos."""
+    """Convert comma-separated CI_STACKS into a lowercased list without blanks."""
     return [s.strip().lower() for s in (value or "").split(",") if s.strip()]
 
 
 def compose_ci(root, stacks, ci_system, dry_run):
-    """Compone .github/workflows/ci.yml mapeando cada stack a su receta de
-    ci/recipes.json (junto al script). Devuelve (stacks_ok, unknown)."""
+    """Compose .github/workflows/ci.yml by mapping each stack to its recipe in
+    ci/recipes.json (next to the script). Return (stacks_ok, unknown)."""
     if "github" not in (ci_system or "").lower():
-        print("Composición de CI integrada solo para GitHub Actions; "
-              "CI_SYSTEM=%s — omito" % ci_system)
+        print("CI composition is supported only for GitHub Actions; "
+              "CI_SYSTEM=%s - skipped" % ci_system)
         return
     with open(os.path.join(root, "ci", "recipes.json"), encoding="utf-8") as f:
         recipes = json.load(f)
@@ -178,50 +176,48 @@ def compose_ci(root, stacks, ci_system, dry_run):
         else:
             unknown.append(s)
     if unknown:
-        print("Sin receta de CI: %s" % ", ".join(unknown))
+        print("No CI recipe for: %s" % ", ".join(unknown))
     if not blocks:
-        print("Ningún stack con receta de CI; omito la composición.")
+        print("No stack has a CI recipe; skipping composition.")
         return ok, unknown
     content = "name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n" + "\n".join(blocks) + "\n"
     ok_str = ", ".join(ok)
     if dry_run:
-        print("Compondría .github/workflows/ci.yml con jobs: %s" % ok_str)
+        print("Would compose .github/workflows/ci.yml with jobs: %s" % ok_str)
         return ok, unknown
     wf_dir = os.path.join(root, ".github", "workflows")
     os.makedirs(wf_dir, exist_ok=True)
     with open(os.path.join(wf_dir, "ci.yml"), "w", encoding="utf-8") as f:
         f.write(content)
-    print("CI compuesto: .github/workflows/ci.yml (jobs: %s)" % ok_str)
+    print("CI composed: .github/workflows/ci.yml (jobs: %s)" % ok_str)
     return ok, unknown
 
 
 def _binding_fragment(root, capability, name):
-    """Ruta al fragmento providers/<capability>/<name>.md; si no existe, avisa y
-    cae al custom.md de esa capacidad. `_contract.md` nunca es seleccionable.
-    Devuelve la ruta o None si no hay ninguno."""
+    """Return providers/<capability>/<name>.md; if missing, warn and fall back
+    to that capability's custom.md. `_contract.md` is never selectable."""
     frag = os.path.join(root, "providers", capability, "%s.md" % name)
     if name != "_contract" and os.path.exists(frag):
         return frag
     fallback = os.path.join(root, "providers", capability, "custom.md")
     if os.path.exists(fallback):
-        print("Sin fragmento providers/%s/%s.md; uso custom.md como fallback." % (capability, name))
+        print("No fragment providers/%s/%s.md; using custom.md as fallback." % (capability, name))
         return fallback
     return None
 
 
 def compose_bindings(root, task_tracker, secrets_provider, dry_run=False):
-    """Compone docs/bindings.md = encabezado + fragmento del proveedor de tareas +
-    fragmento del gestor de secretos, tomados del catálogo providers/. Devuelve la
-    lista de fragmentos usados (testable)."""
+    """Compose docs/bindings.md from the header and task/secrets provider
+    fragments in providers/. Return the list of used fragments (testable)."""
     secrets_provider = secrets_provider or "none"
     if dry_run:
-        print("Compondría docs/bindings.md (tareas: %s, secretos: %s)" % (task_tracker, secrets_provider))
+        print("Would compose docs/bindings.md (tasks: %s, secrets: %s)" % (task_tracker, secrets_provider))
         return []
     used, parts = [], [BINDINGS_HEADER]
     for capability, name in (("task", task_tracker), ("secrets", secrets_provider)):
         frag = _binding_fragment(root, capability, name)
         if not frag:
-            sys.exit("No hay fragmento providers/%s/%s.md ni custom.md de fallback." % (capability, name))
+            sys.exit("No providers/%s/%s.md fragment or custom.md fallback exists." % (capability, name))
         used.append(frag)
         with open(frag, encoding="utf-8") as f:
             parts.append(f.read().rstrip() + "\n")
@@ -229,7 +225,7 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False):
     os.makedirs(docs_dir, exist_ok=True)
     with open(os.path.join(docs_dir, "bindings.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(parts))
-    print("Bindings compuesto: docs/bindings.md (tareas: %s, secretos: %s)" % (task_tracker, secrets_provider))
+    print("Bindings composed: docs/bindings.md (tasks: %s, secrets: %s)" % (task_tracker, secrets_provider))
     return used
 
 
@@ -240,7 +236,7 @@ def cleanup(root):
         if os.path.exists(p):
             os.remove(p)
             removed.append(f)
-    # Fichero anidado de auto-gobernanza de ESTE repo; no viaja al downstream.
+    # Nested self-governance file for THIS repo; it does not travel downstream.
     smoke = os.path.join(root, "docs", "smoke-test.md")
     if os.path.exists(smoke):
         os.remove(smoke)
@@ -258,14 +254,14 @@ def self_check():
     try:
         fp = os.path.join(d, "x.md")
         with open(fp, "w", encoding="utf-8") as f:
-            f.write("Proyecto <PROJECT_NAME>, test <TEST_CMD>, intacto <OTRO>.")
+            f.write("Project <PROJECT_NAME>, test <TEST_CMD>, intact <OTHER>.")
         changes = apply_values(d, {"PROJECT_NAME": "Foo/Bar & Co", "TEST_CMD": "pytest -q"})
         out = open(fp, encoding="utf-8").read()
         assert "Foo/Bar & Co" in out and "pytest -q" in out, out
         assert "<PROJECT_NAME>" not in out and "<TEST_CMD>" not in out, out
-        assert "<OTRO>" in out, "no debe tocar claves fuera del set"
+        assert "<OTHER>" in out, "keys outside the set must remain untouched"
         assert changes.get(fp) == 2, changes
-        assert remaining(d, ["PROJECT_NAME", "OTRO"]) == {"OTRO": 1}, "check por clave"
+        assert remaining(d, ["PROJECT_NAME", "OTHER"]) == {"OTHER": 1}, "per-key check"
 
         d2 = tempfile.mkdtemp()
         try:
@@ -285,24 +281,24 @@ def self_check():
         d3 = tempfile.mkdtemp()
         try:
             for cap, name, body in (
-                ("task", "foo", "## Foo\nTareas en Foo."),
-                ("secrets", "none", "## Sin gestor\nSin secretos reales."),
+                ("task", "foo", "## Foo\nTasks in Foo."),
+                ("secrets", "none", "## No manager\nNo real secrets."),
             ):
                 os.makedirs(os.path.join(d3, "providers", cap), exist_ok=True)
                 with open(os.path.join(d3, "providers", cap, "%s.md" % name), "w", encoding="utf-8") as f:
                     f.write(body)
             used = compose_bindings(d3, "foo", "none", dry_run=False)
             bind = open(os.path.join(d3, "docs", "bindings.md"), encoding="utf-8").read()
-            assert "# Bindings — proveedores obligatorios de este proyecto" in bind, bind
+            assert "# Bindings - mandatory project providers" in bind, bind
             assert "providers/task/_contract.md" in bind, bind
             assert "providers/secrets/_contract.md" in bind, bind
-            assert "Tareas en Foo." in bind and "Sin secretos reales." in bind, bind
+            assert "Tasks in Foo." in bind and "No real secrets." in bind, bind
             assert len(used) == 2, used
 
             with open(os.path.join(d3, "providers", "task", "_contract.md"), "w", encoding="utf-8") as f:
-                f.write("NO DEBE COMPONERSE")
+                f.write("MUST NOT BE COMPOSED")
             with open(os.path.join(d3, "providers", "task", "custom.md"), "w", encoding="utf-8") as f:
-                f.write("FALLBACK CUSTOM")
+                f.write("CUSTOM FALLBACK")
             assert _binding_fragment(d3, "task", "_contract").endswith("custom.md")
         finally:
             shutil.rmtree(d3)
@@ -313,7 +309,7 @@ def self_check():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Inicializa el archetype rellenando placeholders.")
+    ap = argparse.ArgumentParser(description="Initialize the archetype by filling placeholders.")
     ap.add_argument("--set", action="append", metavar="KEY=VALUE")
     ap.add_argument("--answers", metavar="FILE.json")
     ap.add_argument("--defaults", action="store_true")
@@ -334,21 +330,21 @@ def main():
     if args.check:
         rem = remaining(ROOT, keys)
         if rem:
-            print("Placeholders del manifiesto sin resolver:")
+            print("Unresolved manifest placeholders:")
             for k, c in sorted(rem.items(), key=lambda kv: -kv[1]):
                 print("  %s x%d" % (k, c))
             sys.exit(1)
-        print("OK: 0 placeholders del manifiesto pendientes.")
+        print("OK: 0 pending manifest placeholders.")
         return
 
     values = gather(ph, args)
-    # Prerrequisito determinista (offline): si la fabrica es obligatoria, FACTORY_SPEC no puede estar vacio.
+    # Deterministic offline prerequisite: a required factory must have FACTORY_SPEC.
     if str(values.get("FACTORY_REQUIRED", "")).strip().lower() == "true" and not values.get("FACTORY_SPEC", "").strip():
-        sys.exit("FACTORY_REQUIRED=true pero FACTORY_SPEC esta vacio: declara el baseline de organizacion (p. ej. org/factory@v1) antes de inicializar.")
+        sys.exit("FACTORY_REQUIRED=true but FACTORY_SPEC is empty: declare the organization baseline (e.g. org/factory@v1) before initialization.")
     task_tracker = values.get("TASK_TRACKER", "")
     if not values.get("TRACKER") and task_tracker:
         values["TRACKER"] = TRACKER_DISPLAY.get(task_tracker, task_tracker)
-    # Componer ANTES de apply_values para que rellene los tokens dentro del bindings.md recién escrito.
+    # Compose BEFORE apply_values so tokens in the newly written bindings.md are filled.
     if task_tracker:
         compose_bindings(ROOT, task_tracker, values.get("SECRETS_PROVIDER", ""), args.dry_run)
     stacks = parse_stacks(values.get("CI_STACKS", ""))
@@ -357,22 +353,22 @@ def main():
     nonempty = {k: v for k, v in values.items() if v}
     changes = apply_values(ROOT, nonempty, dry_run=args.dry_run)
     total = sum(changes.values())
-    print("%d placeholders %s en %d archivo(s)." % (
-        total, "cambiarían" if args.dry_run else "reemplazados", len(changes)))
+    print("%d placeholders %s in %d file(s)." % (
+        total, "would change" if args.dry_run else "replaced", len(changes)))
     for p in sorted(changes):
         print("  %s" % os.path.relpath(p, ROOT))
     rem = remaining(ROOT, keys)
     if rem:
-        print("Aún sin resolver (vacíos u omitidos): %s" % ", ".join(sorted(rem)))
+        print("Still unresolved (empty or omitted): %s" % ", ".join(sorted(rem)))
     if args.dry_run:
-        print("(dry-run: no se escribió nada)")
+        print("(dry-run: nothing was written)")
         return
     if not args.no_clean:
         removed = cleanup(ROOT)
         if removed:
-            print("Limpieza: eliminados %s." % ", ".join(removed))
-        print("Para empezar con historial propio: rm -rf .git && git init")
-    print("Listo. Revisá los archivos y hacé el primer commit del proyecto.")
+            print("Cleanup: removed %s." % ", ".join(removed))
+        print("To start with a separate history: rm -rf .git && git init")
+    print("Ready. Review the files and make the project's first commit.")
 
 
 if __name__ == "__main__":

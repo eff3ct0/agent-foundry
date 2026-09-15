@@ -1,12 +1,12 @@
-# <TÍTULO_DEL_PR>
+# <PULL_REQUEST_TITLE>
 
-## Resumen
-<!-- guía: qué cambia y por qué, en 2-3 líneas -->
+## Summary
+<!-- guide: what changes and why, in 2-3 lines -->
 
 ## Ticket
-Cierra `<TICKET_ID>`.
+Closes `<TICKET_ID>`.
 
-## Tipo de PR
+## PR type
 - [ ] Bug fix
 - [ ] Feature
 - [ ] Documentation only
@@ -14,27 +14,28 @@ Cierra `<TICKET_ID>`.
 - [ ] Maintenance/tooling
 - [ ] Breaking change
 
-## Cambios
-- <CAMBIO_1>
-- <CAMBIO_2>
+## Changes
+- <CHANGE_1>
+- <CHANGE_2>
 
-## Cómo verificar
+## How to verify
 ```
 <TEST_CMD>
 <BUILD_CMD>
 <LINT_CMD>
 <TYPECHECK_CMD>
 ```
-Comprobación e2e: <PASOS_EN_ENV>
+E2e check: <STEPS_IN_ENV>
 
-## Riesgos y rollback
-- Riesgo: <RIESGO>
-- Rollback: <CÓMO_REVERTIR>
+## Risks and rollback
+- Risk: <RISK>
+- Rollback: <HOW_TO_ROLL_BACK>
 
 ## Definition of Done
-- [ ] Ver la checklist completa en [`definition-of-done.md`](definition-of-done.md).
-- [ ] No quedan placeholders ni secretos.
-- [ ] Review aprobado.
+- [ ] See the complete checklist in [`definition-of-done.md`](definition-of-done.md).
+- [ ] No unresolved placeholders or secrets.
+- [ ] Persisted content uses `<REPO_LANGUAGE>`.
+- [ ] Review approved.
 
-## Capturas OPCIONAL
-<!-- guía: adjuntar si aplica; borrar la sección si no -->
+## Screenshots OPTIONAL
+<!-- guide: attach when applicable; remove this section otherwise -->

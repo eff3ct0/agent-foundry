@@ -1,44 +1,46 @@
-# Factory OS — capa de organización (GitHub)
+# Factory OS - organization layer (GitHub)
 
-Cómo esta plantilla (`factory-template`) se vuelve una fábrica a nivel de organización de GitHub. v1
-adopta dos mecanismos nativos, complementarios.
+How this template (`factory-template`) becomes an organization-level GitHub
+factory. v1 uses two native, complementary mechanisms.
 
-> **Nomenclatura (template ≠ instancia).** `factory-template` es la **plantilla** (este repo, marcado como
-> *Template repository*). `<ORG>/factory` es la **implementación** de la fábrica a nivel de organización:
-> se crea a partir de la plantilla, se versiona con tags (`v1`, `v2`, …) y es a donde apuntan los proyectos
-> con `FACTORY_SPEC = <ORG>/factory@vX`.
+> **Naming (template != instance).** `factory-template` is the **template** (this
+> repo, marked as a *Template repository*). `<ORG>/factory` is the organization
+> factory **implementation**: it is created from the template, versioned with
+> tags (`v1`, `v2`, ...), and referenced by projects through
+> `FACTORY_SPEC = <ORG>/factory@vX`.
 
-## 1. Repo `org/.github` — defaults nativos de la organización
-Creá un repositorio llamado `.github` en la organización. GitHub sirve sus ficheros de salud
-comunitaria (`.github/ISSUE_TEMPLATE/`, `PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, `SECURITY.md`)
-como **default** a cualquier repo de la org que no tenga los suyos. Sembralo copiando las plantillas
-de esta plantilla (`.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md`).
-- Alcance: solo esos ficheros concretos; NO propaga `AGENT.md`/`CLAUDE.md` — para eso, el pin de abajo.
+## 1. `org/.github` - native organization defaults
+Create a repository named `.github` in the organization. GitHub serves its
+community health files (`.github/ISSUE_TEMPLATE/`, `PULL_REQUEST_TEMPLATE.md`,
+`CONTRIBUTING.md`, `SECURITY.md`) as defaults for organization repositories
+that do not provide their own. Seed it by copying this template's
+`.github/ISSUE_TEMPLATE/*` and `.github/pull_request_template.md`.
 
-## Herramienta de bootstrap (idempotente)
-`factory_bootstrap.py` asegura que existan los repos de organización `org/.github` y `org/<factory-repo>`:
+Only those concrete files are propagated. `AGENT.md` and `CLAUDE.md` are not;
+use the pin below for the organization factory spec.
 
-- `python3 factory_bootstrap.py --org <ORG> --ensure` — interactivo: pregunta antes de crear lo que falte.
-- `--yes` — no interactivo (crea sin preguntar).
-- `--no-create` — solo reporta, nunca crea.
-- `--plan` — offline: imprime los targets y la intención, sin llamar a `gh`.
-- `--factory-repo <nombre>` — nombre del repo de la fábrica (default: `factory`).
-- `--visibility public|internal|private` — visibilidad al crear (default: `private`).
+## Bootstrap tool (idempotent)
+`factory_bootstrap.py` ensures that organization repositories `org/.github`
+and `org/<factory-repo>` exist:
 
-Nota: requiere `gh` autenticado; es idempotente (repos existentes → no-op); crear repos es una acción
-consentida (por eso `--yes`/prompt). No forma parte de `init.py`.
+- `python3 factory_bootstrap.py --org <ORG> --ensure` - interactive; asks before creating missing repositories.
+- `--yes` - non-interactive; creates without asking.
+- `--no-create` - report only; never creates.
+- `--plan` - offline; prints targets and intent without calling `gh`.
+- `--factory-repo <name>` - factory repository name (default: `factory`).
+- `--visibility public|internal|private` - creation visibility (default: `private`).
 
-## 2. Template + pin `FACTORY_SPEC`
-- La **plantilla** es este repo (`<ORG>/factory-template`), marcado como **Template repository**.
-- La **instancia** `<ORG>/factory` se crea a partir de la plantilla y se **versiona con tags** (`v1`, `v2`, …):
-  es el baseline vivo de la organización.
-- Cada proyecto se crea con *Use this template* (desde `factory-template`) y declara en [`AGENT.md`](../AGENT.md)
-  qué baseline lo rige: `FACTORY_SPEC = <ORG>/factory@v1`.
-- Regla: el repo se rige por su `FACTORY_SPEC`; el contenido local del repo **sobreescribe** el baseline
-  cuando difiere. Para adoptar una versión nueva del spec: re-pinnear `FACTORY_SPEC` y reconciliar cambios.
-- Política: el flag determinista `FACTORY_REQUIRED` (manifiesto) hace que `init.py` falle-cerrado si
-  `FACTORY_SPEC` está vacío. La *existencia* del repo la asegura `factory_bootstrap.py`, no `init.py` (que es offline).
+The tool requires authenticated `gh`, is idempotent (existing repositories are
+no-ops), never deletes, and requires consent for repository creation. It is
+separate from `init.py`.
 
-## Evolución (no incluida en v1)
-- Defaults de proveedores fusionados (`factory.defaults.json` en `org/factory`, herencia org ← repo).
-- CI como reusable workflows a nivel de org (`uses: org/factory/.github/workflows/<lang>.yml@vX`).
+## 2. Template + `FACTORY_SPEC` pin
+- The **template** is this repo (`<ORG>/factory-template`), marked as a *Template repository*.
+- The **instance** `<ORG>/factory` is created from the template and versioned with tags (`v1`, `v2`, ...); it is the organization's living baseline.
+- Each project uses *Use this template* and declares its governing baseline in [`AGENT.md`](../AGENT.md): `FACTORY_SPEC = <ORG>/factory@v1`.
+- The repository follows its `FACTORY_SPEC`; local content **overrides** the baseline when it differs. To adopt a new spec version, repin `FACTORY_SPEC` and reconcile changes.
+- The deterministic `FACTORY_REQUIRED` manifest flag makes `init.py` fail closed when `FACTORY_SPEC` is empty. `factory_bootstrap.py`, not `init.py`, ensures that the org repository exists.
+
+## Evolution (not included in v1)
+- Merged provider defaults (`factory.defaults.json` in `org/factory`, org -> repo inheritance).
+- Organization-level reusable CI workflows (`uses: org/factory/.github/workflows/<lang>.yml@vX`).
