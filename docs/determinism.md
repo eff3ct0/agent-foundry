@@ -3,7 +3,7 @@
 This repository keeps local checks offline and makes state-changing operations
 safe to repeat. The first run may create or replace local state; a second run
 must produce the same content and must not rewrite unchanged generated files.
-Run the focused audit with:
+Run the focused audit while the template files are still available:
 
 ```sh
 python3 scripts/check-determinism.py
@@ -21,13 +21,15 @@ python3 scripts/check-determinism.py
 | Binding composition | Deterministic, local write, idempotent | Selected provider bytes produce the same `docs/bindings.md`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | CI composition | Deterministic, local write, idempotent | Selected recipe order produces the same `.github/workflows/ci.yml`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | Provider and CI recipe selection | Deterministic catalog lookup | Same selected fragments and job order for the same manifest values | No external state; invalid selections fail closed during a normal run |
-| `scripts/check-determinism.py` | Deterministic, read-only, offline | Runs the focused repeatability checks twice where applicable | No state |
+| `scripts/check-determinism.py` | Template-only, deterministic, read-only, offline | Run before cleanup; `--no-clean` retains it for further template checks | No state |
 | `scripts/check-delivery-contract.py`, `scripts/check-pr-governance.py --self-check`, `start.py --self-check`, `scripts/sync-github-labels.py --self-check` | Deterministic, read-only, offline | Same validation result for unchanged files and catalog | No state |
 
 Normal initialization also performs cleanup unless `--no-clean` is supplied. That
 cleanup is intentionally one-shot: it removes `init.py`, `placeholders.json`,
 `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `ci/`, and
-`providers/`, so it is not a repeatable operation.
+`providers/`, and `scripts/check-determinism.py`, so it is not a repeatable
+operation. The checker is not supported after normal cleanup because its
+template-only dependencies are removed with it.
 
 ## Network, workflows, and procedures
 
@@ -53,6 +55,7 @@ cleanup is intentionally one-shot: it removes `init.py`, `placeholders.json`,
 - Label synchronization does not delete labels absent from the catalog. This
   prevents an unrelated label from being removed accidentally.
 - Normal initialization cleans template-only files unless `--no-clean` is
-  supplied. Cleanup is intentionally one-shot and is not part of dry-run mode.
+  supplied, including `scripts/check-determinism.py`. Cleanup is intentionally
+  one-shot and is not part of dry-run mode.
 - Generated files are written only when bytes change. This preserves stable
   content and avoids unnecessary filesystem side effects on repeat runs.

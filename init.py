@@ -10,7 +10,7 @@ Usage:
   python3 init.py --check               # check for remaining manifest placeholders (CI; nonzero if any)
   python3 init.py --dry-run             # show changes without writing
   python3 init.py --self-check          # internal replacement test
-Options: --no-clean (do not remove init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/ at the end),
+Options: --no-clean (do not remove init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/scripts/check-determinism.py at the end),
          --no-ci (do not compose the CI workflow).
 
 Value precedence: --set  >  --answers  >  interactive prompt  >  manifest default.
@@ -284,6 +284,10 @@ def cleanup(root):
     if os.path.exists(smoke):
         os.remove(smoke)
         removed.append("docs/smoke-test.md")
+    checker = os.path.join(root, "scripts", "check-determinism.py")
+    if os.path.exists(checker):
+        os.remove(checker)
+        removed.append("scripts/check-determinism.py")
     for d in ("ci", "providers"):
         dp = os.path.join(root, d)
         if os.path.isdir(dp):
