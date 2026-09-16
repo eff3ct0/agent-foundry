@@ -163,7 +163,7 @@ def check_factory_bootstrap(factory):
 
     class Result:
         returncode = 1
-        stderr = ""
+        stderr = "404 Not Found"
 
     calls = []
     original_preflight = factory._preflight
