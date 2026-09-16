@@ -61,7 +61,8 @@ bootstrap. Automatic composition remains recipe-based.
 
 ## 6. First commit and branch protection
 - Make the initial commit using conventional commits.
-- Protect `<INTEGRATION_BRANCH>` (required review and green CI before merge).
+- Protect `<INTEGRATION_BRANCH>` with required review and green CI before merge. For this repository's
+  concrete GitHub policy, see [`docs/github-governance.md`](github-governance.md).
 
 ## 7. Ready checklist
 - [ ] Zero unresolved manifest placeholders.
