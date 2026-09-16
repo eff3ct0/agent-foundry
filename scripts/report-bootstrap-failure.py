@@ -162,6 +162,8 @@ def marker(repository, sha, cases, tag="", run_id=""):
         identity = validate_sha(sha)
     elif tag:
         identity = "prepare:" + validate_tag(tag)
+        if run_id:
+            identity += ":run-" + validate_run_id(run_id)
     else:
         identity = "prepare-run:" + validate_run_id(run_id)
     return "Bootstrap-E2E-Failure: %s@%s" % (repository, identity)
@@ -515,8 +517,8 @@ def self_check():
     marked = marker_with_fingerprints("eff3ct0/factory-template", commit, ["python"], [fingerprint])
     assert fingerprint in marked
     prepare_marker = marker("eff3ct0/factory-template", "", ["prepare"], "v0.1.0", "123")
-    assert prepare_marker.endswith("@prepare:v0.1.0")
-    assert marker("eff3ct0/factory-template", "", ["prepare"], "release+build/1", "123").endswith("@prepare:release+build/1")
+    assert prepare_marker.endswith("@prepare:v0.1.0:run-123")
+    assert marker("eff3ct0/factory-template", "", ["prepare"], "release+build/1", "123").endswith("@prepare:release+build/1:run-123")
     run_marker = marker("eff3ct0/factory-template", "", ["prepare"], "", "123")
     assert run_marker.endswith("@prepare-run:123")
     body = build_body("eff3ct0/factory-template", "v0.1.0", commit, ["python"],
