@@ -25,7 +25,7 @@ Note: `eff3ct0/factory` (the org instance) does not exist yet, so leave
 - [ ] `python3 init.py --check` -> zero manifest placeholders (keep `--no-clean` for this).
 - [ ] `docs/bindings.md` contains the selected task and secrets providers.
 - [ ] `.github/workflows/ci.yml` has one job per stack language.
-- [ ] Without `--no-clean`, `init.py`, `placeholders.json`, `ci/`, `providers/`, `factory_bootstrap.py`, `MAINTAINERS.md`, and `docs/smoke-test.md` disappear.
+- [ ] Without `--no-clean`, `init.py`, `placeholders.json`, `ci/`, `providers/`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, and `scripts/check-determinism.py` disappear.
 - [ ] The agent follows the loop contract (one task/session, tracker state, checkpoint, DoD).
 - [ ] Persisted project content uses the configured `<REPO_LANGUAGE>`.
 

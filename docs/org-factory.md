@@ -23,12 +23,16 @@ use the pin below for the organization factory spec.
 `factory_bootstrap.py` ensures that organization repositories `org/.github`
 and `org/<factory-repo>` exist:
 
-- `python3 factory_bootstrap.py --org <ORG> --ensure` - interactive; asks before creating missing repositories.
+- `python3 factory_bootstrap.py --org <ORG>` - interactive; asks before creating missing repositories.
 - `--yes` - non-interactive; creates without asking.
 - `--no-create` - report only; never creates.
-- `--plan` - offline; prints targets and intent without calling `gh`.
+- `--plan --org <ORG>` - offline; prints targets and intent without calling `gh`.
 - `--factory-repo <name>` - factory repository name (default: `factory`).
 - `--visibility public|internal|private` - creation visibility (default: `private`).
+
+Note: `gh` must be authenticated; lookup errors other than confirmed not-found stop before any creation;
+the command is idempotent (existing repositories are no-ops). Repository creation is consented (via
+`--yes`/prompt) and is separate from `init.py`.
 
 The tool requires authenticated `gh`, is idempotent (existing repositories are
 no-ops), never deletes, and requires consent for repository creation. It is
