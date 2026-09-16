@@ -4,7 +4,7 @@
 <!-- guide: what changes and why, in 2-3 lines -->
 
 ## Ticket
-Closes #<TICKET_ID>
+Closes `<TICKET_ID>`.
 
 ## PR type
 - [ ] Bug fix
@@ -27,15 +27,16 @@ Closes #<TICKET_ID>
 ```
 E2e check: <STEPS_IN_ENV>
 
+## Phase evidence
+Copy the final [`handoff.md`](handoff.md) state. It must show `EVIDENCE/DELIVERY`, the branch/commit,
+verification results, required review evidence, and the next action to close the ticket.
+
 ## Risks and rollback
 - Risk: <RISK>
-- Rollback: <HOW_TO_ROLL_BACK>
+- Rollback: <HOW_TO_REVERT>
 
 ## Definition of Done
-- [ ] See the complete checklist in [`definition-of-done.md`](definition-of-done.md).
-- [ ] No unresolved placeholders or secrets.
-- [ ] Persisted content uses `<REPO_LANGUAGE>`.
-- [ ] Review approved.
+- [ ] See [`definition-of-done.md`](definition-of-done.md).
 
 ## Screenshots OPTIONAL
 <!-- guide: attach when applicable; remove this section otherwise -->

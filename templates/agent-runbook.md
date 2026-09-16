@@ -20,19 +20,61 @@ verification, not in the agent.
 **Durable state** lives in `<TRACKER>` and VCS, never only in session memory.
 Each session takes one task to a durable point, leaves state, and ends.
 
+## Ordered phases
+Run every task through these phases in order:
+
+1. `DEFINITION`
+2. `IMPLEMENTATION`
+3. `TESTING/TDD`
+4. `VERIFICATION`
+5. `EVIDENCE/DELIVERY`
+6. `DONE`
+
+`BLOCKED` is entered from any active phase for an approval gate, unresolved dependency, or two failures for
+the same reason. It records the phase to resume and returns there only after the blocker is resolved and
+evidence is recorded.
+
+## Deterministic transition rules
+- `DEFINITION -> IMPLEMENTATION` requires the problem, scope, acceptance criteria, dependencies, and plan.
+- `IMPLEMENTATION -> TESTING/TDD` requires the in-scope change and a test/TDD approach.
+- `TESTING/TDD -> VERIFICATION` requires the applicable tests to pass. A failed test stays in this phase.
+- `VERIFICATION -> EVIDENCE/DELIVERY` requires the applicable test, build, lint, typecheck, and end-to-end gates.
+- `EVIDENCE/DELIVERY -> DONE` requires the complete Definition of Done, required review gates, and durable evidence.
+- Any active phase -> `BLOCKED` is allowed only for an explicit blocker, approval requirement, or retry limit.
+- `BLOCKED ->` the recorded prior phase requires the blocker to be resolved and the new evidence to be recorded.
+- No transition skips a phase, and no transition reaches `DONE` with pending or failed verification or review.
+
 ## Session cycle
 1. **Choose** the next actionable task: first *In Progress*, then *To Do* in order. Announce `Working <TICKET_ID>`.
 2. **Move** the task to *In Progress* and comment the plan. If a task must be created, using the corresponding issue template is MANDATORY; blank or free-form issues are prohibited.
-3. **Execute ONLY that** task (no scope drift).
-4. **Verify** with real signals (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>`, plus e2e when applicable).
-5. **Deliver** the routine result without pausing for confirmation: create a conventional commit referencing `<TICKET_ID>`, push the ticket branch, open the PR with `.github/pull_request_template.md`, and update the ticket with the commit, PR, and verification evidence.
-6. **Close** only after the [Definition of Done](definition-of-done.md) passes; move the task to *Done* with evidence. Opening a PR is not merging it.
-7. **Finish** the session (one task = one session).
+3. **Read** the latest phase-state handoff before inspecting code, especially after an interruption.
+4. **Execute ONLY that** task (no scope drift).
+5. **Complete one phase at a time.** After each completed phase, update the bound issue or project with the current phase, completed work, exact next action, branch/commit, verification evidence, and required resume evidence.
+6. **Verify** with real signals (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>`, plus e2e when applicable).
+7. **Deliver** the routine result without pausing for confirmation: create a conventional commit referencing `<TICKET_ID>`, push the ticket branch, open the PR with `.github/pull_request_template.md`, and update the ticket with the commit, PR, and verification evidence.
+8. **Close** only after the [Definition of Done](definition-of-done.md) passes; move the task to *Done* with evidence. Opening a PR is not merging it.
+9. **Finish** the session (one task = one session).
+
+## Durable handoff and interruption
+Use [`handoff.md`](handoff.md) for every phase completion and checkpoint. The latest handoff comment in the
+bound tracker is the cold-agent source of truth. It must include:
+
+- status and current phase
+- completed work
+- exact next action
+- branch and commit
+- verification evidence
+- required evidence to resume
+- the prior phase and blocker when status is `BLOCKED`
+
+For a mid-task interruption, commit WIP when possible, persist the handoff, announce `CHECKPOINT <TICKET_ID>`,
+and end the session. A new agent reads the tracker state and latest handoff before continuing; it does not use
+session memory or an alternate tracker.
 
 ### Approval boundaries
 - Routine delivery includes issue/project updates, implementation, verification, commit, push, and PR creation.
 - Human decisions remain gated: approving review, merge, production deployment, destructive operations, and release publication. Applying `status:approved` is also gated, but the bound task provider may define a fail-closed delegated-approval protocol.
-- Under that protocol, the agent may add `status:approved` only when a current direct human instruction names the exact issue and `add status:approved`, target-host evidence binds the principal to maintainer/authorized-approver authority, the authenticated actor has `MAINTAIN` or `ADMIN`, and exactly one add attempt is followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation.
+- Under that protocol, the agent may add `status:approved` only when a current direct human instruction names the exact issue and `add status:approved`, target-host evidence binds the principal to maintainer/authorized-approver authority, the authenticated actor has `MAINTAIN` or `ADMIN`, and exactly one scoped add attempt is followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation.
 - Without that evidence, mark the task `BLOCKED: requires approval`, tell the human to apply the label directly, leave the exact next step in the tracker, and stop. This contract change does not grant approval for existing work.
 
 ### GitHub binding

@@ -22,5 +22,7 @@
 ## Definition of Done
 See [`definition-of-done.md`](definition-of-done.md).
 
-## Handoff / status
-<!-- guide: branch, last commit, remaining work, next step -->
+## Phase state and handoff
+Use [`handoff.md`](handoff.md) after every completed phase and at every interruption. The bound issue or
+project item must contain the latest current phase, completed work, exact next action, branch/commit,
+verification evidence, and required evidence to resume.

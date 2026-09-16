@@ -4,8 +4,15 @@
 > **Capability:** `task`
 > **Provider:** `custom`
 
-Custom task provider: define the rules here - name, task location, status
-lifecycle, and prohibitions.
+Define the bound provider's name, task location, state operations, and prohibitions here. The provider MUST
+retain the provider-neutral phase contract:
+
+- `DEFINITION -> IMPLEMENTATION -> TESTING/TDD -> VERIFICATION -> EVIDENCE/DELIVERY -> DONE`.
+- `BLOCKED` records the phase to resume and is used for approval gates, unresolved dependencies, or the retry limit.
+- After every completed phase, persist current phase/status, completed work, exact next action, branch/commit,
+  verification evidence, and required evidence to resume in the bound task.
+- Do not mark *Done* before the Definition of Done and required review gates pass.
+- Approval-gated work stops with `BLOCKED: requires approval`; do not assign human approval labels.
 
 <TASK_TRACKER_CUSTOM_RULES>
 

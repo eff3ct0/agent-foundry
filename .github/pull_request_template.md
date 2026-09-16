@@ -37,5 +37,9 @@ E2e check: <STEPS_IN_ENV>
 - [ ] Persisted content uses `<REPO_LANGUAGE>`.
 - [ ] Review approved.
 
+## Phase evidence
+Copy the final [`templates/handoff.md`](../templates/handoff.md) state, including the branch/commit,
+verification evidence, and the next action to close the ticket.
+
 ## Screenshots OPTIONAL
 <!-- guide: attach when applicable; remove this section otherwise -->
