@@ -1,7 +1,8 @@
 # Bootstrap - initialize a project from the template
 
-Steps for turning this template into a real project. No unresolved
-`<PLACEHOLDER>` values should remain at the end.
+Steps for turning this template into a real project. No unresolved required
+`<PLACEHOLDER>` values should remain at the end; optional values may remain
+intentionally empty when they do not apply.
 
 ## 1. Create the repository
 - From GitHub: *Use this template -> Create a new repository*.
@@ -65,14 +66,14 @@ bootstrap. Automatic composition remains recipe-based.
   concrete GitHub policy, see [`docs/github-governance.md`](github-governance.md).
 
 ## 7. Ready checklist
-- [ ] Zero unresolved manifest placeholders.
+- [ ] Zero unresolved required manifest placeholders.
 - [ ] Base commands pass (`<BUILD_CMD>`, `<TEST_CMD>`, `<TYPECHECK_CMD>`).
 - [ ] CI is green.
 - [ ] `AGENT.md` matches the real project.
 - [ ] Persisted project content is written in `<REPO_LANGUAGE>`.
 
 ### Detect pending placeholders
-During bootstrap, use this canonical CI gate (nonzero when manifest keys remain):
+During bootstrap, use this canonical CI gate (nonzero when required manifest keys remain):
 ```
 python3 init.py --check
 ```
