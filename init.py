@@ -167,31 +167,75 @@ def gather(ph, args):
 
 
 def parse_stacks(value):
-    """Convert comma-separated CI_STACKS into a lowercased list without blanks."""
-    return [s.strip().lower() for s in (value or "").split(",") if s.strip()]
+    """Parse CI_STACKS and reject malformed or duplicate selections."""
+    if not (value or "").strip():
+        return []
+    return _validate_stack_list(value.split(","))
+
+
+def _validate_stack_list(stacks):
+    normalized = []
+    seen = set()
+    for position, raw in enumerate(stacks, 1):
+        stack = raw.strip().lower()
+        if not stack:
+            raise ValueError(
+                "Invalid CI_STACKS: empty selection at position %d; "
+                "use comma-separated stack names." % position
+            )
+        if stack in seen:
+            raise ValueError("Invalid CI_STACKS: duplicate stack '%s'." % stack)
+        seen.add(stack)
+        normalized.append(stack)
+    return normalized
+
+
+def _workflow_path(root):
+    return os.path.join(root, ".github", "workflows", "ci.yml")
+
+
+def _remove_generated_workflow(root, dry_run):
+    path = _workflow_path(root)
+    if not os.path.exists(path):
+        return False
+    if dry_run:
+        print("Would remove stale generated CI workflow: .github/workflows/ci.yml")
+    else:
+        os.remove(path)
+        print("Removed stale generated CI workflow: .github/workflows/ci.yml")
+    return True
 
 
 def compose_ci(root, stacks, ci_system, dry_run):
-    """Compose .github/workflows/ci.yml by mapping each stack to its recipe in
-    ci/recipes.json (next to the script). Return (stacks_ok, unknown)."""
+    """Compose one GitHub Actions job per validated stack.
+
+    Invalid selections fail before writing the workflow. Empty selections and
+    non-GitHub CI systems remove any stale generated workflow.
+    """
     if "github" not in (ci_system or "").lower():
+        _remove_generated_workflow(root, dry_run)
         print("CI composition is supported only for GitHub Actions; "
               "CI_SYSTEM=%s - skipped" % ci_system)
-        return
+        return [], []
     with open(os.path.join(root, "ci", "recipes.json"), encoding="utf-8") as f:
         recipes = json.load(f)
-    ok, unknown, blocks = [], [], []
-    for s in stacks:
-        if s in recipes:
-            ok.append(s)
-            blocks.append(recipes[s])
-        else:
-            unknown.append(s)
-    if unknown:
-        print("No CI recipe for: %s" % ", ".join(unknown))
-    if not blocks:
-        print("No stack has a CI recipe; skipping composition.")
-        return ok, unknown
+    try:
+        ok = _validate_stack_list(stacks)
+        unknown = [s for s in ok if s not in recipes]
+        if unknown:
+            supported = ", ".join(sorted(recipes))
+            raise ValueError(
+                "Invalid CI_STACKS: unknown stack(s): %s. Supported stacks: %s."
+                % (", ".join(unknown), supported)
+            )
+    except ValueError:
+        _remove_generated_workflow(root, dry_run)
+        raise
+    if not ok:
+        _remove_generated_workflow(root, dry_run)
+        print("No CI stacks selected; no GitHub Actions workflow generated.")
+        return [], []
+    blocks = [recipes[s] for s in ok]
     content = "name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n" + "\n".join(blocks) + "\n"
     ok_str = ", ".join(ok)
     if dry_run:
@@ -199,7 +243,7 @@ def compose_ci(root, stacks, ci_system, dry_run):
         return ok, unknown
     wf_dir = os.path.join(root, ".github", "workflows")
     os.makedirs(wf_dir, exist_ok=True)
-    workflow = os.path.join(wf_dir, "ci.yml")
+    workflow = _workflow_path(root)
     changed = not os.path.exists(workflow)
     if not changed:
         with open(workflow, encoding="utf-8") as f:
@@ -209,7 +253,7 @@ def compose_ci(root, stacks, ci_system, dry_run):
             f.write(content)
     print("CI %s: .github/workflows/ci.yml (jobs: %s)" % (
         "composed" if changed else "already current", ok_str))
-    return ok, unknown
+    return ok, []
 
 
 def _binding_fragment(root, capability, name):
@@ -322,13 +366,56 @@ def self_check():
             os.makedirs(os.path.join(d2, "ci"))
             with open(os.path.join(d2, "ci", "recipes.json"), "w", encoding="utf-8") as f:
                 json.dump({"aa": "  aa:\n    runs-on: x", "bb": "  bb:\n    runs-on: y"}, f)
-            ok, unknown = compose_ci(d2, ["aa", "cc", "bb"], "GitHub Actions", dry_run=False)
-            wf = open(os.path.join(d2, ".github", "workflows", "ci.yml"), encoding="utf-8").read()
+            ok, unknown = compose_ci(d2, ["aa", "bb"], "GitHub Actions", dry_run=False)
+            workflow = os.path.join(d2, ".github", "workflows", "ci.yml")
+            wf = open(workflow, encoding="utf-8").read()
             assert "name: CI" in wf, wf
             assert "jobs:" in wf, wf
             assert "  aa:" in wf and "  bb:" in wf, wf
             assert ok == ["aa", "bb"], ok
-            assert unknown == ["cc"], unknown
+            assert unknown == [], unknown
+            assert wf.count("  aa:\n") == 1 and wf.count("  bb:\n") == 1, wf
+
+            first = wf
+            compose_ci(d2, ["aa", "bb"], "GitHub Actions", dry_run=False)
+            assert open(workflow, encoding="utf-8").read() == first
+
+            with open(workflow, "w", encoding="utf-8") as f:
+                f.write("stale\n")
+            try:
+                compose_ci(d2, ["aa", "cc"], "GitHub Actions", dry_run=False)
+            except ValueError as exc:
+                assert "unknown stack(s): cc" in str(exc), exc
+            else:
+                raise AssertionError("unknown stacks must fail")
+            assert not os.path.exists(workflow), "unknown stack preserved stale workflow"
+
+            with open(workflow, "w", encoding="utf-8") as f:
+                f.write("stale\n")
+            try:
+                compose_ci(d2, ["aa", "aa"], "GitHub Actions", dry_run=False)
+            except ValueError as exc:
+                assert "duplicate stack 'aa'" in str(exc), exc
+            else:
+                raise AssertionError("duplicate stacks must fail")
+            assert not os.path.exists(workflow), "duplicate stack preserved stale workflow"
+
+            with open(workflow, "w", encoding="utf-8") as f:
+                f.write("stale\n")
+            assert compose_ci(d2, [], "GitHub Actions", dry_run=False) == ([], [])
+            assert not os.path.exists(workflow), "empty selection preserved stale workflow"
+
+            try:
+                parse_stacks("aa,,bb")
+            except ValueError as exc:
+                assert "empty selection" in str(exc), exc
+            else:
+                raise AssertionError("empty stack entries must fail")
+
+            with open(workflow, "w", encoding="utf-8") as f:
+                f.write("stale\n")
+            assert compose_ci(d2, ["aa"], "GitLab CI", dry_run=False) == ([], [])
+            assert not os.path.exists(workflow), "unsupported CI preserved stale workflow"
         finally:
             shutil.rmtree(d2)
 
@@ -404,6 +491,13 @@ def main():
     task_tracker = values.get("TASK_TRACKER", "")
     if not values.get("TRACKER") and task_tracker:
         values["TRACKER"] = TRACKER_DISPLAY.get(task_tracker, task_tracker)
+    if not args.no_ci:
+        try:
+            stacks = parse_stacks(values.get("CI_STACKS", ""))
+            compose_ci(ROOT, stacks, values.get("CI_SYSTEM", ""), args.dry_run)
+        except ValueError as exc:
+            _remove_generated_workflow(ROOT, args.dry_run)
+            sys.exit(str(exc))
     # Compose BEFORE apply_values so tokens in the newly written bindings.md are filled.
     if task_tracker:
         compose_bindings(
@@ -413,9 +507,6 @@ def main():
             dry_run=args.dry_run,
             code_intelligence=values.get("CODE_INTELLIGENCE", "none"),
         )
-    stacks = parse_stacks(values.get("CI_STACKS", ""))
-    if not args.no_ci and stacks:
-        compose_ci(ROOT, stacks, values.get("CI_SYSTEM", ""), args.dry_run)
     nonempty = {k: v for k, v in values.items() if v}
     changes = apply_values(ROOT, nonempty, dry_run=args.dry_run)
     total = sum(changes.values())
