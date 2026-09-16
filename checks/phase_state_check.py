@@ -61,7 +61,13 @@ def initial_state():
     )
 
 
-def complete_phase(state, completed_work, verification_evidence, dod_complete=False, review_approved=False):
+def complete_phase(
+    state,
+    completed_work,
+    verification_evidence,
+    dod_complete=False,
+    review_approved=False,
+):
     if state.status != ACTIVE:
         raise TransitionError("only active work can complete a phase")
     if state.current_phase not in PHASES:
@@ -211,10 +217,14 @@ def assert_handoff_is_resumable(tracker, state, expected_phase=None):
     assert record["Commit"] == state.commit, record
     assert record["Verification evidence"], record
     assert record["Required evidence to resume"], record
-    assert tracker.bound_state["current_phase"] == state.current_phase, tracker.bound_state
+    assert tracker.bound_state["current_phase"] == state.current_phase, (
+        tracker.bound_state
+    )
     assert tracker.issue_state["handoff"] == tracker.issue_handoff, tracker.issue_state
     if tracker.provider == "github-projects":
-        assert tracker.project_item["current_phase"] == state.current_phase, tracker.project_item
+        assert tracker.project_item["current_phase"] == state.current_phase, (
+            tracker.project_item
+        )
     return record
 
 
@@ -283,7 +293,9 @@ def run():
         assert record["Status"] == BLOCKED_APPROVAL, record
         assert record["Resume phase when blocked"] == "DEFINITION", record
         resumed = resume(blocked, "approval decision recorded by a human")
-        assert resumed.status == ACTIVE and resumed.current_phase == "DEFINITION", resumed
+        assert resumed.status == ACTIVE and resumed.current_phase == "DEFINITION", (
+            resumed
+        )
 
     print("phase-state check OK")
 

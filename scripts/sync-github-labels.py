@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Create or update the repository's canonical GitHub labels."""
+
 import argparse
 import json
 import shutil
@@ -29,9 +30,14 @@ def sync(labels, repo=None, dry_run=False):
         raise RuntimeError("gh is not in PATH; install GitHub CLI and authenticate it")
     for label in labels:
         command = [
-            "gh", "label", "create", label["name"],
-            "--color", label["color"],
-            "--description", label["description"],
+            "gh",
+            "label",
+            "create",
+            label["name"],
+            "--color",
+            label["color"],
+            "--description",
+            label["description"],
             "--force",
         ]
         if repo:
@@ -52,7 +58,9 @@ def self_check():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", help="OWNER/REPO; otherwise gh uses the current repository")
+    parser.add_argument(
+        "--repo", help="OWNER/REPO; otherwise gh uses the current repository"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--self-check", action="store_true")
     args = parser.parse_args()

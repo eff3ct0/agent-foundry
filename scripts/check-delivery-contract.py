@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check that the delegated-delivery contract and approval gates stay aligned."""
+
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -25,14 +26,20 @@ PROVIDER_DIRS = {
 }
 DOCUMENT_SECTIONS = {
     "AGENT.md": (
-        "Project coordinates", "Archetype documents", "Operating rules",
-        "Protected `status:approved` gate", "Bindings (provider contract)",
+        "Project coordinates",
+        "Archetype documents",
+        "Operating rules",
+        "Protected `status:approved` gate",
+        "Bindings (provider contract)",
         "Reading order for a cold agent",
     ),
     "agent-runbook.md": (
-        "Why this is a contract, not a runner", "Convergence rules",
-        "Principle: the session is disposable", "Session cycle",
-        "Approval boundaries", "Guardrails",
+        "Why this is a contract, not a runner",
+        "Convergence rules",
+        "Principle: the session is disposable",
+        "Session cycle",
+        "Approval boundaries",
+        "Guardrails",
     ),
     "bindings.md": ("Protected `status:approved` gate",),
 }
@@ -90,8 +97,9 @@ def _section_present(text, section):
     }
     if wanted in labels:
         return True
-    if wanted == "identity" and all(_field(text, field) for field in (
-            "Contract instance", "Capability", "Provider")):
+    if wanted == "identity" and all(
+        _field(text, field) for field in ("Contract instance", "Capability", "Provider")
+    ):
         return True
     return any(alias in labels for alias in SECTION_ALIASES.get(wanted, ()))
 
@@ -107,7 +115,11 @@ def _provider_files(root):
 def _check_links(path, text, root, errors):
     for target in LOCAL_LINK.findall(text):
         target = target.strip("<>")
-        if not target or target.startswith("#") or re.match(r"^[a-z][a-z0-9+.-]*:", target, re.IGNORECASE):
+        if (
+            not target
+            or target.startswith("#")
+            or re.match(r"^[a-z][a-z0-9+.-]*:", target, re.IGNORECASE)
+        ):
             continue
         destination = (path.parent / target.split("#", 1)[0]).resolve()
         if not destination.exists():
@@ -126,11 +138,15 @@ def _check_document(path, text, root, errors):
             for target in LOCAL_LINK.findall(text)
         }
         for relative in (
-                "providers/task/_contract.md", "providers/secrets/_contract.md",
-                "providers/code-intel/_contract.md", "ci/_contract.md"):
+            "providers/task/_contract.md",
+            "providers/secrets/_contract.md",
+            "providers/code-intel/_contract.md",
+            "ci/_contract.md",
+        ):
             if (root / relative).resolve() not in linked:
-                errors.append("%s missing contract link: %s" % (
-                    _display(path, root), relative))
+                errors.append(
+                    "%s missing contract link: %s" % (_display(path, root), relative)
+                )
 
 
 def _check_provider(capability, path, contract_path, contract_text, text, root, errors):
@@ -147,10 +163,14 @@ def _check_provider(capability, path, contract_path, contract_text, text, root, 
     else:
         linked = (path.parent / instance.group(1).split("#", 1)[0]).resolve()
         if linked != expected:
-            errors.append("%s Contract instance link must resolve to %s" % (
-                label, _display(contract_path, root)))
+            errors.append(
+                "%s Contract instance link must resolve to %s"
+                % (label, _display(contract_path, root))
+            )
 
-    expected_capability = "code-intelligence" if capability == "code-intel" else capability
+    expected_capability = (
+        "code-intelligence" if capability == "code-intel" else capability
+    )
     if _field(text, "Capability").strip("`").lower() != expected_capability:
         errors.append("%s must declare Capability: %s" % (label, expected_capability))
     provider = _field(text, "Provider").strip("`")
@@ -161,10 +181,14 @@ def _check_provider(capability, path, contract_path, contract_text, text, root, 
 
     if capability == "code-intel" and path.stem == "none":
         lowered = text.lower()
-        missing = [marker for marker in CODE_INTEL_NONE_MARKERS if marker not in lowered]
+        missing = [
+            marker for marker in CODE_INTEL_NONE_MARKERS if marker not in lowered
+        ]
         if missing:
-            errors.append("%s missing explicit intentional-minimal none contract: %s" % (
-                label, ", ".join(missing)))
+            errors.append(
+                "%s missing explicit intentional-minimal none contract: %s"
+                % (label, ", ".join(missing))
+            )
 
 
 def _check_ci(path, root, errors):
@@ -187,7 +211,9 @@ def _check_ci(path, root, errors):
         if CI_RECIPE_MARKER not in job:
             errors.append("%s recipe %r missing %s" % (label, name, CI_RECIPE_MARKER))
         if not re.search(r"(?m)^\s{2}%s:\s*$" % re.escape(name), job):
-            errors.append("%s recipe %r must expose its recipe key as the job" % (label, name))
+            errors.append(
+                "%s recipe %r must expose its recipe key as the job" % (label, name)
+            )
         for required in ("runs-on:", "actions/checkout@", "steps:", "run:"):
             if required not in job:
                 errors.append("%s recipe %r missing %s" % (label, name, required))
@@ -203,7 +229,10 @@ def _infer_root(paths, root):
         return root
     for path in paths:
         path = Path(path)
-        if path.parent.name in PROVIDER_DIRS.values() and path.parent.parent.name == "providers":
+        if (
+            path.parent.name in PROVIDER_DIRS.values()
+            and path.parent.parent.name == "providers"
+        ):
             return path.parent.parent.parent.resolve()
     return root
 
@@ -238,7 +267,10 @@ def check(paths=None, root=ROOT):
     for capability, directory in PROVIDER_DIRS.items():
         contract_path = root / "providers" / directory / "_contract.md"
         if contract_path.exists():
-            contracts[capability] = (contract_path, contract_path.read_text(encoding="utf-8"))
+            contracts[capability] = (
+                contract_path,
+                contract_path.read_text(encoding="utf-8"),
+            )
 
     provider_paths = list(_provider_files(root)) if default_paths else []
     if not default_paths:
@@ -246,7 +278,10 @@ def check(paths=None, root=ROOT):
         for capability, directory in PROVIDER_DIRS.items():
             for path in paths:
                 path = Path(path)
-                if path.parent == root / "providers" / directory and path.name != "_contract.md":
+                if (
+                    path.parent == root / "providers" / directory
+                    and path.name != "_contract.md"
+                ):
                     provider_paths.append((capability, path))
 
     for capability, path in provider_paths:
@@ -254,13 +289,22 @@ def check(paths=None, root=ROOT):
         if not contract or not path.exists():
             continue
         contract_path, contract_text = contract
-        _check_provider(capability, path, contract_path, contract_text,
-                        path.read_text(encoding="utf-8"), root, errors)
+        _check_provider(
+            capability,
+            path,
+            contract_path,
+            contract_text,
+            path.read_text(encoding="utf-8"),
+            root,
+            errors,
+        )
 
     recipes = root / "ci" / "recipes.json"
     if recipes in present:
         _check_ci(recipes, root, errors)
     return errors
+
+
 APPROVAL_ACTION = "add status:approved"
 ALLOWED_PRINCIPAL_ROLES = ("MAINTAINER", "AUTHORIZED_APPROVER")
 ALLOWED_ACTOR_CAPABILITIES = ("MAINTAIN", "ADMIN")
@@ -293,7 +337,10 @@ def delegated_approval_errors(evidence, target_issue):
         errors.append("authenticated actor is not the authorized principal")
     if actor.get("capability") not in ALLOWED_ACTOR_CAPABILITIES:
         errors.append("actor lacks MAINTAIN or ADMIN capability")
-    if operation.get("issue") != target_issue or operation.get("label") != "status:approved":
+    if (
+        operation.get("issue") != target_issue
+        or operation.get("label") != "status:approved"
+    ):
         errors.append("operation is not scoped to the exact issue and label")
     if operation.get("attempts") != 1:
         errors.append("operation must have exactly one add attempt")
@@ -301,7 +348,9 @@ def delegated_approval_errors(evidence, target_issue):
         errors.append("readback must immediately follow the one add attempt")
     if operation.get("result") != "added":
         errors.append("mutation must succeed with a known added result")
-    if readback.get("issue") != target_issue or "status:approved" not in readback.get("labels", []):
+    if readback.get("issue") != target_issue or "status:approved" not in readback.get(
+        "labels", []
+    ):
         errors.append("target-host readback does not confirm the approval")
     return errors
 
@@ -313,13 +362,26 @@ def delegated_approval_allowed(evidence, target_issue):
 
 def approval_self_check():
     valid = {
-        "instruction": {"source": "direct-human", "current": True, "issue": 32,
-                         "action": APPROVAL_ACTION, "principal": "human-1"},
-        "principal": {"evidence_source": "target-host", "subject": "human-1",
-                       "role": "MAINTAINER"},
+        "instruction": {
+            "source": "direct-human",
+            "current": True,
+            "issue": 32,
+            "action": APPROVAL_ACTION,
+            "principal": "human-1",
+        },
+        "principal": {
+            "evidence_source": "target-host",
+            "subject": "human-1",
+            "role": "MAINTAINER",
+        },
         "actor": {"subject": "human-1", "capability": "ADMIN"},
-        "operation": {"issue": 32, "label": "status:approved", "attempts": 1,
-                       "result": "added", "sequence": ["add", "readback"]},
+        "operation": {
+            "issue": 32,
+            "label": "status:approved",
+            "attempts": 1,
+            "result": "added",
+            "sequence": ["add", "readback"],
+        },
         "readback": {"issue": 32, "labels": ["status:approved"]},
     }
     assert delegated_approval_allowed(valid, 32)
@@ -374,8 +436,10 @@ def self_check():
             encoding="utf-8",
         )
         incomplete_errors = check([contract_path, incomplete], root=fixture_root)
-        assert any("incomplete.md missing contract section" in error
-                   for error in incomplete_errors), incomplete_errors
+        assert any(
+            "incomplete.md missing contract section" in error
+            for error in incomplete_errors
+        ), incomplete_errors
 
         valid = code_dir / "valid.md"
         valid_text = """## Valid provider
@@ -398,12 +462,17 @@ Do not bypass repository policy.
         broken = valid_text.replace("./_contract.md", "./missing-contract.md")
         valid.write_text(broken, encoding="utf-8")
         broken_errors = check([contract_path, valid], root=fixture_root)
-        assert any("valid.md broken link" in error for error in broken_errors), broken_errors
-        assert all(str(fixture_root) not in error for error in broken_errors), broken_errors
+        assert any("valid.md broken link" in error for error in broken_errors), (
+            broken_errors
+        )
+        assert all(str(fixture_root) not in error for error in broken_errors), (
+            broken_errors
+        )
 
         valid.write_text(valid_text, encoding="utf-8")
         assert check([contract_path, valid], root=fixture_root) == [], check(
-            [contract_path, valid], root=fixture_root)
+            [contract_path, valid], root=fixture_root
+        )
 
     approval_self_check()
     print("self-check OK")

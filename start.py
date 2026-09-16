@@ -19,6 +19,7 @@ Modes:
   SETUP - uninitialized instance (placeholders.json remains).
   WORK  - initialized project (placeholders.json is absent).
 """
+
 import argparse
 import os
 import subprocess
@@ -57,7 +58,8 @@ def _origin_url(root):
     try:
         result = subprocess.run(
             ["git", "-C", root, "remote", "get-url", "origin"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
     except OSError:
         return None  # git is not installed
@@ -97,8 +99,14 @@ def self_check():
         placeholders = os.path.join(directory, "placeholders.json")
         open(placeholders, "w").close()
         # (a) placeholders.json + factory-template origin -> SELF (SSH and HTTPS).
-        assert detect_mode(directory, "git@github.com:eff3ct0/factory-template.git") == SELF
-        assert detect_mode(directory, "https://github.com/eff3ct0/factory-template") == SELF
+        assert (
+            detect_mode(directory, "git@github.com:eff3ct0/factory-template.git")
+            == SELF
+        )
+        assert (
+            detect_mode(directory, "https://github.com/eff3ct0/factory-template")
+            == SELF
+        )
         # (b) placeholders.json + different origin -> SETUP.
         assert detect_mode(directory, "git@github.com:eff3ct0/my-service.git") == SETUP
         # Offline sentinel: no origin + placeholders.json, without MAINTAINERS -> SETUP.
@@ -119,9 +127,13 @@ def self_check():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Detect repository state (SELF/SETUP/WORK) and print the next action.")
-    parser.add_argument("--self-check", action="store_true",
-                        help="internal routing test (assert-based, offline)")
+        description="Detect repository state (SELF/SETUP/WORK) and print the next action."
+    )
+    parser.add_argument(
+        "--self-check",
+        action="store_true",
+        help="internal routing test (assert-based, offline)",
+    )
     args = parser.parse_args()
 
     if args.self_check:
