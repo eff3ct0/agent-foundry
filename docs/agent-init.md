@@ -105,7 +105,7 @@ contract file is not a recipe and is excluded from selection. Check that jobs
 match real languages and adjust commands if the project uses custom scripts.
 
 ## Step 6 - Verify before auto-cleanup
-- `python3 init.py --check` -> **0 pending** manifest placeholders (nonzero when any remain).
+- `python3 init.py --check` -> **0 pending** required manifest placeholders (nonzero when any required keys remain). Optional keys may remain intentionally empty.
 - Base commands pass.
 - Run [`scripts/check-determinism.py`](../scripts/check-determinism.py) to verify offline dry-runs, binding/CI composition, bootstrap planning, label synchronization, startup, and governance checks.
 - Remember: local `templates/` tokens (`<TICKET_ID>`, `<CRITERION_1>`, ...) are intentional, not manifest placeholders.
@@ -114,7 +114,7 @@ match real languages and adjust commands if the project uses custom scripts.
 ## Step 7 - Finish
 - Make the first commit using conventional commits.
 - The script auto-cleans `init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `scripts/check-determinism.py`, `ci/`, and `providers/`; generated `ci.yml` and `docs/bindings.md` remain. Use `--no-clean` if the determinism checker must remain available for further template checks.
-- No manifest `<KEY>` should remain unresolved.
+- No required manifest `<KEY>` should remain unresolved; optional keys may remain intentionally empty.
 
 ## Anti-error note
 - Do not fill local template tokens; they are completed when each `templates/*.md` file is used.

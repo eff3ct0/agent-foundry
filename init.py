@@ -7,7 +7,7 @@ Usage:
   python3 init.py --defaults            # use manifest defaults, do not ask
   python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='pytest -q'
   python3 init.py --answers answers.json
-  python3 init.py --check               # check for remaining manifest placeholders (CI; nonzero if any)
+  python3 init.py --check               # check required manifest placeholders (CI; nonzero if any)
   python3 init.py --dry-run             # show changes without writing
   python3 init.py --self-check          # internal replacement test
 Options: --no-clean (do not remove init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/scripts/check-determinism.py at the end),
@@ -16,7 +16,8 @@ Options: --no-clean (do not remove init.py/placeholders.json/factory_bootstrap.p
 Value precedence: --set  >  --answers  >  interactive prompt  >  manifest default.
 Only manifest keys are replaced. Local template tokens (<TICKET_ID>, <CRITERION_1>,
 <DATE>, <NNN>, ...) remain for filling when each template is used. A key without
-a value is NOT touched (it remains <KEY> and --check reports it), not deleted.
+a value is NOT touched (it remains <KEY> and required keys are reported by
+--check), not deleted. Optional keys may remain intentionally empty.
 
 FACTORY_REQUIRED policy: when FACTORY_REQUIRED=true, init.py fails closed (deterministic,
 offline) if FACTORY_SPEC is empty. init.py does NOT verify or create org repositories:
@@ -37,6 +38,7 @@ Composition happens BEFORE apply_values so tokens (<TRACKER_KEY>,
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -46,6 +48,7 @@ MANIFEST = os.path.join(ROOT, "placeholders.json")
 SELF = os.path.basename(__file__)
 SKIP_DIRS = {".git"}
 SKIP_ROOT_FILES = {SELF, "placeholders.json"}
+PROTECTED_VALIDATION_PREFIX = "scripts/check-"
 
 TRACKER_DISPLAY = {
     "jira": "Jira",
@@ -57,10 +60,13 @@ TRACKER_DISPLAY = {
 BINDINGS_HEADER = (
     "# Bindings - mandatory project providers\n\n"
     "These bindings are mandatory for every agent, regardless of harness.\n"
-    "The shape of each instance is defined by providers/task/_contract.md, "
-    "providers/secrets/_contract.md, and providers/code-intel/_contract.md when selected; "
-    "the harness provides access and the binding provides the rules.\n\n"
-    "## Protected status:approved gate\n"
+    "The shape of each instance is defined by:\n"
+    "- [`providers/task/_contract.md`](../providers/task/_contract.md)\n"
+    "- [`providers/secrets/_contract.md`](../providers/secrets/_contract.md)\n"
+    "- [`providers/code-intel/_contract.md`](../providers/code-intel/_contract.md) when selected\n"
+    "- [`ci/_contract.md`](../ci/_contract.md)\n"
+    "The harness provides access and the binding provides the rules.\n\n"
+    "## Protected `status:approved` gate\n"
     "The bound task provider may support delegated approval only through its "
     "fail-closed protocol: a current direct human instruction must name the exact "
     "issue and add status:approved; target-host evidence must bind that principal "
@@ -82,6 +88,11 @@ def token(key):
     return "<%s>" % key
 
 
+def _is_protected_validation_source(path, root):
+    relative = os.path.relpath(path, root).replace(os.sep, "/")
+    return relative.startswith(PROTECTED_VALIDATION_PREFIX)
+
+
 def iter_text_files(root):
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames.sort()
@@ -90,6 +101,8 @@ def iter_text_files(root):
             if dirpath == root and name in SKIP_ROOT_FILES:
                 continue
             path = os.path.join(dirpath, name)
+            if _is_protected_validation_source(path, root):
+                continue
             try:
                 with open(path, encoding="utf-8") as f:
                     yield path, f.read()
@@ -123,6 +136,28 @@ def remaining(root, keys):
             if c:
                 found[key] = found.get(key, 0) + c
     return found
+
+
+def _rebase_links(text, source, destination):
+    """Rebase relative fragment links for the generated bindings document."""
+    source_dir = os.path.dirname(source)
+    destination_dir = os.path.dirname(destination)
+
+    def replace(match):
+        target = match.group(2)
+        if target.startswith(("#", "/")) or "://" in target:
+            return match.group(0)
+        path, separator, anchor = target.partition("#")
+        if not path:
+            return match.group(0)
+        rebased = os.path.relpath(
+            os.path.normpath(os.path.join(source_dir, path)), destination_dir
+        ).replace(os.sep, "/")
+        if separator:
+            rebased += "#" + anchor
+        return match.group(1) + rebased
+
+    return re.sub(r"(\]\()([^\s)]+)", replace, text)
 
 
 def gather(ph, args):
@@ -291,14 +326,18 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False, code_i
             sys.exit("No providers/%s/%s.md fragment or custom.md fallback exists." % (capability, name))
         used.append(frag)
         with open(frag, encoding="utf-8") as f:
-            parts.append(f.read().rstrip() + "\n")
+            parts.append(_rebase_links(
+                f.read().rstrip(), frag, os.path.join(root, "docs", "bindings.md")
+            ) + "\n")
     if code_intelligence != "none":
         frag = _binding_fragment(root, "code-intel", code_intelligence)
         if not frag:
             sys.exit("No providers/code-intel/%s.md fragment or custom.md fallback exists." % code_intelligence)
         used.append(frag)
         with open(frag, encoding="utf-8") as f:
-            parts.append(f.read().rstrip() + "\n")
+            parts.append(_rebase_links(
+                f.read().rstrip(), frag, os.path.join(root, "docs", "bindings.md")
+            ) + "\n")
     docs_dir = os.path.join(root, "docs")
     os.makedirs(docs_dir, exist_ok=True)
     bindings = os.path.join(docs_dir, "bindings.md")
@@ -473,15 +512,16 @@ def main():
 
     ph = load_manifest()
     keys = [p["key"] for p in ph]
+    required_keys = [p["key"] for p in ph if p.get("required")]
 
     if args.check:
-        rem = remaining(ROOT, keys)
+        rem = remaining(ROOT, required_keys)
         if rem:
-            print("Unresolved manifest placeholders:")
+            print("Unresolved required manifest placeholders:")
             for k, c in sorted(rem.items(), key=lambda kv: -kv[1]):
                 print("  %s x%d" % (k, c))
             sys.exit(1)
-        print("OK: 0 pending manifest placeholders.")
+        print("OK: 0 pending required manifest placeholders.")
         return
 
     values = gather(ph, args)
