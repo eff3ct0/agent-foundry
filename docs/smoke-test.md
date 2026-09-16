@@ -22,7 +22,7 @@ Note: `eff3ct0/factory` (the org instance) does not exist yet, so leave
 
 ## 3. Success criteria
 - [ ] The kickoff was sufficient; no process explanation was needed.
-- [ ] `python3 init.py --check` -> zero manifest placeholders (keep `--no-clean` for this).
+- [ ] `python3 init.py --check` -> zero required manifest placeholders (keep `--no-clean` for this; optional non-applicable values may remain empty).
 - [ ] `docs/bindings.md` contains the selected task and secrets providers.
 - [ ] `.github/workflows/ci.yml` has one job per stack language.
 - [ ] Without `--no-clean`, `init.py`, `placeholders.json`, `ci/`, `providers/`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, and `scripts/check-determinism.py` disappear.
