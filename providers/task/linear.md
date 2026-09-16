@@ -19,18 +19,14 @@ issues are prohibited.
 **Rules and lifecycle:**
 - Linear status cycle: *Backlog/Todo* -> *In Progress* -> *Done* (use the team's actual statuses).
 - At start, move the issue to *In Progress* and comment the plan; at close, move it to *Done*.
+- After every completed phase, add the latest [`templates/handoff.md`](../../templates/handoff.md) state to the issue. The handoff records current phase/status, completed work, exact next action, branch/commit, verification evidence, and required evidence to resume.
 - Leave progress/checkpoint comments on the issue.
 - One issue = one unit of work. Every commit/PR references the identifier (`<TRACKER_KEY>-NNN`).
+- **Protected `status:approved` gate:** the provider MUST keep this gate fail closed. A current direct human instruction must name the exact issue and the exact action `add status:approved`; target-host evidence must bind that principal to maintainer or authorized-approver authority; the authenticated actor must have `MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale or ambiguous instruction, insufficient permission, failed or unknown mutation, or readback mismatch stops the operation without retrying or broadening scope. Without that evidence, the human applies the label directly.
 
-**Protected `status:approved` gate:** the provider MUST keep this gate fail
-closed. A current direct human instruction must name the exact issue and the
-exact action `add status:approved`; target-host evidence must bind that
-principal to maintainer or authorized-approver authority; the authenticated
-actor must have `MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must
-be followed by target-host readback. Any mismatch, stale or ambiguous
-instruction, insufficient permission, failed or unknown mutation, or readback
-mismatch stops the operation without retrying or broadening scope. Without
-this evidence, the human applies the label directly.
+**Phase state:** Use `DEFINITION -> IMPLEMENTATION -> TESTING/TDD -> VERIFICATION -> EVIDENCE/DELIVERY -> DONE`.
+`BLOCKED` records the phase to resume; failed gates remain in the current phase. Never skip a phase or close
+with pending or failed verification.
 
 **Prohibitions:**
 - Do not open tasks in Jira, GitHub, or another system.

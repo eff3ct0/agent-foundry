@@ -50,6 +50,39 @@ It is not tied to any language or stack.
 13. **Persistence language:** the agent's conversational language is independent from the repository's persistence language. ALL persisted work (specs, docs, issues, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
 14. **Delegated delivery:** when a human delegates a specific task, that delegation authorizes the routine delivery flow for that task: tracker updates, implementation, verification, commit, push, pull request, and evidence updates. Do not ask for intermediate confirmation. It does not authorize merge, production deployment, destructive operations, release publication, or other human approval decisions.
 
+## Ordered phase model
+Every work unit follows this ordered model. `BLOCKED` is an explicit state, not a hidden session condition.
+
+1. `DEFINITION` - record the problem, scope, acceptance criteria, dependencies, and plan.
+2. `IMPLEMENTATION` - make the smallest in-scope code, configuration, or documentation change.
+3. `TESTING/TDD` - add or update behavior checks and run the required test/TDD signal.
+4. `VERIFICATION` - run the applicable test, build, lint, typecheck, and end-to-end gates.
+5. `EVIDENCE/DELIVERY` - record results, review evidence, commit/PR details, and delivery readiness.
+6. `DONE` - enter only after the Definition of Done and required review gates pass.
+
+`BLOCKED` is an explicit interruption state entered from any active phase when approval, an unresolved
+dependency, or the retry limit stops progress. It records the phase to resume.
+
+Phase transitions are deterministic: phases are not skipped; a failed gate stays in its current phase;
+`BLOCKED` records the phase to resume; resolving the blocker returns to that phase with new evidence. No path
+may enter `DONE` without every required Definition of Done item and review gate passing.
+
+## Durable phase state and cold resumption
+After **every completed phase**, update the bound issue or project before starting the next phase. Use the
+latest tracker handoff comment as the durable source of truth, together with the project item's native state
+when the binding provides one. The update MUST include:
+
+- Current phase and status (`ACTIVE`, `BLOCKED`, or `DONE`)
+- Completed work
+- Exact next action
+- Branch and commit
+- Verification evidence, or an explicit statement that it is not yet run
+- Required evidence to resume for the next agent
+
+The latest state and handoff comment are what a cold agent reads before inspecting the worktree or continuing;
+they replace session memory, not the bound tracker. Use [`templates/handoff.md`](templates/handoff.md) for the
+canonical comment shape. Do not create a second tracker or change the one-work-unit-per-session rule.
+
 ### Protected `status:approved` gate
 An agent MAY add `status:approved` only through the bound task provider's delegated-approval protocol, and only when every condition below is satisfied:
 
@@ -62,7 +95,7 @@ An agent MAY add `status:approved` only through the bound task provider's delega
 Without all of that evidence, stop and ask the human to apply the label directly. This contract change does not grant approval for existing work or apply the label to any issue.
 
 ## Bindings (provider contract)
-Project capabilities are **bound to concrete providers** in [`docs/bindings.md`](docs/bindings.md): the task provider (`<TASK_TRACKER>`) and secrets manager (`<SECRETS_PROVIDER>`). Their use is **MANDATORY and EXCLUSIVE** for every agent; alternatives are not used.
+Project capabilities are **bound to concrete providers** in [`docs/bindings.md`](docs/bindings.md): the task tracker (`<TASK_TRACKER>`) and secrets manager (`<SECRETS_PROVIDER>`). Their use is **MANDATORY and EXCLUSIVE** for every agent; alternatives are not used.
 The **harness** provides the access mechanism (MCP / CLI / API); the **spec** provides the provider and its rules. This contract takes precedence over agent or harness preferences.
 
 ## Reading order for a cold agent
