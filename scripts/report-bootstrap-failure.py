@@ -29,6 +29,11 @@ FORM_CONTROLS = (
 FORM_OPTIONS = ("Critical", "High", "Medium", "Low")
 ALLOWED_CASES = frozenset(("cleanup", "matrix", "prepare"))
 ENVELOPE_VERSION = "bootstrap-e2e-failure/v1"
+TRIAGE_VERSION = "bootstrap-e2e-triage/v1"
+ALLOWED_MODELS = frozenset({
+    "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-5-mini", "gpt-5.4",
+})
+ALLOWED_CLASSIFICATIONS = frozenset(("cleanup", "environment", "initializer", "release", "workflow", "unknown"))
 SAFE_FAILURE_CODE = re.compile(r"[a-z0-9][a-z0-9_-]{0,48}")
 MAX_API_RESPONSE_BYTES = 64 * 1024
 MAX_API_REQUEST_BYTES = 16 * 1024
@@ -36,6 +41,7 @@ MAX_PAGINATED_ITEMS = 1000
 MAX_EVIDENCE_FILES = 32
 MAX_EVIDENCE_FILE_BYTES = 64 * 1024
 MAX_EVIDENCE_TOTAL_BYTES = 512 * 1024
+MAX_TRIAGE_BYTES = 16 * 1024
 MAX_BODY_CHARS = 12000
 MAX_LOG_ITEMS = 3
 MAX_ISSUE_RESULTS = 100
@@ -204,6 +210,7 @@ def load_bounded_json(path, limit, message):
 
 def load_failure_records(directory):
     records = []
+    evidence_models = set()
     paths = sorted(Path(directory).glob("*.json"))
     if len(paths) > MAX_EVIDENCE_FILES:
         raise ReporterError("too many evidence files")
@@ -218,6 +225,8 @@ def load_failure_records(directory):
         data = load_bounded_json(path, MAX_EVIDENCE_FILE_BYTES, "invalid evidence file")
         if not isinstance(data, dict) or data.get("schema_version") != ENVELOPE_VERSION:
             raise ReporterError("unsupported evidence envelope")
+        if data.get("openai_model") in ALLOWED_MODELS:
+            evidence_models.add(data["openai_model"])
         if data.get("release_tag"):
             validate_tag(data["release_tag"])
         logs = data.get("logs", [])
@@ -241,6 +250,8 @@ def load_failure_records(directory):
                              "logs": data.get("cleanup_logs", [])})
         if len(records) > MAX_PAGINATED_ITEMS:
             raise ReporterError("too many evidence records")
+    if len(evidence_models) > 1:
+        raise ReporterError("evidence OPENAI_MODEL values do not match")
     for record in records:
         if record["release_sha"]:
             record["release_sha"] = validate_sha(record["release_sha"])
@@ -323,6 +334,28 @@ def validate_body(body):
         raise ReporterError("generated issue body has missing required fields")
 
 
+def load_triage(path):
+    if not path:
+        return {"status": "fallback", "selected_model": None}
+    data = load_bounded_json(path, MAX_TRIAGE_BYTES, "invalid triage result")
+    if not isinstance(data, dict) or data.get("schema_version") != TRIAGE_VERSION:
+        raise ReporterError("unsupported triage result")
+    if data.get("status") != "success":
+        return {"status": "fallback", "selected_model": None}
+    if set(data) != {"schema_version", "status", "selected_model", "classification", "summary", "reproduction"}:
+        raise ReporterError("triage result has unexpected fields")
+    if data.get("selected_model") not in ALLOWED_MODELS or data.get("classification") not in ALLOWED_CLASSIFICATIONS:
+        raise ReporterError("triage result is not allowlisted")
+    safe = {"status": "success", "selected_model": data["selected_model"], "classification": data["classification"]}
+    for name, limit in (("summary", 600), ("reproduction", 1200)):
+        value = data.get(name)
+        if not isinstance(value, str) or not value.strip() or len(value) > limit or re.search(
+                r"(?i)(ignore previous|github_token|openai_api_key|authorization|bearer|token=|secret=|password=|/home/|/tmp/|https?://|```|###|<|>|\b[A-Z][A-Z0-9_]{1,}=|\b(?:10|127|192\.168|169\.254|172\.(?:1[6-9]|2[0-9]|3[0-1]))\.\d{1,3}\.\d{1,3}\b)", value):
+            raise ReporterError("triage %s is unsafe" % name)
+        safe[name] = re.sub(r"\s+", " ", value).strip()
+    return safe
+
+
 def verify_repository(repository, token):
     result = request("GET", "repos/%s" % repository, token)
     if not isinstance(result, dict) or (result.get("full_name") or "").lower() != repository.lower():
@@ -356,7 +389,7 @@ def artifact_url(repository, run_id, token, fallback):
     return "https://github.com/%s/actions/runs/%s/artifacts/%s" % (repository, run_id, matches[0]["id"])
 
 
-def build_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_text):
+def build_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_text, triage=None):
     tag_text = "`%s`" % tag if tag else "unavailable (release preparation failed)"
     sha_text = "`%s`" % sha if sha else "unavailable (no release commit was resolved)"
     lines = [
@@ -373,6 +406,14 @@ def build_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_t
         marker_text, "", "### Environment",
         "GitHub Actions release bootstrap E2E for `%s`; the release commit was %s." % (repository, sha_text),
     ]
+    if triage and triage.get("status") == "success":
+        lines.extend([
+            "Advisory classification: `%s` (untrusted, non-authoritative)." % triage["classification"],
+            "Advisory summary: %s" % triage["summary"],
+            "Suggested reproduction: %s" % triage["reproduction"],
+        ])
+    else:
+        lines.append("Advisory triage: unavailable; deterministic evidence is authoritative.")
     lines.extend(["", "### Severity", "High"])
     body = "\n".join(lines)
     if len(body) > MAX_BODY_CHARS:
@@ -480,7 +521,11 @@ def report(args):
     fallback_artifact = validate_run_url(args.artifact_url, repository, run_id)
     verify_repository(repository, token)
     artifact = artifact_url(repository, run_id, token, fallback_artifact)
-    body = build_body(repository, tag, sha, cases, workflow_url, artifact, marker_text)
+    try:
+        triage = load_triage(getattr(args, "triage_file", None))
+    except ReporterError:
+        triage = {"status": "fallback", "selected_model": None}
+    body = build_body(repository, tag, sha, cases, workflow_url, artifact, marker_text, triage)
     matches = search_issues(repository, marker_text, token, fingerprints)
     if matches:
         issue = matches[0]
@@ -526,6 +571,13 @@ def self_check():
                       "https://github.com/eff3ct0/factory-template/actions/runs/123", failure_marker)
     assert "token=" not in body.lower()
     assert "### Severity\nHigh" in body
+    advisory = {"status": "success", "selected_model": "gpt-4o-mini", "classification": "initializer",
+                "summary": "The initializer failed.", "reproduction": "Run the released initializer for the matrix case."}
+    advisory_body = build_body("eff3ct0/factory-template", "v0.1.0", commit, ["python"],
+                               "https://github.com/eff3ct0/factory-template/actions/runs/123",
+                               "https://github.com/eff3ct0/factory-template/actions/runs/123", marked, advisory)
+    assert "Advisory classification" in advisory_body
+    assert load_triage("")["status"] == "fallback"
     assert "not resolved" not in body
     print("bootstrap failure reporter self-check OK")
 
@@ -538,6 +590,7 @@ def main():
     report_parser.add_argument("--repository", required=True)
     report_parser.add_argument("--tag")
     report_parser.add_argument("--sha")
+    report_parser.add_argument("--triage-file")
     report_parser.add_argument("--workflow-url", required=True)
     report_parser.add_argument("--artifact-url", required=True)
     report_parser.add_argument("--evidence-dir")

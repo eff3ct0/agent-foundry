@@ -106,7 +106,13 @@ def test_workflow_contract():
     text = workflow.WORKFLOW.read_text(encoding="utf-8")
     assert "release:\n    types: [published]" in text
     assert "workflow_dispatch" in text and "tag_name" in text
-    assert "OPENAI_API_KEY" not in text and "OPENAI_MODEL" not in text
+    bootstrap_job = text.split("\n  bootstrap:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
+    cleanup_job = text.split("\n  cleanup:\n", 1)[1].split("\n  triage:\n", 1)[0]
+    report_job = text.split("\n  report:\n", 1)[1]
+    triage_job = text.split("\n  triage:\n", 1)[1].split("\n  report:\n", 1)[0]
+    assert "OPENAI_API_KEY" not in bootstrap_job + cleanup_job + report_job
+    assert "OPENAI_API_KEY" in triage_job and "OPENAI_MODEL" in triage_job
+    assert "env -i" in triage_job
     assert "cancel-in-progress: false" in text
 
 

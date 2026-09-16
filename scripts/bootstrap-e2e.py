@@ -29,6 +29,9 @@ MAX_LOG_CHARS = 2000
 MAX_API_RESPONSE_BYTES = 64 * 1024
 MAX_API_REQUEST_BYTES = 16 * 1024
 MAX_EVIDENCE_BYTES = 64 * 1024
+ALLOWED_MODELS = frozenset({
+    "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-5-mini", "gpt-5.4",
+})
 SAFE_DIAGNOSTIC = re.compile(
     r"(?i)(?:^(?:fatal|error|warning|traceback|remote|hint):|\b(?:failed|error|invalid|missing|mismatch|unavailable|refused|timeout)\b|"
     r"\b(?:authorization|bearer|token|password|secret|api[_-]?key|credential)=<redacted>|<private-(?:path|address)>)"
@@ -62,6 +65,13 @@ def validate_tag(tag):
         return validate_git_tag(tag)
     except ValueError as error:
         raise HarnessError(str(error)) from error
+
+
+def validate_model(model):
+    model = (model or "").strip()
+    if model not in ALLOWED_MODELS:
+        raise HarnessError("OPENAI_MODEL is absent or not allowlisted", "configuration_missing")
+    return model
 
 
 def validate_repository(repository):
@@ -320,6 +330,7 @@ def run_bootstrap(args):
     tag = validate_tag(args.tag)
     sha = validate_sha(args.sha)
     stack = validate_stack(args.stack)
+    raw_model = os.environ.get("OPENAI_MODEL", "")
     prefix = disposable_prefix(args.run_id)
     token = os.environ.get(args.token_env, "")
     lifecycle_token = token
@@ -333,6 +344,7 @@ def run_bootstrap(args):
         "release_archive_url": "https://github.com/%s/archive/%s.tar.gz" % (repository, sha),
         "matrix_case": stack, "disposable_repository": full_name or "not-configured", "tested_head_sha": None,
         "check_identifier": "bootstrap-e2e/%s" % stack, "result": "failed", "failure_code": "not-run",
+        "openai_model": raw_model if raw_model in ALLOWED_MODELS else None,
         "exit_code": None, "logs": [], "cleanup": "not-attempted", "cleanup_status": "not-attempted",
         "workflow_url": args.workflow_url or None,
     }
@@ -347,6 +359,7 @@ def run_bootstrap(args):
 
     signal.signal(signal.SIGTERM, cancelled)
     try:
+        validate_model(raw_model)
         if not token or not owner:
             raise HarnessError("%s and %s must be configured" % (args.token_env, args.owner_env), "configuration_missing")
         source = Path(args.source_dir).resolve()
@@ -465,7 +478,8 @@ def self_check():
     workflow = WORKFLOW.read_text(encoding="utf-8")
     for text in ("published", "workflow_dispatch", "tag_name", "github.workflow_sha", "fail-fast: false",
                  "if: always()", "permissions: {}", "persist-credentials: false", "retention-days: 7",
-                 "EXPECTED_SHA", "RELEASE_SHA", "--run-id \"$RUN_ID\""):
+                 "EXPECTED_SHA", "RELEASE_SHA", "--run-id \"$RUN_ID\"", "OPENAI_MODEL", "OPENAI_API_KEY",
+                 "env -i", "bootstrap-e2e-triage-"):
         assert text in workflow, text
     assert "needs.prepare.outputs.prefix" not in workflow
     error = HarnessError("secret=bad /home/private", "initializer_failed", 7,

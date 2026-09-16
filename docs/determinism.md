@@ -47,6 +47,7 @@ template-only dependencies are removed with it.
 | `docs/smoke-test.md` | Intentionally one-shot, outward, approval-gated procedure | Creates a disposable repository once; cleanup is a separate explicit deletion step | GitHub repository lifecycle; deletion requires explicit human approval |
 | `.github/workflows/bootstrap-e2e.yml` and `scripts/bootstrap-e2e.py` | Network-dependent, release-triggered, disposable validation | A published or explicitly supplied tag resolves to one commit SHA; every recipe case tests that SHA in its own private repository; repeated runs use a new run prefix | Creates and deletes only `bootstrap-e2e-<run-id>-<case>` repositories in the configured owner; final cleanup is always attempted and exact-prefix recovery is documented |
 | `scripts/report-bootstrap-failure.py` | Network-dependent, deduplicated issue reporting | A release-SHA marker, or a tag/run preparation marker when no SHA resolves, searches open and closed issues; one existing canonical issue receives one marker-bearing comment, otherwise one bug-form issue is created | Uses only issue write permission; no source or disposable repository mutation; a rerun is a no-op after the marker-bearing comment exists |
+| `scripts/triage-bootstrap-failure.py` | Network-dependent, advisory failure analysis | A sanitized `bootstrap-e2e-failure/v1` payload is bounded, sent with strict `text.format` JSON Schema and `store: false`, and invalid/unavailable model output becomes a deterministic fallback | Receives only sanitized payload, `OPENAI_MODEL`, and `OPENAI_API_KEY`; no GitHub token, tools, lifecycle control, or issue mutation; triage artifacts are retained 7 days |
 
 ## Boundaries
 
@@ -68,11 +69,13 @@ template-only dependencies are removed with it.
   that commit, verifies disposable `HEAD`, and executes released code with an
   environment allowlist.
 - Release E2E operations have 30-second API/subprocess timeouts and job limits
-  of 10/30/15 minutes for prepare/matrix/cleanup and 10 minutes for report. Cleanup is attempted
+  of 10/30/15/10/10 minutes for prepare/matrix/cleanup/triage/report. Cleanup is attempted
   after validation and independently by the always-on cleanup job; forced
   cancellation, runner loss, credential failure, and API failure require the
   documented exact-run-ID recovery command. Third-party workflow actions are
   pinned to verified full SHAs and checked by `scripts/check-bootstrap-workflow.py`.
-- Failure envelopes are versioned and bounded. Fingerprints are derived from the
-  release SHA when available, matrix case, normalized failure code, and check
-  identifier. Only deterministic reporter code searches or mutates GitHub.
+- Failure envelopes and advisory results are versioned and bounded. Fingerprints
+  are derived from the release SHA when available, matrix case, normalized
+  failure code, and check identifier. Only deterministic reporter code searches
+  or mutates GitHub, and only after validating model text against fixed
+  allowlists.
