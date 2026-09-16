@@ -4,6 +4,11 @@ This repo (`eff3ct0/factory-template`) follows its OWN doctrine (dogfooding).
 This layer is concrete and SEPARATE from the **product** (the template content
 containing `<PLACEHOLDER>` values).
 
+Release E2E and OpenAI triage automation is self-governance for this repository
+only. `init.py` removes the release workflow, smoke-test procedure, and related
+helpers and tests; generic workflows, checkers, and generated project files
+remain in initialized repositories.
+
 ## Hard rule
 Do NOT run `init.py` on this repo: it would consume itself, fill its
 placeholders, and remove its scaffolding. `init.py`, `placeholders.json`,
@@ -37,5 +42,6 @@ Every project bootstrapped from the template that finds a gap opens a
 feeds the backlog.
 
 ## Propagation
-`MAINTAINERS.md` and `docs/smoke-test.md` belong to THIS repo; `init.py` removes
-them from an initialized project (they do not travel downstream).
+`MAINTAINERS.md`, `docs/smoke-test.md`, and release E2E/triage automation belong
+to THIS repo; `init.py` removes them from an initialized project (they do not
+travel downstream). Generic template assets remain available to the project.
