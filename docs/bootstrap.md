@@ -16,7 +16,7 @@ is the single source of truth for project-level placeholders:
 - **Script (`init.py`, Python 3 stdlib):** deterministic and repeatable replacement.
   - Interactive: `python3 init.py`
   - Non-interactive: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...'`, `--answers answers.json`, or `--defaults`.
-  - `python3 init.py --dry-run` shows changes without writing. Normal initialization removes the `ARCHETYPE_ONLY_PATHS` contract: source governance, provider/CI inputs, release E2E/triage workflow and helpers, and this smoke-test procedure. Generic checkers, workflows, and generated outputs remain; use `--no-clean` to keep source-only files for verification.
+  - `python3 init.py --dry-run` shows changes without writing. Normal initialization consumes the source template's ownership contract during cleanup; `--no-clean` keeps all source-only inputs for verification.
   - Release bootstrap E2E and OpenAI triage are maintainer-only operations for `eff3ct0/factory-template`; initialized projects do not receive their workflow, helpers, or tests.
   - An empty value remains `<KEY>` (it is not deleted), so the checklist can detect it.
   - Before normal cleanup, run [`scripts/check-determinism.py`](../scripts/check-determinism.py) for repeatability and generated-file timestamp guarantees. With `--no-clean`, the checker remains available for further template checks.
@@ -60,6 +60,14 @@ quoting and maintenance.
 
 If a project needs custom commands, adjust the generated workflow after
 bootstrap. Automatic composition remains recipe-based.
+
+### Ownership rule
+
+The source template classifies each tracked asset as archetype-only, inherited,
+an initializer input, a provider/CI recipe, or a generated output. New source
+files must receive one classification before they are merged. Do not remove
+inherited contracts or generated outputs during bootstrap; do not copy
+archetype-only maintainer procedures into a project.
 
 ## 6. First commit and branch protection
 - Make the initial commit using conventional commits.

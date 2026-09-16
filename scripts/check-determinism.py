@@ -191,6 +191,49 @@ def check_initializer(init):
         shutil.rmtree(root)
 
 
+def check_ownership_boundary(init):
+    """Prove normal cleanup removes registered archetype-only paths only."""
+    ownership = init.load_ownership()
+    entries = init.ownership_entries(ownership)
+    covered = {entry["path"] for _, _, entry in entries}
+    directories = {entry["path"] for _, _, entry in entries if entry["kind"] == "directory"}
+    tracked = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+    tracked.append(init.OWNERSHIP_MANIFEST_NAME)
+    missing = [
+        path for path in tracked
+        if path not in covered and not any(path.startswith(directory + "/") for directory in directories)
+    ]
+    assert not missing, "unclassified tracked paths: %s" % ", ".join(missing)
+    root = tempfile.mkdtemp()
+    try:
+        for _, _, entry in entries:
+            path = os.path.join(root, entry["path"])
+            if entry["path"] == init.OWNERSHIP_MANIFEST_NAME:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(ownership, f, indent=2)
+                    f.write("\n")
+            elif entry["kind"] == "directory":
+                os.makedirs(path, exist_ok=True)
+                with open(os.path.join(path, "fixture.txt"), "w", encoding="utf-8") as f:
+                    f.write("fixture")
+            else:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("fixture")
+
+        init.cleanup(root)
+        for _, disposition, entry in entries:
+            path = os.path.join(root, entry["path"])
+            if disposition == "removed":
+                assert not os.path.exists(path), entry["path"]
+            else:
+                assert os.path.exists(path), entry["path"]
+        print("ownership coverage and boundary self-check OK")
+    finally:
+        shutil.rmtree(root)
+
+
 def check_factory_bootstrap(factory):
     assert_same_output(lambda: factory.plan("acme", "factory"))
 
@@ -257,12 +300,10 @@ def self_check():
     labels = load_module("sync_github_labels", "scripts/sync-github-labels.py")
     governance = load_module("check_pr_governance", "scripts/check-pr-governance.py")
     delivery = load_module("check_delivery_contract", "scripts/check-delivery-contract.py")
-    release_paths = (
-        ".github/workflows/bootstrap-e2e.yml",
-        "scripts/bootstrap-e2e.py",
-        "scripts/report-bootstrap-failure.py",
-        "scripts/triage-bootstrap-failure.py",
-        "scripts/check-bootstrap-workflow.py",
+    release_paths = tuple(
+        entry["path"]
+        for category, disposition, entry in init.ownership_entries()
+        if category == "archetype_only_release_e2e" and disposition == "removed"
     )
     release_scripts = ()
     if all(os.path.isfile(os.path.join(ROOT, path)) for path in release_paths):
@@ -273,6 +314,8 @@ def self_check():
             load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
         )
     check_initializer(init)
+    if not os.environ.get(SKIP_LIFECYCLE):
+        check_ownership_boundary(init)
     if not os.environ.get(SKIP_LIFECYCLE):
         check_initializer_lifecycle(init)
     check_factory_bootstrap(factory)

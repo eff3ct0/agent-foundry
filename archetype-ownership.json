@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "description": "Authoritative ownership and initialization lifecycle for tracked template assets.",
+  "categories": {
+    "archetype_governance": {
+      "disposition": "removed",
+      "paths": [
+        {"path": "init.py", "kind": "file"},
+        {"path": "archetype-ownership.json", "kind": "file"},
+        {"path": "factory_bootstrap.py", "kind": "file"},
+        {"path": "MAINTAINERS.md", "kind": "file"},
+        {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"}
+      ]
+    },
+    "archetype_only_release_e2e": {
+      "disposition": "removed",
+      "paths": [
+        {"path": ".github/workflows/bootstrap-e2e.yml", "kind": "file"},
+        {"path": "docs/smoke-test.md", "kind": "file"},
+        {"path": "scripts/bootstrap-e2e.py", "kind": "file"},
+        {"path": "scripts/check-bootstrap-workflow.py", "kind": "file"},
+        {"path": "scripts/release_ref.py", "kind": "file"},
+        {"path": "scripts/report-bootstrap-failure.py", "kind": "file"},
+        {"path": "scripts/triage-bootstrap-failure.py", "kind": "file"},
+        {"path": "scripts/test-bootstrap-triage.py", "kind": "file"}
+      ]
+    },
+    "initializer_inputs": {
+      "disposition": "removed",
+      "paths": [
+        {"path": "placeholders.json", "kind": "file"}
+      ]
+    },
+    "provider_ci_recipes": {
+      "disposition": "removed",
+      "paths": [
+        {"path": "ci", "kind": "directory"},
+        {"path": "providers", "kind": "directory"}
+      ]
+    },
+    "inherited_generic": {
+      "disposition": "inherited",
+      "paths": [
+        {"path": ".github/ISSUE_TEMPLATE/bug.yml", "kind": "file"},
+        {"path": ".github/ISSUE_TEMPLATE/config.yml", "kind": "file"},
+        {"path": ".github/ISSUE_TEMPLATE/dx-feedback.yml", "kind": "file"},
+        {"path": ".github/ISSUE_TEMPLATE/task.yml", "kind": "file"},
+        {"path": ".github/labels.json", "kind": "file"},
+        {"path": ".github/pull_request_template.md", "kind": "file"},
+        {"path": ".github/workflows/governance.yml", "kind": "file"},
+        {"path": ".github/workflows/sync-labels.yml", "kind": "file"},
+        {"path": ".gitignore", "kind": "file"},
+        {"path": "AGENT.md", "kind": "file"},
+        {"path": "CLAUDE.md", "kind": "file"},
+        {"path": "README.md", "kind": "file"},
+        {"path": "checks/phase_state_check.py", "kind": "file"},
+        {"path": "docs/agent-init.md", "kind": "file"},
+        {"path": "docs/bootstrap.md", "kind": "file"},
+        {"path": "docs/determinism.md", "kind": "file"},
+        {"path": "docs/engineering-handbook.md", "kind": "file"},
+        {"path": "docs/github-governance.md", "kind": "file"},
+        {"path": "docs/org-factory.md", "kind": "file"},
+        {"path": "docs/workflow.md", "kind": "file"},
+        {"path": "hooks", "kind": "directory"},
+        {"path": "openspec/config.yaml", "kind": "file"},
+        {"path": "scripts/check-delivery-contract.py", "kind": "file"},
+        {"path": "scripts/check-determinism.py", "kind": "file"},
+        {"path": "scripts/check-pr-governance.py", "kind": "file"},
+        {"path": "scripts/sync-github-labels.py", "kind": "file"},
+        {"path": "start.py", "kind": "file"},
+        {"path": "templates", "kind": "directory"},
+        {"path": "test_factory_bootstrap.py", "kind": "file"}
+      ]
+    },
+    "generated_outputs": {
+      "disposition": "generated",
+      "paths": [
+        {"path": ".github/workflows/ci.yml", "kind": "file"},
+        {"path": "docs/bindings.md", "kind": "file"}
+      ]
+    }
+  }
+}
