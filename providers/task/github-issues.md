@@ -13,9 +13,8 @@ API). Semantic operations are reading, opening, updating, commenting on,
 labeling, and closing issues. GitHub CLI examples are acceptable when the
 harness does not provide a native operation.
 
-**Mandatory template:** every new issue MUST use the corresponding template in
-`.github/ISSUE_TEMPLATE/` (`task.yml` for product work or `bug.yml` for defects).
-In the web UI, use the corresponding form. The body must include context/problem,
+**Mandatory template:** every new issue MUST use the corresponding issue form in
+`.github/ISSUE_TEMPLATE/`. In the web UI, use the corresponding form. The body must include context/problem,
 acceptance criteria, scope, and verification. With `gh`, fill the equivalent
 structure first and create it with:
 `gh issue create --repo <OWNER>/<REPO> --title "<title>" --label "type:product" --body-file <filled-template>`

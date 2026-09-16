@@ -13,7 +13,7 @@ API). Semantic operations are creating an item (or linking an existing issue),
 setting fields, and changing status.
 
 **Mandatory template:** a new issue linked to the board MUST use the
-corresponding `.github/ISSUE_TEMPLATE/` (`task` or `bug`). With `gh`, fill that
+corresponding issue form in `.github/ISSUE_TEMPLATE/`. With `gh`, fill that
 structure via `gh issue create --body-file <filled-template>`, then link the
 issue to the project. Do not create blank or free-form issues.
 
