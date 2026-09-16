@@ -189,13 +189,16 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(start, labels, governance, delivery):
+def check_scripts(start, labels, governance, delivery, bootstrap, reporter, workflow):
     catalog = labels.load_labels()
     assert_same_output(start.self_check)
     assert_same_output(lambda: labels.sync(
         catalog, repo="acme/example", dry_run=True))
     assert_same_output(governance.self_check)
     assert_same_output(delivery.self_check)
+    assert_same_output(bootstrap.self_check)
+    assert_same_output(reporter.self_check)
+    assert_same_output(workflow.check)
 
 
 def check_cli_commands():
@@ -218,11 +221,14 @@ def self_check():
     labels = load_module("sync_github_labels", "scripts/sync-github-labels.py")
     governance = load_module("check_pr_governance", "scripts/check-pr-governance.py")
     delivery = load_module("check_delivery_contract", "scripts/check-delivery-contract.py")
+    bootstrap = load_module("bootstrap_e2e", "scripts/bootstrap-e2e.py")
+    reporter = load_module("report_bootstrap_failure", "scripts/report-bootstrap-failure.py")
+    workflow = load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py")
     check_initializer(init)
     if not os.environ.get(SKIP_LIFECYCLE):
         check_initializer_lifecycle()
     check_factory_bootstrap(factory)
-    check_scripts(start, labels, governance, delivery)
+    check_scripts(start, labels, governance, delivery, bootstrap, reporter, workflow)
     check_cli_commands()
     print("determinism self-check OK")
 
