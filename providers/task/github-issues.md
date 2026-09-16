@@ -1,6 +1,6 @@
 ## GitHub Issues
 
-> **Contract instance:** [`_contract.md`](../providers/task/_contract.md)
+> **Contract instance:** [`_contract.md`](./_contract.md)
 > **Capability:** `task`
 > **Provider:** `github-issues`
 
