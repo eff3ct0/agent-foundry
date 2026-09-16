@@ -113,7 +113,7 @@ match real languages and adjust commands if the project uses custom scripts.
 
 ## Step 7 - Finish
 - Make the first commit using conventional commits.
-- The script auto-cleans `init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `ci/`, and `providers/`; generated `ci.yml` and `docs/bindings.md` remain.
+- The script auto-cleans `init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `scripts/check-determinism.py`, `ci/`, and `providers/`; generated `ci.yml` and `docs/bindings.md` remain. Use `--no-clean` if the determinism checker must remain available for further template checks.
 - No manifest `<KEY>` should remain unresolved.
 
 ## Anti-error note
