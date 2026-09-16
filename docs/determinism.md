@@ -24,12 +24,11 @@ python3 scripts/check-determinism.py
 | `scripts/check-determinism.py` | Template-only, deterministic, read-only, offline | Run before cleanup; `--no-clean` retains it for further template checks | No state |
 | `scripts/check-delivery-contract.py`, `scripts/check-pr-governance.py --self-check`, `start.py --self-check`, `scripts/sync-github-labels.py --self-check` | Deterministic, read-only, offline | Same validation result for unchanged files and catalog | No state |
 
-Normal initialization also performs cleanup unless `--no-clean` is supplied. That
-cleanup is intentionally one-shot: it removes `init.py`, `placeholders.json`,
-`factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `ci/`, and
-`providers/`, and `scripts/check-determinism.py`, so it is not a repeatable
-operation. The checker is not supported after normal cleanup because its
-template-only dependencies are removed with it.
+Normal initialization also performs cleanup unless `--no-clean` is supplied. The
+cleanup contract removes archetype-only governance, provider/CI inputs, and
+release E2E/triage automation, while generic checkers and generated outputs
+remain available to the initialized project. Cleanup is intentionally one-shot
+for the removed source-only inputs and is not part of dry-run mode.
 
 ## Network, workflows, and procedures
 

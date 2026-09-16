@@ -16,7 +16,8 @@ is the single source of truth for project-level placeholders:
 - **Script (`init.py`, Python 3 stdlib):** deterministic and repeatable replacement.
   - Interactive: `python3 init.py`
   - Non-interactive: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...'`, `--answers answers.json`, or `--defaults`.
-  - `python3 init.py --dry-run` shows changes without writing. By default the script cleans itself up (removes `init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `scripts/check-determinism.py`, `ci/`, and `providers/`); use `--no-clean` to keep them.
+  - `python3 init.py --dry-run` shows changes without writing. Normal initialization removes the `ARCHETYPE_ONLY_PATHS` contract: source governance, provider/CI inputs, release E2E/triage workflow and helpers, and this smoke-test procedure. Generic checkers, workflows, and generated outputs remain; use `--no-clean` to keep source-only files for verification.
+  - Release bootstrap E2E and OpenAI triage are maintainer-only operations for `eff3ct0/factory-template`; initialized projects do not receive their workflow, helpers, or tests.
   - An empty value remains `<KEY>` (it is not deleted), so the checklist can detect it.
   - Before normal cleanup, run [`scripts/check-determinism.py`](../scripts/check-determinism.py) for repeatability and generated-file timestamp guarantees. With `--no-clean`, the checker remains available for further template checks.
 - **Agent:** run the script for mechanical values and resolve `judgment` values (`<BRANCHING_MODEL>`, `<TDD_POLICY>`, `<COVERAGE_TARGET>`, `<APPROVAL_GATED_ACTIONS>`) by interview or repository evidence; see [`agent-init.md`](agent-init.md). CI is composed automatically from `<CI_STACKS>` (one job per language; see step 5).

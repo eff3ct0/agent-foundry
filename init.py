@@ -10,7 +10,7 @@ Usage:
   python3 init.py --check               # check required manifest placeholders (CI; nonzero if any)
   python3 init.py --dry-run             # show changes without writing
   python3 init.py --self-check          # internal replacement test
-Options: --no-clean (do not remove init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/scripts/check-determinism.py at the end),
+Options: --no-clean (do not remove archetype-only paths at the end),
          --no-ci (do not compose the CI workflow).
 
 Value precedence: --set  >  --answers  >  interactive prompt  >  manifest default.
@@ -49,6 +49,25 @@ SELF = os.path.basename(__file__)
 SKIP_DIRS = {".git"}
 SKIP_ROOT_FILES = {SELF, "placeholders.json"}
 PROTECTED_VALIDATION_PREFIX = "scripts/check-"
+
+ARCHETYPE_ONLY_PATHS = (
+    SELF,
+    "placeholders.json",
+    "factory_bootstrap.py",
+    "MAINTAINERS.md",
+    "docs/smoke-test.md",
+    "ci",
+    "providers",
+    # Release E2E and triage paths are added by the archetype repository and
+    # are intentionally absent from older template revisions.
+    ".github/workflows/bootstrap-e2e.yml",
+    "scripts/bootstrap-e2e.py",
+    "scripts/check-bootstrap-workflow.py",
+    "scripts/release_ref.py",
+    "scripts/report-bootstrap-failure.py",
+    "scripts/triage-bootstrap-failure.py",
+    "scripts/test-bootstrap-triage.py",
+)
 
 TRACKER_DISPLAY = {
     "jira": "Jira",
@@ -357,25 +376,14 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False, code_i
 
 def cleanup(root):
     removed = []
-    for f in (SELF, "placeholders.json", "factory_bootstrap.py", "MAINTAINERS.md"):
-        p = os.path.join(root, f)
-        if os.path.exists(p):
-            os.remove(p)
-            removed.append(f)
-    # Nested self-governance file for THIS repo; it does not travel downstream.
-    smoke = os.path.join(root, "docs", "smoke-test.md")
-    if os.path.exists(smoke):
-        os.remove(smoke)
-        removed.append("docs/smoke-test.md")
-    checker = os.path.join(root, "scripts", "check-determinism.py")
-    if os.path.exists(checker):
-        os.remove(checker)
-        removed.append("scripts/check-determinism.py")
-    for d in ("ci", "providers"):
-        dp = os.path.join(root, d)
-        if os.path.isdir(dp):
-            shutil.rmtree(dp)
-            removed.append(d + "/")
+    for relative in ARCHETYPE_ONLY_PATHS:
+        path = os.path.join(root, relative)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+            removed.append(relative + "/")
+        elif os.path.isfile(path):
+            os.remove(path)
+            removed.append(relative)
     return removed
 
 
@@ -488,6 +496,45 @@ def self_check():
             assert _binding_fragment(d3, "task", "_contract").endswith("custom.md")
         finally:
             shutil.rmtree(d3)
+
+        d4 = tempfile.mkdtemp()
+        try:
+            directories = {"ci", "providers"}
+            for relative in ARCHETYPE_ONLY_PATHS:
+                path = os.path.join(d4, relative)
+                if relative in directories:
+                    os.makedirs(path, exist_ok=True)
+                    path = os.path.join(path, "fixture.txt")
+                else:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("archetype-only fixture")
+
+            inherited = {
+                "AGENT.md": "# Agent\n",
+                "README.md": "# Example project\n",
+                ".github/workflows/ci.yml": "name: CI\n",
+                "docs/bindings.md": "# Bindings\n",
+                "scripts/check-determinism.py": "print('retained')\n",
+            }
+            for relative, content in inherited.items():
+                path = os.path.join(d4, relative)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+            removed = cleanup(d4)
+            expected = {
+                relative + "/" if relative in directories else relative
+                for relative in ARCHETYPE_ONLY_PATHS
+            }
+            assert set(removed) == expected, removed
+            assert all(not os.path.exists(os.path.join(d4, relative))
+                       for relative in ARCHETYPE_ONLY_PATHS)
+            assert all(os.path.exists(os.path.join(d4, relative))
+                       for relative in inherited)
+        finally:
+            shutil.rmtree(d4)
 
         print("self-check OK")
     finally:
