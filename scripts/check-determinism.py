@@ -12,6 +12,7 @@ import tempfile
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SKIP_LIFECYCLE = "CHECK_DETERMINISM_SKIP_LIFECYCLE"
 
 
 def load_module(name, filename):
@@ -43,6 +44,69 @@ def assert_repeatable_command(command):
     assert first.returncode == second.returncode == 0, (command, first.returncode, second.returncode)
     assert first.stdout == second.stdout, (command, "stdout differs")
     assert first.stderr == second.stderr, (command, "stderr differs")
+
+
+def check_initializer_lifecycle():
+    cleanup_paths = (
+        "init.py",
+        "placeholders.json",
+        "factory_bootstrap.py",
+        "MAINTAINERS.md",
+        "docs/smoke-test.md",
+        "scripts/check-determinism.py",
+        "ci",
+        "providers",
+    )
+    for no_clean in (False, True):
+        root = tempfile.mkdtemp()
+        try:
+            shutil.copytree(
+                ROOT,
+                root,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git", ".atl", "__pycache__"),
+            )
+            with open(os.path.join(root, "placeholders.json"), encoding="utf-8") as manifest_file:
+                manifest = json.load(manifest_file)["placeholders"]
+            answers = {
+                placeholder["key"]: placeholder.get("default") or "Example"
+                for placeholder in manifest
+            }
+            answers.update(PROJECT_NAME="Example", TASK_TRACKER="github-issues", CI_STACKS="python")
+            with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
+                json.dump(answers, answers_file)
+            checker = subprocess.run(
+                [sys.executable, "scripts/check-determinism.py"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                env={**os.environ, SKIP_LIFECYCLE: "1"},
+            )
+            assert checker.returncode == 0, (checker.stdout, checker.stderr)
+            command = [
+                sys.executable,
+                "init.py",
+                "--answers",
+                "answers.json",
+            ]
+            if no_clean:
+                command.insert(2, "--no-clean")
+            result = subprocess.run(command, cwd=root, capture_output=True, text=True)
+            assert result.returncode == 0, (command, result.stdout, result.stderr)
+
+            if no_clean:
+                assert all(os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
+                check = subprocess.run(
+                    [sys.executable, "init.py", "--check"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert check.returncode == 0, (check.stdout, check.stderr)
+            else:
+                assert all(not os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
+        finally:
+            shutil.rmtree(root)
 
 
 def check_initializer(init):
@@ -155,6 +219,8 @@ def self_check():
     governance = load_module("check_pr_governance", "scripts/check-pr-governance.py")
     delivery = load_module("check_delivery_contract", "scripts/check-delivery-contract.py")
     check_initializer(init)
+    if not os.environ.get(SKIP_LIFECYCLE):
+        check_initializer_lifecycle()
     check_factory_bootstrap(factory)
     check_scripts(start, labels, governance, delivery)
     check_cli_commands()
