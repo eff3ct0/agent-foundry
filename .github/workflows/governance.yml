@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   validate:
+    # Keep this job name stable: main branch protection requires the "validate" check.
+    name: validate
     runs-on: ubuntu-latest
     steps:
       # pull_request_target has a read-only token; validate only trusted base-branch code.

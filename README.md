@@ -17,6 +17,7 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 - [`.github/`](.github/) - issue and pull request templates for GitHub.
 - [`init.py`](init.py) + [`placeholders.json`](placeholders.json) - Python 3 stdlib initializer that fills placeholders; `placeholders.json` is the single source of truth for project-level placeholders.
 - [`.github/labels.json`](.github/labels.json) + [`scripts/`](scripts/) - canonical GitHub labels, idempotent synchronization, and PR governance validation.
+- [`docs/github-governance.md`](docs/github-governance.md) - the stable required check and the separate `main` branch enforcement settings.
 
 ## How to use it
 1. **As a GitHub template:** mark this repo as a *Template repository* (Settings -> Template repository). Then use *Use this template -> Create a new repository* for each project.
@@ -38,6 +39,10 @@ instruction naming the exact issue and action, target-host maintainer/authorized
 `MAINTAIN` or `ADMIN` actor capability, one exact add attempt, and target-host readback. Otherwise the
 human applies it directly. Labels are synchronized with:
 `python3 scripts/sync-github-labels.py --repo OWNER/REPO`.
+
+The workflow only validates pull-request metadata. GitHub branch protection separately requires the stable
+`validate` check, a human review, and administrator enforcement before `main` can be updated. See
+[`docs/github-governance.md`](docs/github-governance.md).
 
 ## Delegated delivery
 Delegating a task authorizes its routine path without intermediate confirmation: update the tracker,

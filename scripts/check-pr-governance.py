@@ -14,6 +14,7 @@ CLOSE_REFERENCE = re.compile(
     r"(?:(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+))?#(?P<number>[0-9]+)\b",
     re.IGNORECASE,
 )
+REQUIRED_CHECK = "validate"
 
 
 def issue_numbers(body, repository):
@@ -70,6 +71,9 @@ def validate_event(event, repository, token):
 
 def self_check():
     root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
+    assert re.search(r"^  %s:$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE)
+    assert re.search(r"^    name: %s$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE)
     for template in (
         root / ".github" / "pull_request_template.md",
         root / "templates" / "pull-request.md",
