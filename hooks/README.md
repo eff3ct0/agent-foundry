@@ -59,12 +59,13 @@ Official documentation: [Pi extensions](https://github.com/earendil-works/pi/tre
 
 ## OpenCode
 
-The adapter is `hooks/opencode/factory-start.ts`. Copy it to the project's
+The adapter is opt-in. During initialization, confirm `OPENCODE_PLUGIN=true`
+interactively or pass it explicitly with `--set OPENCODE_PLUGIN=true` (or in an
+answers file). The initializer then copies it to the project's
 `.opencode/plugins/` directory:
 
 ```sh
-mkdir -p .opencode/plugins
-cp hooks/opencode/factory-start.ts .opencode/plugins/factory-start.ts
+python3 init.py --set OPENCODE_PLUGIN=true
 ```
 
 It runs `python3 start.py` when `session.created` fires and appends the stdout
@@ -73,6 +74,6 @@ automatically; no package dependency is required.
 
 Official documentation: [OpenCode plugins](https://opencode.ai/docs/plugins/).
 
-All three adapters are permanent template content and are not included in
-`init.py` cleanup. They remain opt-in, and the manual `python3 start.py` rule
-remains the universal fallback.
+The source adapter remains in the template, but initialization does not create
+the project plugin unless `OPENCODE_PLUGIN=true` is confirmed. The manual
+`python3 start.py` rule remains the universal fallback.
