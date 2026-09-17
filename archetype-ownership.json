@@ -78,7 +78,8 @@
       "disposition": "generated",
       "paths": [
         {"path": ".github/workflows/ci.yml", "kind": "file"},
-        {"path": "docs/bindings.md", "kind": "file"}
+        {"path": "docs/bindings.md", "kind": "file"},
+        {"path": ".opencode/plugins/factory-start.ts", "kind": "file"}
       ]
     }
   }

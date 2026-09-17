@@ -19,6 +19,10 @@ Only manifest keys are replaced. Local template tokens (<TICKET_ID>, <CRITERION_
 a value is NOT touched (it remains <KEY> and required keys are reported by
 --check), not deleted. Optional keys may remain intentionally empty.
 
+The optional OpenCode startup plugin is generated only when the confirmed
+OPENCODE_PLUGIN value is true. The manual `python3 start.py` fallback remains
+available when it is false.
+
 FACTORY_REQUIRED policy: when FACTORY_REQUIRED=true, init.py fails closed (deterministic,
 offline) if FACTORY_SPEC is empty. init.py does NOT verify or create org repositories:
 actual provisioning is handled separately by `factory_bootstrap.py` (idempotent, uses `gh`).
@@ -40,6 +44,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -51,6 +56,8 @@ SELF = os.path.basename(__file__)
 SKIP_DIRS = {".git"}
 SKIP_ROOT_FILES = {SELF, "placeholders.json", OWNERSHIP_MANIFEST_NAME}
 PROTECTED_VALIDATION_PREFIX = "scripts/check-"
+OPENCODE_PLUGIN_SOURCE = os.path.join("hooks", "opencode", "factory-start.ts")
+OPENCODE_PLUGIN_DESTINATION = os.path.join(".opencode", "plugins", "factory-start.ts")
 
 ARCHETYPE_ONLY_PATHS = (
     SELF,
@@ -157,6 +164,113 @@ ARCHETYPE_ONLY_PATHS = archetype_only_paths()
 
 def token(key):
     return "<%s>" % key
+
+
+def _origin_url(root):
+    """Return the local origin URL, or None when Git metadata is unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", root, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _repository_identity(value):
+    value = (value or "").strip(" `").rstrip("/")
+    if not value or value.startswith("<"):
+        return None
+    if "://" in value:
+        value = value.split("://", 1)[1]
+    if "@" in value and ":" in value.split("/", 1)[0]:
+        value = value.split("@", 1)[1]
+    elif value.startswith("git@"):
+        value = value[4:]
+    if ":" in value and "/" not in value.split(":", 1)[0]:
+        value = value.replace(":", "/", 1)
+    return value.removesuffix(".git").lower()
+
+
+def _repository_matches(value, origin):
+    origin_identity = _repository_identity(origin)
+    if not origin_identity:
+        return True
+    identities = [
+        _repository_identity(candidate)
+        for candidate in re.split(r"[\s,]+", value or "")
+        if _repository_identity(candidate)
+    ]
+    return not identities or origin_identity in identities
+
+
+def _declared_repository_url(root):
+    path = os.path.join(root, "AGENT.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return ""
+    match = re.search(r"Repositories:\s*([^\n]+)", text, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
+
+def _replace_declared_repository_url(root, value, dry_run):
+    path = os.path.join(root, "AGENT.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return
+    updated, count = re.subn(
+        r"(Repositories:\s*)[^\n]+",
+        lambda match: match.group(1) + value,
+        text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    if not count or updated == text:
+        return
+    if dry_run:
+        print("Would update stale repository metadata in AGENT.md.")
+    else:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(updated)
+        print("Updated repository metadata in AGENT.md.")
+
+
+def reconcile_repository_metadata(root, values, dry_run=False, confirm=None):
+    """Require confirmation before replacing repository metadata that disagrees with origin."""
+    origin = _origin_url(root)
+    declared = _declared_repository_url(root)
+    selected = (values.get("REPO_URLS") or "").strip()
+    stale = (selected and not _repository_matches(selected, origin)) or (
+        not selected and declared and not _repository_matches(declared, origin)
+    )
+    declared_stale = declared and not _repository_matches(declared, origin)
+    if not origin or not stale:
+        if origin and declared_stale and selected:
+            values["REPO_URLS"] = origin
+            _replace_declared_repository_url(root, origin, dry_run)
+        return
+    if confirm is None:
+        confirm = _confirm_repository
+    if not confirm(
+        "Repository metadata conflicts with Git origin (%s vs %s). "
+        "Replace it with the actual origin? [y/N] " % (declared or selected, origin)
+    ):
+        sys.exit("Repository metadata conflict requires explicit confirmation.")
+    values["REPO_URLS"] = origin
+    _replace_declared_repository_url(root, origin, dry_run)
+
+
+def _confirm_repository(prompt):
+    try:
+        return input(prompt).strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
 
 
 def _is_protected_validation_source(path, root):
@@ -440,6 +554,32 @@ def cleanup(root):
     return removed
 
 
+def configure_opencode_plugin(root, enabled, dry_run=False):
+    """Generate the OpenCode adapter only after an explicit opt-in."""
+    if str(enabled).strip().lower() != "true":
+        return False
+    source = os.path.join(root, OPENCODE_PLUGIN_SOURCE)
+    destination = os.path.join(root, OPENCODE_PLUGIN_DESTINATION)
+    if not os.path.isfile(source):
+        sys.exit("OpenCode plugin source is missing: %s" % OPENCODE_PLUGIN_SOURCE)
+    if dry_run:
+        print("Would generate %s" % OPENCODE_PLUGIN_DESTINATION)
+        return False
+    with open(source, encoding="utf-8") as source_file:
+        content = source_file.read()
+    changed = not os.path.isfile(destination)
+    if not changed:
+        with open(destination, encoding="utf-8") as destination_file:
+            changed = destination_file.read() != content
+    if changed:
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        with open(destination, "w", encoding="utf-8") as destination_file:
+            destination_file.write(content)
+    print("OpenCode plugin %s: %s" % (
+        "generated" if changed else "already current", OPENCODE_PLUGIN_DESTINATION))
+    return changed
+
+
 def self_check():
     d = tempfile.mkdtemp()
     try:
@@ -550,6 +690,23 @@ def self_check():
         finally:
             shutil.rmtree(d3)
 
+        d5 = tempfile.mkdtemp()
+        try:
+            source = os.path.join(d5, OPENCODE_PLUGIN_SOURCE)
+            destination = os.path.join(d5, OPENCODE_PLUGIN_DESTINATION)
+            os.makedirs(os.path.dirname(source), exist_ok=True)
+            with open(source, "w", encoding="utf-8") as f:
+                f.write("plugin\n")
+            assert not configure_opencode_plugin(d5, "false")
+            assert not os.path.exists(destination), "default setup installed OpenCode plugin"
+            assert configure_opencode_plugin(d5, "true")
+            assert open(destination, encoding="utf-8").read() == "plugin\n"
+            plugin_mtime = os.stat(destination).st_mtime_ns
+            assert not configure_opencode_plugin(d5, "true")
+            assert os.stat(destination).st_mtime_ns == plugin_mtime
+        finally:
+            shutil.rmtree(d5)
+
         d4 = tempfile.mkdtemp()
         try:
             with open(OWNERSHIP_MANIFEST, encoding="utf-8") as source:
@@ -598,6 +755,34 @@ def self_check():
         finally:
             shutil.rmtree(d4)
 
+        d5 = tempfile.mkdtemp()
+        try:
+            subprocess.run(["git", "init", "-q", d5], check=True)
+            subprocess.run(
+                ["git", "remote", "add", "origin", "git@github.com:acme/project.git"],
+                cwd=d5,
+                check=True,
+            )
+            with open(os.path.join(d5, "AGENT.md"), "w", encoding="utf-8") as f:
+                f.write("- Name: Example - Repositories: https://github.com/stale/project\n")
+            values = {"REPO_URLS": ""}
+            try:
+                reconcile_repository_metadata(d5, values, confirm=lambda _: False)
+            except SystemExit as exc:
+                assert "explicit confirmation" in str(exc), exc
+            else:
+                raise AssertionError("stale repository metadata must require confirmation")
+            reconcile_repository_metadata(d5, values, confirm=lambda _: True)
+            assert values["REPO_URLS"] == "git@github.com:acme/project.git"
+            assert "git@github.com:acme/project.git" in open(
+                os.path.join(d5, "AGENT.md"), encoding="utf-8"
+            ).read()
+            assert _repository_matches(
+                "https://github.com/acme/project", values["REPO_URLS"]
+            )
+        finally:
+            shutil.rmtree(d5)
+
         print("self-check OK")
     finally:
         shutil.rmtree(d)
@@ -634,6 +819,7 @@ def main():
         return
 
     values = gather(ph, args)
+    reconcile_repository_metadata(ROOT, values, dry_run=args.dry_run)
     # Deterministic offline prerequisite: a required factory must have FACTORY_SPEC.
     if str(values.get("FACTORY_REQUIRED", "")).strip().lower() == "true" and not values.get("FACTORY_SPEC", "").strip():
         sys.exit("FACTORY_REQUIRED=true but FACTORY_SPEC is empty: declare the organization baseline (e.g. org/factory@v1) before initialization.")
@@ -656,6 +842,7 @@ def main():
             dry_run=args.dry_run,
             code_intelligence=values.get("CODE_INTELLIGENCE", "none"),
         )
+    configure_opencode_plugin(ROOT, values.get("OPENCODE_PLUGIN", "false"), dry_run=args.dry_run)
     nonempty = {k: v for k, v in values.items() if v}
     changes = apply_values(ROOT, nonempty, dry_run=args.dry_run)
     total = sum(changes.values())
