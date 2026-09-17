@@ -16,6 +16,7 @@ workflows and generated project files remain.
 | --- | --- | --- |
 | Archetype governance | Removed after initialization | `init.py`, `factory_bootstrap.py`, this file, and source change records exist only to operate the archetype. |
 | Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/factory-template`. |
+| Template validation | Removed after initialization | `scripts/check-determinism.py` runs while template files are available; `--no-clean` retains it for further template checks. |
 | Initializer inputs | Removed after initialization | `placeholders.json` is consumed before cleanup; it must not be deleted before replacement, validation, or composition. |
 | Provider and CI recipes | Removed after initialization | `providers/` and `ci/` are composition inputs. They stay available until bindings and CI are generated, then are removed as a unit. |
 | Inherited generic assets | Retained | `start.py`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic checkers belong to every initialized project. |

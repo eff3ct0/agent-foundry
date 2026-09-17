@@ -48,6 +48,7 @@ def assert_repeatable_command(command):
 
 def check_initializer_lifecycle(init):
     cleanup_paths = tuple(init.ARCHETYPE_ONLY_PATHS)
+    checker_path = os.path.join("scripts", "check-determinism.py")
     for no_clean in (False, True):
         root = tempfile.mkdtemp()
         try:
@@ -113,6 +114,15 @@ def check_initializer_lifecycle(init):
                     text=True,
                 )
                 assert check.returncode == 0, (check.stdout, check.stderr)
+                assert os.path.isfile(os.path.join(root, checker_path)), checker_path
+                checker = subprocess.run(
+                    [sys.executable, checker_path],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    env={**os.environ, SKIP_LIFECYCLE: "1"},
+                )
+                assert checker.returncode == 0, (checker.stdout, checker.stderr)
                 answers["OPENCODE_PLUGIN"] = "true"
                 with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
                     json.dump(answers, answers_file)
@@ -145,6 +155,7 @@ def check_initializer_lifecycle(init):
                 )
                 assert contract.returncode == 0, (contract.stdout, contract.stderr)
             else:
+                assert not os.path.exists(os.path.join(root, checker_path)), checker_path
                 assert all(not os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
         finally:
             shutil.rmtree(root)

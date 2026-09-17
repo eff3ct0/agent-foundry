@@ -21,7 +21,7 @@ is the single source of truth for project-level placeholders:
   - `--defaults` supplies manifest proposals; it is not consent. Existing `AGENT.md` values are proposals too.
   - A repository value that conflicts with the local `origin` blocks before composition, replacement, or cleanup.
   - A local `.github/` directory is not evidence of a separate `.github` repository or a GitHub task provider.
-  - `python3 init.py --dry-run` shows changes without writing. Normal initialization consumes the source template's ownership contract during cleanup, removing source-only governance, provider/CI inputs, and release E2E/triage assets while retaining generic checkers, workflows, and generated outputs; `--no-clean` keeps source-only inputs for verification.
+  - `python3 init.py --dry-run` shows changes without writing. Normal initialization consumes the source template's ownership contract during cleanup, removing source-only governance, provider/CI inputs, release E2E/triage assets, and template validation while retaining inherited assets, workflows, and generated outputs; `--no-clean` keeps source-only inputs for verification.
   - Release bootstrap E2E and OpenAI triage are maintainer-only operations for `eff3ct0/factory-template`; initialized projects do not receive their workflow, helpers, or tests.
   - An empty value remains `<KEY>` (it is not deleted), so the checklist can detect it.
   - Before normal cleanup, run [`scripts/check-determinism.py`](../scripts/check-determinism.py) for repeatability and generated-file timestamp guarantees. With `--no-clean`, the checker remains available for further template checks.
