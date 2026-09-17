@@ -26,9 +26,6 @@ MAX_LOG_ITEMS = 3
 MAX_OUTPUT_ITEMS = 16
 MAX_CONTENT_ITEMS = 16
 MAX_TRIAGE_FILE_BYTES = 16 * 1024
-ALLOWED_MODELS = frozenset({
-    "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-5-mini", "gpt-5.4",
-})
 ALLOWED_CLASSIFICATIONS = frozenset({"cleanup", "environment", "initializer", "release", "workflow", "unknown"})
 SAFE_FAILURE_CODE = re.compile(r"[a-z0-9][a-z0-9_-]{0,48}")
 SAFE_CASE = re.compile(r"[a-z0-9][a-z0-9_-]{0,48}")
@@ -71,9 +68,11 @@ def sanitize_text(value):
 
 
 def validate_model(model):
-    model = (model or "").strip()
-    if model not in ALLOWED_MODELS:
-        raise TriageError("OPENAI_MODEL is absent or not allowlisted")
+    if not isinstance(model, str):
+        raise TriageError("OPENAI_MODEL is absent or malformed")
+    model = model.strip()
+    if (not model or len(model) > 128 or any(ord(char) < 32 or ord(char) == 127 for char in model)):
+        raise TriageError("OPENAI_MODEL is absent or malformed")
     return model
 
 
@@ -276,7 +275,10 @@ def validate_result(result, model):
 
 
 def fallback(reason, model=""):
-    selected = model.strip() if model.strip() in ALLOWED_MODELS else None
+    try:
+        selected = validate_model(model)
+    except TriageError:
+        selected = None
     return {"schema_version": TRIAGE_VERSION, "status": "fallback", "reason": reason, "selected_model": selected}
 
 
@@ -346,7 +348,7 @@ def self_check():
             pass
         else:
             raise AssertionError("bad OpenAI response accepted")
-    assert fallback("OpenAI request failed", "not-allowlisted")["selected_model"] is None
+    assert fallback("OpenAI request failed", None)["selected_model"] is None
     print("bootstrap triage self-check OK")
 
 

@@ -30,9 +30,6 @@ FORM_OPTIONS = ("Critical", "High", "Medium", "Low")
 ALLOWED_CASES = frozenset(("cleanup", "matrix", "prepare"))
 ENVELOPE_VERSION = "bootstrap-e2e-failure/v1"
 TRIAGE_VERSION = "bootstrap-e2e-triage/v1"
-ALLOWED_MODELS = frozenset({
-    "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-5-mini", "gpt-5.4",
-})
 ALLOWED_CLASSIFICATIONS = frozenset(("cleanup", "environment", "initializer", "release", "workflow", "unknown"))
 SAFE_FAILURE_CODE = re.compile(r"[a-z0-9][a-z0-9_-]{0,48}")
 MAX_API_RESPONSE_BYTES = 64 * 1024
@@ -52,6 +49,15 @@ MAX_REPORT_CASES = 32
 
 class ReporterError(RuntimeError):
     """A safe reporter failure."""
+
+
+def validate_model(model):
+    if not isinstance(model, str):
+        raise ReporterError("OPENAI_MODEL is absent or malformed")
+    model = model.strip()
+    if (not model or len(model) > 128 or any(ord(char) < 32 or ord(char) == 127 for char in model)):
+        raise ReporterError("OPENAI_MODEL is absent or malformed")
+    return model
 
 
 def request(method, path, token, payload=None, expected=(200, 201), include_headers=False):
@@ -225,8 +231,7 @@ def load_failure_records(directory):
         data = load_bounded_json(path, MAX_EVIDENCE_FILE_BYTES, "invalid evidence file")
         if not isinstance(data, dict) or data.get("schema_version") != ENVELOPE_VERSION:
             raise ReporterError("unsupported evidence envelope")
-        if data.get("openai_model") in ALLOWED_MODELS:
-            evidence_models.add(data["openai_model"])
+        evidence_models.add(validate_model(data.get("openai_model")))
         if data.get("release_tag"):
             validate_tag(data["release_tag"])
         logs = data.get("logs", [])
@@ -344,9 +349,10 @@ def load_triage(path):
         return {"status": "fallback", "selected_model": None}
     if set(data) != {"schema_version", "status", "selected_model", "classification", "summary", "reproduction"}:
         raise ReporterError("triage result has unexpected fields")
-    if data.get("selected_model") not in ALLOWED_MODELS or data.get("classification") not in ALLOWED_CLASSIFICATIONS:
-        raise ReporterError("triage result is not allowlisted")
-    safe = {"status": "success", "selected_model": data["selected_model"], "classification": data["classification"]}
+    selected_model = validate_model(data.get("selected_model"))
+    if data.get("classification") not in ALLOWED_CLASSIFICATIONS:
+        raise ReporterError("triage result classification is invalid")
+    safe = {"status": "success", "selected_model": selected_model, "classification": data["classification"]}
     for name, limit in (("summary", 600), ("reproduction", 1200)):
         value = data.get(name)
         if not isinstance(value, str) or not value.strip() or len(value) > limit or re.search(
