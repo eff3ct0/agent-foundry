@@ -319,7 +319,7 @@ def initializer_arguments(repository, stack):
         "TDD_POLICY": "tests-first for non-trivial logic", "COVERAGE_TARGET": "behavior coverage",
         "APPROVAL_GATED_ACTIONS": "release publication and repository deletion",
     }
-    arguments = ["--defaults", "--no-clean"]
+    arguments = ["--defaults", "--confirm", "--no-clean"]
     for key, value in values.items():
         arguments.extend(["--set", "%s=%s" % (key, value)])
     return arguments

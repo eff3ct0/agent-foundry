@@ -99,10 +99,12 @@ cd factory-smoke-test
 
 ## 2. Minimal kickoff (NEW agent session inside the repo)
 > You are a cold agent in this newly created factory-template project. Read
-> CLAUDE.md and AGENT.md and follow docs/agent-init.md: fill placeholders with
-> init.py (use `--no-clean` for verification), compose bindings and CI, and
-> verify. Ask me what you cannot infer (name, stack, tracker, secrets, and
-> persistence language). Do not take outward actions without my approval.
+> CLAUDE.md and AGENT.md and follow docs/agent-init.md: propose placeholder
+> values with init.py (use `--no-clean` for verification), present the complete
+> configuration, explicitly confirm it, compose bindings and CI, and verify.
+> Ask me for decisions (name, stack, tracker, secrets, and persistence language)
+> rather than treating local files or defaults as consent. Do not take outward
+> actions without my approval.
 
 Note: `eff3ct0/factory` (the org instance) does not exist yet, so leave
 `FACTORY_SPEC` empty and set `FACTORY_REQUIRED=false`.

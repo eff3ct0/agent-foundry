@@ -16,8 +16,8 @@ python3 scripts/check-determinism.py
 | `start.py` | Deterministic, read-only, offline | Same mode and message for the same local files and git remote | No state |
 | `hooks/claude-code/session-start.sh`, `hooks/pi/factory-start.ts`, `hooks/opencode/factory-start.ts` | Deterministic local adapters | Each configured session event runs `start.py` once and forwards its output once | No external state or network |
 | `init.py --check` and `--self-check` | Deterministic, read-only, offline | Same result while inputs are unchanged | No state; fix the reported local input |
-| `init.py --dry-run` | Deterministic, read-only, offline | Same output; it does not compose, replace, or clean files | No state; rerun the same command to apply changes |
-| `init.py` replacement with `--no-clean` | Deterministic, local write, idempotent | Replaces supplied manifest tokens; unchanged files are not rewritten on later runs | Local files only; restore from VCS or a backup |
+| `init.py --dry-run` | Deterministic, read-only, offline | Same proposal/output; it does not compose, replace, or clean files, and does not require confirmation | No state; rerun with explicit confirmation to apply changes |
+| `init.py` replacement with `--no-clean` | Deterministic, local write, idempotent | Presents proposals and requires explicit confirmation; replaces supplied manifest tokens; unchanged files are not rewritten on later runs | Local files only; restore from VCS or a backup |
 | Binding composition | Deterministic, local write, idempotent | Selected provider bytes produce the same `docs/bindings.md`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | CI composition | Deterministic, local write, idempotent | Selected recipe order produces the same `.github/workflows/ci.yml`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | Provider and CI recipe selection | Deterministic catalog lookup | Same selected fragments and job order for the same manifest values | No external state; invalid selections fail closed during a normal run |
@@ -55,6 +55,8 @@ part of dry-run mode.
 
 - `init.py` never calls the network. `factory_bootstrap.py` is the separate
   outward tool and fails closed when `gh` is missing or unauthenticated.
+- `init.py` does not infer providers from a local `.github/` directory. It compares rendered repository
+  metadata with the local `origin` and stops before writes when they conflict.
 - `factory_bootstrap.py` never deletes repositories. A partial create is
   recoverable by rerunning it; deletion is outside its contract.
 - Label synchronization does not delete labels absent from the catalog. This

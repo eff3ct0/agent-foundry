@@ -13,14 +13,19 @@ intentionally empty when they do not apply.
 There are two complementary paths; [`placeholders.json`](../placeholders.json)
 is the single source of truth for project-level placeholders:
 
-- **Script (`init.py`, Python 3 stdlib):** deterministic and repeatable replacement.
+- **Script (`init.py`, Python 3 stdlib):** deterministic and repeatable replacement. It first presents the
+  complete configuration proposal and requires explicit confirmation before any local write.
   - Interactive: `python3 init.py`
-  - Non-interactive: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...'`, `--answers answers.json`, or `--defaults`.
+  - Non-interactive: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...' --confirm`,
+    `--answers answers.json` with JSON boolean `"confirm": true`, or `--defaults --confirm`.
+  - `--defaults` supplies manifest proposals; it is not consent. Existing `AGENT.md` values are proposals too.
+  - A repository value that conflicts with the local `origin` blocks before composition, replacement, or cleanup.
+  - A local `.github/` directory is not evidence of a separate `.github` repository or a GitHub task provider.
   - `python3 init.py --dry-run` shows changes without writing. Normal initialization consumes the source template's ownership contract during cleanup, removing source-only governance, provider/CI inputs, and release E2E/triage assets while retaining generic checkers, workflows, and generated outputs; `--no-clean` keeps source-only inputs for verification.
   - Release bootstrap E2E and OpenAI triage are maintainer-only operations for `eff3ct0/factory-template`; initialized projects do not receive their workflow, helpers, or tests.
   - An empty value remains `<KEY>` (it is not deleted), so the checklist can detect it.
   - Before normal cleanup, run [`scripts/check-determinism.py`](../scripts/check-determinism.py) for repeatability and generated-file timestamp guarantees. With `--no-clean`, the checker remains available for further template checks.
-- **Agent:** run the script for mechanical values and resolve `judgment` values (`<BRANCHING_MODEL>`, `<TDD_POLICY>`, `<COVERAGE_TARGET>`, `<APPROVAL_GATED_ACTIONS>`) by interview or repository evidence; see [`agent-init.md`](agent-init.md). CI is composed automatically from `<CI_STACKS>` (one job per language; see step 5).
+- **Agent:** run the script for mechanical values and resolve `judgment` values (`<BRANCHING_MODEL>`, `<TDD_POLICY>`, `<COVERAGE_TARGET>`, `<APPROVAL_GATED_ACTIONS>`) by interview or repository evidence, then confirm the final proposal; see [`agent-init.md`](agent-init.md). CI is composed automatically from `<CI_STACKS>` (one job per language; see step 5).
 
 > Local template tokens (`<TICKET_ID>`, `<CRITERION_1>`, `<DATE>`, `<NNN>`, and similar) are NOT filled here. Fill them whenever a `templates/*.md` file is used; they are not manifest placeholders.
 

@@ -67,6 +67,7 @@ def check_initializer_lifecycle(init):
                 for placeholder in manifest
             }
             answers.update(PROJECT_NAME="Example", TASK_TRACKER="github-issues", CI_STACKS="python")
+            answers["confirm"] = True
             with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
                 json.dump(answers, answers_file)
             missing_required = subprocess.run(

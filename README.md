@@ -22,7 +22,7 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 ## How to use it
 1. **As a GitHub template:** mark this repo as a *Template repository* (Settings -> Template repository). Then use *Use this template -> Create a new repository* for each project.
 2. **By cloning:** copy the contents to a new repo without this template's history.
-3. Fill `<PLACEHOLDER>` values with the initializer: `python3 init.py` (interactive), or let an agent run it and resolve judgment values. Then choose tooling and make the first commit. See [`docs/bootstrap.md`](docs/bootstrap.md).
+3. Fill `<PLACEHOLDER>` values with the initializer: `python3 init.py` (interactive), or let an agent run it and resolve judgment values. The initializer presents the complete proposal and requires explicit confirmation before writing; non-interactive answers must include `"confirm": true` or use `--confirm`. Then choose tooling and make the first commit. See [`docs/bootstrap.md`](docs/bootstrap.md).
 
 ## Placeholder convention
 `<UPPER_SNAKE>` = value to fill. `<!-- guide: ... -->` = instruction for the person filling it. Sections marked `OPTIONAL` are removed when they do not apply. A correctly initialized project has no unresolved required manifest `<PLACEHOLDER>` values; optional values may remain intentionally empty (see the final checklist in [`docs/bootstrap.md`](docs/bootstrap.md)).
