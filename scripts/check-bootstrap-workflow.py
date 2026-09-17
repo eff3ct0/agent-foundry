@@ -57,11 +57,16 @@ def check():
     if not template_uses or any(not re.fullmatch(r"[^@]+@[0-9a-f]{40}", reference) for reference in template_uses):
         raise AssertionError("template bootstrap action is not pinned to a full commit SHA")
     for required in ("workflow_dispatch:", "permissions: {}", "fail-fast: false", "--template", "--stack",
-                     "if: always()", "issues: write", "--run-id"):
+                     "if: always()", "issues: write", "--run-id", "cleanup-template",
+                     "actions/download-artifact@%s" % PINNED_ACTIONS["actions/download-artifact"]):
         if required not in template:
             raise AssertionError("template workflow is missing %s" % required)
     if "OPENAI_API_KEY" in template:
         raise AssertionError("template bootstrap must not receive OpenAI credentials")
+    bootstrap = template.split("\n  bootstrap:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
+    report = template.split("\n  report:\n", 1)[1]
+    if "GITHUB_TOKEN" in bootstrap or "BOOTSTRAP_E2E_TOKEN" in report:
+        raise AssertionError("lifecycle and reporting credentials must remain separate")
     print("template bootstrap workflow static check OK")
 
 

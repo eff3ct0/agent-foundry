@@ -322,6 +322,165 @@ def test_template_bootstrap_contract():
         assert all(check["status"] == "passed" for check in checks), checks
 
 
+def test_template_provisioning_readback_and_fresh_checkout_boundary():
+    source_sha = "a" * 40
+    generated_sha = "b" * 40
+    calls = []
+    original_request = bootstrap.api_request
+
+    def fake_request(method, path, token, payload=None, expected=(200, 201, 204)):
+        calls.append((method, path, payload, expected))
+        if path == "users/acme":
+            return {"login": "acme", "type": "Organization"}
+        if path == "repos/eff3ct0/factory-template":
+            return {"full_name": "eff3ct0/factory-template", "is_template": True, "default_branch": "main"}
+        if path == "repos/eff3ct0/factory-template/git/ref/heads/main":
+            return {"object": {"sha": source_sha}}
+        if path == "repos/acme/bootstrap-e2e-123-python" and method == "GET":
+            if not any(call[0] == "POST" for call in calls):
+                return None
+            return {"full_name": "acme/bootstrap-e2e-123-python", "name": "bootstrap-e2e-123-python",
+                    "private": True, "default_branch": "main", "owner": {"login": "acme"},
+                    "template_repository": {"full_name": "eff3ct0/factory-template"}}
+        if path == "repos/acme/bootstrap-e2e-123-python/git/ref/heads/main":
+            return {"object": {"sha": generated_sha}}
+        if method == "POST" and path == "repos/eff3ct0/factory-template/generate":
+            return {"full_name": "acme/bootstrap-e2e-123-python"}
+        raise AssertionError(path)
+
+    bootstrap.api_request = fake_request
+    try:
+        proof = bootstrap.provision_template_repository(
+            "eff3ct0/factory-template", "acme", "bootstrap-e2e-123-python", "123", "token")
+    finally:
+        bootstrap.api_request = original_request
+    assert proof["template"] == "eff3ct0/factory-template"
+    assert proof["initial_revision"] == generated_sha
+    assert proof["template_relationship"] == "eff3ct0/factory-template"
+    assert not any(method == "DELETE" for method, *_ in calls)
+
+    with tempfile.TemporaryDirectory() as directory:
+        clone = Path(directory) / "clone"
+        (clone / ".git").mkdir(parents=True)
+        (clone / ".git" / "config").write_text("[remote \"origin\"]\n\turl = https://github.com/acme/repo\n",
+                                                    encoding="utf-8")
+        bootstrap.clean_checkout(clone, ["token"])
+        (clone / ".git" / "config").write_text("[credential]\n\thelper = store\n", encoding="utf-8")
+        try:
+            bootstrap.clean_checkout(clone, ["token"])
+        except bootstrap.HarnessError as error:
+            assert error.failure_code == "credential_leak"
+        else:
+            raise AssertionError("credential helper accepted in fresh checkout")
+
+
+def test_template_readback_mismatch_and_exact_cleanup_fail_closed():
+    calls = []
+    original_request = bootstrap.api_request
+
+    def mismatch_request(method, path, token, payload=None, expected=(200, 201, 204)):
+        calls.append((method, path))
+        if path == "users/acme":
+            return {"login": "acme", "type": "Organization"}
+        if path == "repos/eff3ct0/factory-template":
+            return {"full_name": "eff3ct0/factory-template", "is_template": True, "default_branch": "main"}
+        if path == "repos/eff3ct0/factory-template/git/ref/heads/main":
+            return {"object": {"sha": "a" * 40}}
+        if path == "repos/acme/bootstrap-e2e-123-python" and method == "GET":
+            if not any(call[0] == "POST" for call in calls):
+                return None
+            return {"full_name": "acme/bootstrap-e2e-123-python", "name": "bootstrap-e2e-123-python",
+                    "private": True, "default_branch": "main", "owner": {"login": "other"}}
+        if method == "POST":
+            return {"full_name": "acme/bootstrap-e2e-123-python"}
+        raise AssertionError(path)
+
+    bootstrap.api_request = mismatch_request
+    try:
+        try:
+            bootstrap.provision_template_repository(
+                "eff3ct0/factory-template", "acme", "bootstrap-e2e-123-python", "123", "token")
+        except bootstrap.HarnessError as error:
+            assert error.failure_code == "owner_identity_failed"
+        else:
+            raise AssertionError("ownership mismatch accepted")
+        proof = {"owner": "acme", "name": "bootstrap-e2e-123-python", "full_name": "acme/bootstrap-e2e-123-python",
+                 "template": "eff3ct0/factory-template", "run_id": "999", "stack": "python"}
+        try:
+            bootstrap.cleanup_template_repository(proof, "acme", "123", "token")
+        except bootstrap.HarnessError as error:
+            assert error.failure_code == "cleanup_proof_mismatch"
+        else:
+            raise AssertionError("cleanup accepted another run's proof")
+    finally:
+        bootstrap.api_request = original_request
+    assert not any(method == "DELETE" for method, _ in calls)
+
+
+def test_template_cleanup_records_agent_failure_and_api_failure():
+    proof = {"status": "verified", "owner": "acme", "name": "bootstrap-e2e-123-python",
+             "full_name": "acme/bootstrap-e2e-123-python", "template": "eff3ct0/factory-template",
+             "run_id": "123", "stack": "python", "default_branch": "main", "initial_revision": "b" * 40}
+    with tempfile.TemporaryDirectory() as directory:
+        evidence_dir = Path(directory) / "evidence"
+        evidence_dir.mkdir()
+        (evidence_dir / "python.json").write_text(json.dumps({
+            "matrix_case": "python", "result": "failed", "provisioning": proof}), encoding="utf-8")
+        output = Path(directory) / "cleanup.json"
+        original_request = bootstrap.api_request
+        calls = []
+
+        def successful_request(method, path, token, payload=None, expected=(200, 201, 204)):
+            calls.append((method, path))
+            if path == "users/acme":
+                return {"login": "acme", "type": "Organization"}
+            if path == "repos/acme/bootstrap-e2e-123-python":
+                return {"full_name": proof["full_name"], "name": proof["name"], "private": True,
+                        "default_branch": "main", "owner": {"login": "acme"},
+                        "template_repository": {"full_name": proof["template"]}}
+            if method == "DELETE":
+                return {}
+            raise AssertionError(path)
+
+        bootstrap.api_request = successful_request
+        try:
+            result = bootstrap.cleanup_template_evidence(
+                evidence_dir, output, proof["template"], "acme", "123", "token")
+        finally:
+            bootstrap.api_request = original_request
+        assert result["status"] == "passed"
+        assert result["deleted"] == [proof["full_name"]]
+        assert ("DELETE", "repos/" + proof["full_name"]) in calls
+
+        def failed_delete(method, path, token, payload=None, expected=(200, 201, 204)):
+            if path == "users/acme":
+                return {"login": "acme", "type": "Organization"}
+            if method == "DELETE":
+                raise bootstrap.HarnessError("API unavailable", "api_unavailable")
+            if path == "repos/acme/bootstrap-e2e-123-python":
+                return {"full_name": proof["full_name"], "name": proof["name"], "private": True,
+                        "default_branch": "main", "owner": {"login": "acme"},
+                        "template_repository": {"full_name": proof["template"]}}
+            raise AssertionError(path)
+
+        bootstrap.api_request = failed_delete
+        try:
+            result = bootstrap.cleanup_template_evidence(
+                evidence_dir, output, proof["template"], "acme", "123", "token")
+        finally:
+            bootstrap.api_request = original_request
+        assert result["status"] == "recovery-required"
+        assert result["failures"]
+        assert "manual_recovery" in result
+
+        empty = Path(directory) / "empty"
+        empty.mkdir()
+        result = bootstrap.cleanup_template_evidence(
+            empty, output, proof["template"], "acme", "123", "token")
+        assert result["status"] == "recovery-required"
+        assert any("no provisioning evidence" in failure for failure in result["failures"])
+
+
 if __name__ == "__main__":
     test_release_identity_and_environment_boundary()
     test_unexpected_harness_exception_is_written_to_evidence()
@@ -330,4 +489,7 @@ if __name__ == "__main__":
     test_workflow_contract()
     test_cleanup_probes_only_run_scoped_repositories()
     test_template_bootstrap_contract()
+    test_template_provisioning_readback_and_fresh_checkout_boundary()
+    test_template_readback_mismatch_and_exact_cleanup_fail_closed()
+    test_template_cleanup_records_agent_failure_and_api_failure()
     print("bootstrap E2E offline tests OK")

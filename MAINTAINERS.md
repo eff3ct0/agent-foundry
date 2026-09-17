@@ -102,9 +102,17 @@ pending; restore the credential, inspect the owner, and run
 with the exact run ID. Do not broaden the prefix or delete unrelated repos.
 
 The template bootstrap workflow is a manual, maintainer-only check. It generates
-one disposable repository per recipe from the published template, runs the
-cold-start and `--no-clean` validation matrix, records redacted evidence, and
-uses the same exact-prefix cleanup and deduplicated reporter as release E2E.
+one disposable repository per recipe from the published template, records a
+run-scoped ownership/readback proof before the cold-start and `--no-clean`
+validation matrix, and records redacted evidence. Its `if: always()` cleanup
+job downloads those proofs and deletes only exact owner/name pairs independently
+validated against GitHub. If the runner or API fails, retain the evidence
+artifact and rerun exact recovery with:
+
+`BOOTSTRAP_E2E_TOKEN=<short-lived-token> python3 scripts/bootstrap-e2e.py cleanup-template --owner <sandbox-owner> --run-id <run-id> --template eff3ct0/factory-template --evidence-dir <downloaded-evidence> --output cleanup.json`
+
+Never replace the evidence directory with a prefix scan or delete a repository
+whose proof is missing or mismatched.
 
 The workflow pins every third-party action to a verified full commit SHA:
 
