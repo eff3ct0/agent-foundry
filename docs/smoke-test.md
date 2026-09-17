@@ -4,6 +4,11 @@ Validate that a COLD agent, given only the repository and a minimal kickoff,
 initializes itself according to the contract. Every friction point becomes a
 [`type:dx-feedback` issue](../.github/ISSUE_TEMPLATE/dx-feedback.yml) in the template repository.
 
+> **Archetype boundary:** Release E2E and OpenAI triage paths exist only in
+> `eff3ct0/factory-template`. Normal initialization removes those maintainer
+> procedures and their helpers and tests. Downstream projects inherit generic
+> template behavior and generated assets such as CI and bindings.
+
 ## 1. Create a project from the template
 ```
 gh repo create <YOUR_ACCOUNT>/factory-smoke-test --template eff3ct0/factory-template --private --clone
