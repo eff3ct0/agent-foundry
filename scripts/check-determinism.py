@@ -68,6 +68,7 @@ def check_initializer_lifecycle(init):
             }
             answers.update(PROJECT_NAME="Example", TASK_TRACKER="github-issues", CI_STACKS="python")
             answers["confirm"] = True
+            answers.pop("OPENCODE_PLUGIN", None)
             with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
                 json.dump(answers, answers_file)
             missing_required = subprocess.run(
@@ -96,6 +97,8 @@ def check_initializer_lifecycle(init):
                 command.insert(2, "--no-clean")
             result = subprocess.run(command, cwd=root, capture_output=True, text=True)
             assert result.returncode == 0, (command, result.stdout, result.stderr)
+            plugin = os.path.join(root, ".opencode", "plugins", "factory-start.ts")
+            assert not os.path.exists(plugin), "default setup installed OpenCode plugin"
 
             if no_clean:
                 expected = [
@@ -110,6 +113,30 @@ def check_initializer_lifecycle(init):
                     text=True,
                 )
                 assert check.returncode == 0, (check.stdout, check.stderr)
+                answers["OPENCODE_PLUGIN"] = "true"
+                with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
+                    json.dump(answers, answers_file)
+                opt_in = subprocess.run(
+                    [sys.executable, "init.py", "--no-clean", "--answers", "answers.json"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert opt_in.returncode == 0, (opt_in.stdout, opt_in.stderr)
+                assert os.path.isfile(plugin), "explicit OpenCode opt-in did not install plugin"
+                plugin_content = open(plugin, encoding="utf-8").read()
+                assert plugin_content == open(
+                    os.path.join(root, "hooks", "opencode", "factory-start.ts"), encoding="utf-8"
+                ).read()
+                plugin_mtime = os.stat(plugin).st_mtime_ns
+                repeat_opt_in = subprocess.run(
+                    [sys.executable, "init.py", "--no-clean", "--answers", "answers.json"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert repeat_opt_in.returncode == 0, (repeat_opt_in.stdout, repeat_opt_in.stderr)
+                assert os.stat(plugin).st_mtime_ns == plugin_mtime
                 contract = subprocess.run(
                     [sys.executable, "scripts/check-delivery-contract.py"],
                     cwd=root,
@@ -188,6 +215,94 @@ def check_initializer(init):
         init.compose_bindings(root, "github-issues", "none", dry_run=False)
         assert open(bindings, encoding="utf-8").read() == bindings_content
         assert os.stat(bindings).st_mtime_ns == bindings_mtime
+    finally:
+        shutil.rmtree(root)
+
+
+def check_initializer_metadata(init):
+    root = tempfile.mkdtemp()
+    try:
+        shutil.copytree(
+            ROOT,
+            root,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(".git", ".atl", ".codegraph", "__pycache__"),
+        )
+        subprocess.run(["git", "init", "-q", root], check=True)
+        subprocess.run(
+            ["git", "remote", "add", "origin", "git@github.com:acme/project.git"],
+            cwd=root,
+            check=True,
+        )
+        agent = os.path.join(root, "AGENT.md")
+        with open(agent, encoding="utf-8") as source:
+            text = source.read().replace("<REPO_URLS>", "https://github.com/stale/project")
+        with open(agent, "w", encoding="utf-8") as target:
+            target.write(text)
+        answers = {
+            placeholder["key"]: (placeholder.get("default") or "Example")
+            for placeholder in init.load_manifest()
+            if placeholder.get("required")
+        }
+        answers.update(PROJECT_NAME="Example", TASK_TRACKER="github-issues")
+        answers_path = os.path.join(root, "answers.json")
+        with open(answers_path, "w", encoding="utf-8") as f:
+            json.dump(answers, f)
+        rejected = subprocess.run(
+            [sys.executable, "init.py", "--no-clean", "--defaults", "--answers", "answers.json"],
+            cwd=root,
+            input="n\n",
+            capture_output=True,
+            text=True,
+        )
+        assert rejected.returncode != 0
+        assert "explicit confirmation" in rejected.stderr, rejected.stderr
+
+        answers["confirm"] = True
+        with open(answers_path, "w", encoding="utf-8") as f:
+            json.dump(answers, f)
+        accepted = subprocess.run(
+            [sys.executable, "init.py", "--no-clean", "--defaults", "--answers", "answers.json"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        assert accepted.returncode == 0, (accepted.stdout, accepted.stderr)
+        assert "git@github.com:acme/project.git" in open(agent, encoding="utf-8").read()
+
+        provider_root = tempfile.mkdtemp()
+        try:
+            shutil.copytree(
+                ROOT,
+                provider_root,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git", ".atl", ".codegraph", "__pycache__"),
+            )
+            os.makedirs(os.path.join(provider_root, ".github", "ISSUE_TEMPLATE"), exist_ok=True)
+            agent = os.path.join(provider_root, "AGENT.md")
+            with open(agent, encoding="utf-8") as source:
+                text = source.read().replace("<TRACKER>", "GitHub Projects").replace(
+                    "<TASK_TRACKER>", "GitHub Projects"
+                )
+            with open(agent, "w", encoding="utf-8") as target:
+                target.write(text)
+            provider_answers = {
+                placeholder["key"]: (placeholder.get("default") or "Example")
+                for placeholder in init.load_manifest()
+                if placeholder.get("key") != "TASK_TRACKER"
+            }
+            with open(os.path.join(provider_root, "answers.json"), "w", encoding="utf-8") as f:
+                json.dump(provider_answers, f)
+            no_provider = subprocess.run(
+                [sys.executable, "init.py", "--no-clean", "--defaults", "--answers", "answers.json"],
+                cwd=provider_root,
+                capture_output=True,
+                text=True,
+            )
+            assert no_provider.returncode != 0
+            assert "TASK_TRACKER" in no_provider.stderr, no_provider.stderr
+        finally:
+            shutil.rmtree(provider_root)
     finally:
         shutil.rmtree(root)
 
@@ -316,6 +431,7 @@ def self_check():
             load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
         )
     check_initializer(init)
+    check_initializer_metadata(init)
     if not os.environ.get(SKIP_LIFECYCLE):
         check_ownership_boundary(init)
     if not os.environ.get(SKIP_LIFECYCLE):

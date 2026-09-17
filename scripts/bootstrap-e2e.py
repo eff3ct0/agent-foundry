@@ -163,11 +163,15 @@ def api_request(method, path, token, payload=None, expected=(200, 201, 204)):
         detail = getattr(error, "read", lambda *_: b"")(MAX_API_RESPONSE_BYTES + 1)
         if len(detail) > MAX_API_RESPONSE_BYTES:
             detail = detail[:MAX_API_RESPONSE_BYTES]
+        if isinstance(error, urllib.error.HTTPError) and error.code == 404 and 404 in expected:
+            return None
         raise HarnessError(redacted(detail.decode("utf-8", "replace"))) from error
     if len(raw) > MAX_API_RESPONSE_BYTES:
         raise HarnessError("GitHub API response is too large")
     if status not in expected:
         raise HarnessError("GitHub API returned HTTP %s" % status)
+    if status == 404 and 404 in expected:
+        return None
     if not raw:
         return {}
     try:
@@ -303,13 +307,14 @@ def released_environment():
     return environment
 
 
-def initializer_arguments(repository, stack):
+def initializer_arguments(repository, stack, task_tracker="github-issues", secrets_provider="none",
+                          code_intelligence="none"):
     values = {
         "PROJECT_NAME": "bootstrap-e2e-%s" % stack, "REPO_LANGUAGE": "en", "FACTORY_SPEC": "none",
         "FACTORY_REQUIRED": "false", "INTEGRATION_BRANCH": "main", "REPO_URLS": "https://github.com/%s" % repository,
         "LANGUAGES_AND_FRAMEWORKS": stack, "PACKAGE_MANAGER": "none", "TRACKER": "GitHub Issues",
-        "TRACKER_KEY": "bootstrap-e2e", "EPIC_ID": "none", "TASK_TRACKER": "github-issues",
-        "SECRETS_PROVIDER": "none", "CODE_INTELLIGENCE": "none", "SECRETS_PATH": "none",
+        "TRACKER_KEY": "bootstrap-e2e", "EPIC_ID": "none", "TASK_TRACKER": task_tracker,
+        "SECRETS_PROVIDER": secrets_provider, "CODE_INTELLIGENCE": code_intelligence, "SECRETS_PATH": "none",
         "BRANCHING_MODEL": "trunk-based", "BRANCH_NAMING": "type/ticket-slug", "BUILD_CMD": "not-applicable",
         "TEST_CMD": "python3 init.py --check", "LINT_CMD": "not-applicable", "TYPECHECK_CMD": "not-applicable",
         "RUN_CMD": "not-applicable", "ENVIRONMENTS": "GitHub Actions", "DEPLOY_METHOD": "not-applicable",
@@ -445,6 +450,184 @@ def run_bootstrap(args):
         raise HarnessError(evidence.get("failure", "bootstrap E2E failed"))
 
 
+def command_result(name, command, cwd, environment, secrets=()):
+    try:
+        result = subprocess.run(command, cwd=cwd, env=environment, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as error:
+        return {"name": name, "command": " ".join(command), "status": "failed",
+                "exit_code": None, "output": redacted(error, secrets)}
+    output = redacted((result.stdout + "\n" + result.stderr).strip(), secrets)
+    return {"name": name, "command": " ".join(command),
+            "status": "passed" if result.returncode == 0 else "failed",
+            "exit_code": bounded_exit_code(result.returncode), "output": output}
+
+
+def assertion_result(name, passed, detail):
+    return {"name": name, "status": "passed" if passed else "failed", "detail": detail}
+
+
+VALIDATION_COMMANDS = (
+    ("placeholder-check", ["python3", "init.py", "--check"]),
+    ("initializer-self-check", ["python3", "init.py", "--self-check"]),
+    ("startup-self-check", ["python3", "start.py", "--self-check"]),
+    ("governance", ["python3", "scripts/check-pr-governance.py", "--self-check"]),
+    ("delivery-contract", ["python3", "scripts/check-delivery-contract.py"]),
+    ("bootstrap-workflow", ["python3", "scripts/check-bootstrap-workflow.py"]),
+)
+
+
+def template_repository(template, owner, name, token):
+    existing = api_request("GET", "repos/%s" % (owner + "/" + name), token, expected=(200, 404))
+    if existing:
+        raise HarnessError("disposable repository already exists", "disposable_repository_exists")
+    result = api_request("POST", "repos/%s/generate" % template, token,
+                         {"owner": owner, "name": name, "private": True,
+                          "include_all_branches": False}, expected=(201,))
+    full_name = "%s/%s" % (owner, name)
+    if not isinstance(result, dict) or result.get("full_name") != full_name:
+        raise HarnessError("GitHub generated an unexpected disposable repository", "repository_identity_failed")
+    return full_name
+
+
+def template_sha(repository, token):
+    details = api_request("GET", "repos/%s" % repository, token)
+    if not isinstance(details, dict) or details.get("is_template") is not True:
+        raise HarnessError("source repository is not a published GitHub template", "template_invalid")
+    branch = details.get("default_branch") if isinstance(details, dict) else None
+    if not isinstance(branch, str) or not re.fullmatch(r"[A-Za-z0-9._/-]+", branch):
+        raise HarnessError("published template has no valid default branch", "template_invalid")
+    ref = api_request("GET", "repos/%s/git/ref/heads/%s" % (repository, urllib.parse.quote(branch, safe="")), token)
+    target = ref.get("object", {}) if isinstance(ref, dict) else {}
+    return validate_sha(target.get("sha", ""))
+
+
+def readback_result(clone, stacks, task_tracker, secrets_provider, code_intelligence):
+    bindings_path = clone / "docs" / "bindings.md"
+    workflow_path = clone / ".github" / "workflows" / "ci.yml"
+    if not bindings_path.is_file() or not workflow_path.is_file():
+        return [assertion_result("generated-readback", False, "generated bindings or CI workflow is missing")]
+    bindings = bindings_path.read_text(encoding="utf-8")
+    workflow = workflow_path.read_text(encoding="utf-8")
+    providers = {value for value in re.findall(r"^> \*\*Provider:\*\* `([^`]+)`$", bindings, re.MULTILINE)}
+    jobs = re.findall(r"^  ([a-z0-9][a-z0-9_-]*):$", workflow.split("jobs:\n", 1)[-1], re.MULTILINE)
+    expected_jobs = list(stacks)
+    checks = [assertion_result("bindings-readback", {task_tracker, secrets_provider, code_intelligence} <= providers,
+                                "providers=%s" % ",".join(sorted(providers)))]
+    checks.append(assertion_result("generated-workflow", jobs == expected_jobs,
+                                   "jobs=%s expected=%s" % (jobs, expected_jobs)))
+    return checks
+
+
+def run_template(args):
+    template = validate_repository(args.template)
+    stack = validate_stack(args.stack)
+    owner = validate_owner(os.environ.get(args.owner_env, ""))
+    token = os.environ.get(args.token_env, "")
+    name = disposable_name(disposable_prefix(args.run_id), stack)
+    full_name = "%s/%s" % (owner, name)
+    evidence = {
+        "schema_version": ENVELOPE_VERSION, "source_repository": template, "release_tag": "main",
+        "release_sha": None, "release_archive_url": None, "matrix_case": stack,
+        "disposable_repository": full_name, "tested_head_sha": None,
+        "check_identifier": "template-bootstrap-e2e/%s" % stack, "result": "failed",
+        "failure_code": "not-run", "openai_model": None, "exit_code": None, "logs": [],
+        "checks": [], "selected_bindings": {"task": args.task_tracker, "secrets": args.secrets_provider,
+                                               "code-intelligence": args.code_intelligence},
+        "selected_stacks": [stack], "cleanup": "not-attempted", "cleanup_status": "not-attempted",
+        "workflow_url": args.workflow_url or None,
+    }
+    temporary = tempfile.mkdtemp(prefix="template-bootstrap-e2e-")
+    created = False
+    error = None
+    try:
+        if not token:
+            raise HarnessError("%s is not configured" % args.token_env, "configuration_missing")
+        if not owner:
+            raise HarnessError("%s is not configured" % args.owner_env, "configuration_missing")
+        template_commit = template_sha(template, token)
+        evidence["release_sha"] = template_commit
+        template_repository(template, owner, name, token)
+        created = True
+        with tempfile.TemporaryDirectory(dir=temporary) as git_temp:
+            askpass, git_environment = askpass_environment(token, git_temp)
+            target_url = "https://github.com/%s" % full_name
+            git(["clone", "--config", "credential.helper=", "--branch", "main", "--single-branch",
+                 target_url, str(Path(temporary) / "clone")], ROOT, git_environment)
+            askpass.unlink(missing_ok=True)
+            clone = Path(temporary) / "clone"
+            environment = released_environment()
+            evidence["tested_head_sha"] = git(["rev-parse", "HEAD"], clone, environment)
+            if evidence["tested_head_sha"] != template_commit:
+                raise HarnessError("generated repository HEAD does not match template", "template_head_mismatch")
+            start = command_result("cold-start", ["python3", "start.py"], clone, environment)
+            evidence["checks"].append(start)
+            evidence["checks"].append(assertion_result(
+                "agent-init-flow", "SETUP mode" in start.get("output", "") and
+                "docs/agent-init.md" in start.get("output", ""), "start.py routes to docs/agent-init.md"))
+            agent_init = (clone / "docs" / "agent-init.md").read_text(encoding="utf-8")
+            evidence["checks"].append(assertion_result(
+                "agent-init-contract", all(marker in agent_init for marker in ("python3 start.py", "--no-clean",
+                                                                                  "docs/bindings.md")),
+                "docs/agent-init.md contains the cold-start procedure"))
+            evidence["checks"].append(command_result(
+                "determinism", ["python3", "scripts/check-determinism.py"], clone, environment))
+            init_command = ["python3", "init.py", *initializer_arguments(
+                full_name, stack, args.task_tracker, args.secrets_provider, args.code_intelligence)]
+            init_result = command_result("initialize-no-clean", init_command, clone, environment)
+            evidence["checks"].append(init_result)
+            if init_result["status"] == "passed":
+                for name_, command in VALIDATION_COMMANDS:
+                    evidence["checks"].append(command_result(name_, command, clone, environment))
+                evidence["checks"].extend(readback_result(
+                    clone, [stack], args.task_tracker, args.secrets_provider, args.code_intelligence))
+                preserved = all((clone / path).exists() for path in ("init.py", "placeholders.json", "ci", "providers"))
+                evidence["checks"].append(assertion_result("no-clean-preserved", preserved,
+                                                           "initializer inputs and composition sources remain"))
+                failed = next((check for check in evidence["checks"] if check["status"] != "passed"), None)
+                if failed:
+                    evidence["failure_code"] = re.sub(r"[^a-z0-9_-]+", "_", failed["name"])
+            else:
+                evidence["checks"].extend(
+                    {"name": name_, "status": "skipped", "detail": "initialization failed"}
+                    for name_, _ in VALIDATION_COMMANDS
+                )
+                evidence["failure_code"] = "initializer_failed"
+            if all(check["status"] == "passed" for check in evidence["checks"]):
+                evidence["result"] = "passed"
+                evidence["failure_code"] = ""
+    except (OSError, HarnessError, subprocess.SubprocessError) as caught:
+        error = caught
+        evidence["failure"] = redacted(caught, [token])
+        evidence["failure_code"] = getattr(caught, "failure_code", "unknown")
+        evidence["exit_code"] = bounded_exit_code(getattr(caught, "exit_code", None))
+        evidence["logs"] = failure_logs(caught, [token])
+    finally:
+        if created:
+            try:
+                current = api_request("GET", "repos/%s" % full_name, token, expected=(200, 404))
+                if current:
+                    if current.get("full_name") != full_name:
+                        raise HarnessError("cleanup identity mismatch", "cleanup_identity_failed")
+                    delete_repository(full_name, token)
+                evidence["cleanup"] = "passed"
+                evidence["cleanup_status"] = "passed"
+            except HarnessError as caught:
+                evidence["cleanup"] = "failed"
+                evidence["cleanup_status"] = "failed"
+                evidence["cleanup_error"] = redacted(caught, [token])
+                evidence["failure"] = evidence.get("failure", "disposable repository cleanup failed")
+                evidence["failure_code"] = "cleanup_failed"
+                evidence["result"] = "failed"
+        else:
+            evidence["cleanup"] = "not-created"
+            evidence["cleanup_status"] = "not-created"
+        shutil.rmtree(temporary, ignore_errors=True)
+        Path(args.evidence).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.evidence).write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if evidence["result"] != "passed":
+        raise HarnessError(evidence.get("failure", "template bootstrap E2E failed")) from error
+
+
 def self_check():
     assert recipe_keys() == ["rust", "typescript", "python", "go"]
     assert validate_tag("v1.2.3") == "v1.2.3"
@@ -518,6 +701,21 @@ def main():
     run.add_argument("--owner-env", default="BOOTSTRAP_E2E_OWNER")
     run.add_argument("--token-env", default="BOOTSTRAP_E2E_TOKEN")
     run.set_defaults(handler=run_bootstrap)
+    template = subparsers.add_parser("template")
+    template.add_argument("--template", required=True)
+    template.add_argument("--stack", required=True)
+    template.add_argument("--run-id", required=True)
+    template.add_argument("--evidence", required=True)
+    template.add_argument("--workflow-url")
+    template.add_argument("--owner-env", default="BOOTSTRAP_E2E_OWNER")
+    template.add_argument("--token-env", default="BOOTSTRAP_E2E_TOKEN")
+    template.add_argument("--task-tracker", default="github-issues",
+                          choices=("jira", "github-issues", "github-projects", "linear", "custom"))
+    template.add_argument("--secrets-provider", default="none",
+                          choices=("infisical", "vault", "doppler", "none", "custom"))
+    template.add_argument("--code-intelligence", default="codegraph",
+                          choices=("none", "codegraph", "custom"))
+    template.set_defaults(handler=run_template)
     cleanup = subparsers.add_parser("cleanup")
     cleanup.add_argument("--owner", required=True)
     cleanup.add_argument("--run-id", required=True)

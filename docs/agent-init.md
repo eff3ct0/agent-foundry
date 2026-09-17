@@ -30,9 +30,7 @@ Fix the **bound capabilities** (provider contract) before filling values:
 - **Tasks:** `<TASK_TRACKER>` (`jira` / `github-issues` / `github-projects` / `linear` / `custom`) and board `<TRACKER_KEY>`.
 - **Secrets:** `<SECRETS_PROVIDER>` (`infisical` / `vault` / `doppler` / `none` / `custom`) and `<SECRETS_PATH>` when applicable.
 - **Code intelligence:** `<CODE_INTELLIGENCE>` (`none` / `codegraph` / `custom`), defaulting to `none` so the template adds no dependency unless selected.
-- **Brownfield:** repository files may suggest candidates, but the owner must explicitly choose each provider.
-  A local `.github/` directory is not evidence of a separate `.github` repository or a GitHub task provider.
-  Do not infer `jira`, `github-issues`, `github-projects`, `linear`, or a secrets manager from local structure alone.
+- **Brownfield:** choose from explicit project configuration or ask the user. Repository files may suggest candidates, but the owner must explicitly choose each provider. A local `.github/` directory contains repository-local templates/workflows and is not proof of a separate organization `.github` repository or a GitHub Issues/Projects provider. Do not trust stale provider text. Repository identity is checked against the local Git `origin` before initialization continues.
 
 The shape of each fragment is defined by the abstract capability contracts:
 [`providers/task/_contract.md`](../providers/task/_contract.md),

@@ -16,6 +16,20 @@ the safest trigger because GitHub has published the release artifact. A manual
 a full immutable commit SHA and tests that exact revision; it does not use the
 template API because that follows the default branch.
 
+## Template bootstrap E2E contract
+
+The maintainer-only `.github/workflows/template-bootstrap-e2e.yml` workflow is
+the repeatable template-level check. A manual run creates one private repository
+per `ci/recipes.json` stack through GitHub's template-generation endpoint, reads
+back the generated repository, and deletes only its numeric run-prefix targets.
+Each disposable checkout runs `python3 start.py`, follows `docs/agent-init.md`,
+and invokes `python3 init.py --no-clean` with GitHub Issues, no secrets manager,
+and CodeGraph selected. The report records the cold-start, placeholder,
+self-check, pre-initialization determinism, governance, delivery-contract,
+binding, generated-CI, and no-clean results. Failed records use the existing bounded reporter, which
+searches open and closed bug issues and comments or creates exactly one marker-
+identified report.
+
 ## Release E2E contract
 
 - The matrix reads every key in `ci/recipes.json` and runs all cases with
