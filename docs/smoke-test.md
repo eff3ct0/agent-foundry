@@ -39,17 +39,29 @@ template API because that follows the default branch.
   `.github/ISSUE_TEMPLATE/bug.yml`. Evidence contains only redacted JSON with
   the tag, SHA, failed cases, workflow URL, and artifact page; it never contains
   credentials, full environment output, or temporary paths.
+- The isolated triage job runs after evidence download with only
+  `OPENAI_API_KEY`, the repository variable `OPENAI_MODEL`, and a clean process
+  environment containing a bounded sanitized JSON payload. It has no GitHub
+  token, issue permission, tools, or control over pass/fail, retries, cleanup,
+  concurrency, or workflow state. Responses API structured output is strict;
+  missing or rejected configuration, timeout, refusal, malformed/schema-invalid
+  output, and unsafe model text all use the deterministic reporter fallback.
 - The failure envelope is versioned as `bootstrap-e2e-failure/v1` and includes
-  the release tag, immutable SHA, matrix case, normalized failure code,
-  bounded exit-code evidence, sanitized logs, and cleanup status. The reporter
-  uses the deterministic failure body.
+  the allowlisted selected `OPENAI_MODEL` when available, release tag, immutable
+  SHA when available, matrix case, normalized failure code, bounded exit-code
+  evidence, sanitized logs, and cleanup status. Missing or invalid model
+  configuration fails the bootstrap case; it cannot turn the E2E green. The
+  triage job remains failed/fallback in that case, and the reporter still uses
+  the deterministic failure body. Triage uses `bootstrap-e2e-triage/v1`; its
+  request is bounded, uses `store: false`, and is not a source of lifecycle or
+  issue authority.
 - Evidence is retained for 7 days. GitHub API requests and each git or
   initializer subprocess use a 30-second timeout. Job timeouts are 10 minutes
   for prepare/report, 30 minutes for the matrix, and 15 minutes for cleanup.
   Report concurrency serializes the same resolved SHA (with a tag fallback when
   preparation cannot resolve one) and does not cancel an active run. Evidence,
-  API responses, issue/comment results, and generated issue bodies are bounded
-  and oversized input fails closed.
+  API responses, issue/comment results, generated issue bodies, and model output
+  are bounded and oversized input fails closed.
 - The workflow does not mutate the source release and deletes disposable
   repositories only after released validation completes. The harness handles
   ordinary cancellation with `finally` cleanup; GitHub force-cancellation,
@@ -70,10 +82,14 @@ Run the local trusted checks with:
 ```
 python3 scripts/bootstrap-e2e.py --self-check
 python3 scripts/report-bootstrap-failure.py --self-check
+python3 scripts/triage-bootstrap-failure.py --self-check
+python3 scripts/test-bootstrap-triage.py
 ```
 
 These checks are offline; they do not create repositories or prove hosted
-GitHub Actions execution.
+GitHub Actions execution. The OpenAI request follows the official Responses API
+structured-output guidance at
+https://developers.openai.com/api/docs/guides/structured-outputs.
 
 ## 1. Create a project from the template
 ```

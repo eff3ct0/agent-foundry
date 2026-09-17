@@ -273,9 +273,10 @@ def check_scripts(start, labels, governance, delivery, release_scripts=()):
     assert_same_output(governance.self_check)
     assert_same_output(delivery.self_check)
     if release_scripts:
-        bootstrap, reporter, workflow = release_scripts
+        bootstrap, reporter, triage, workflow = release_scripts
         assert_same_output(bootstrap.self_check)
         assert_same_output(reporter.self_check)
+        assert_same_output(triage.self_check)
         assert_same_output(workflow.check)
 
 
@@ -302,6 +303,7 @@ def self_check():
     release_paths = (
         "scripts/bootstrap-e2e.py",
         "scripts/report-bootstrap-failure.py",
+        "scripts/triage-bootstrap-failure.py",
         "scripts/check-bootstrap-workflow.py",
     )
     release_scripts = ()
@@ -309,6 +311,7 @@ def self_check():
         release_scripts = (
             load_module("bootstrap_e2e", "scripts/bootstrap-e2e.py"),
             load_module("report_bootstrap_failure", "scripts/report-bootstrap-failure.py"),
+            load_module("triage_bootstrap_failure", "scripts/triage-bootstrap-failure.py"),
             load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
         )
     check_initializer(init)

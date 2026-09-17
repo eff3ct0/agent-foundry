@@ -9,6 +9,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "bootstrap-e2e.yml"
 PINNED_ACTIONS = {
     "actions/checkout": "11bd71901bbe5b1630ceea73d27597364c9af683",  # v4.2.2
     "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02",  # v4.6.2
+    "actions/download-artifact": "d3f86a106a0bac45b974a628896c90dbdf5c8093",  # v4.3.0
     "actions/create-github-app-token": "fee1f7d63c2ff003460e3d139729b119787bc349",  # v2.2.2
 }
 USE = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
@@ -38,12 +39,13 @@ def check():
         raise AssertionError("report must serialize by resolved SHA")
     if "- name: Delete this run's disposable repositories\n        if: always()" not in text:
         raise AssertionError("cleanup deletion must run always")
-    cleanup = text.split("\n  cleanup:\n", 1)[1].split("\n  report:\n", 1)[0]
+    cleanup = text.split("\n  cleanup:\n", 1)[1].split("\n  triage:\n", 1)[0]
     if "actions/checkout@" in cleanup:
         raise AssertionError("cleanup must not depend on repository checkout")
     bootstrap = text.split("\n  bootstrap:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
-    if "OPENAI_API_KEY" in text or "OPENAI_MODEL" in text:
-        raise AssertionError("baseline workflow must not require OpenAI triage")
+    report = text.split("\n  report:\n", 1)[1]
+    if "OPENAI_API_KEY" in bootstrap or "OPENAI_API_KEY" in cleanup or "OPENAI_API_KEY" in report:
+        raise AssertionError("OPENAI_API_KEY must be isolated to triage")
     if "BOOTSTRAP_E2E_TOKEN: ${{ secrets." in bootstrap or "BOOTSTRAP_E2E_TOKEN: ${{ secrets." in cleanup:
         raise AssertionError("lifecycle token must be short-lived App output")
     print("bootstrap workflow static check OK")

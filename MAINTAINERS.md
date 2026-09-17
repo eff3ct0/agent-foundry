@@ -59,13 +59,30 @@ Configure these repository settings before enabling the workflow:
   in bootstrap and cleanup, restricts it to `BOOTSTRAP_E2E_OWNER`, and grants
   only `administration: write` and `contents: write`. Never use a personal or
   long-lived broad-scope token.
+- `OPENAI_MODEL` (Actions variable): one of the explicitly allowlisted model
+  IDs in `scripts/triage-bootstrap-failure.py`. The workflow fails closed when
+  it is absent or not allowlisted.
+- `OPENAI_API_KEY` (Actions secret): used only by the isolated advisory triage
+  job. It is never passed to bootstrap, cleanup, or reporting.
+
 The short-lived lifecycle credential is available only to create/push/clone/cleanup steps,
 is removed from the released subprocess environment before released code
 executes, and is never available to the issue reporter. The released subprocess
 gets an allowlisted environment, not a copy of the runner environment. The
-reporter uses the workflow token with `contents: read`, `actions: read`, and
-`issues: write`; it searches open and closed issues using stable
-SHA/case/failure/check fingerprints and follows `.github/ISSUE_TEMPLATE/bug.yml`.
+advisory triage job receives only a bounded sanitized JSON payload, the model
+variable, and `OPENAI_API_KEY`; its clean process environment contains no GitHub
+token and it has no tools or mutation authority. The reporter uses the workflow
+token with `contents: read`, `actions: read`, and `issues: write`; it searches
+open and closed issues using stable SHA/case/failure/check fingerprints and
+follows `.github/ISSUE_TEMPLATE/bug.yml`.
+
+The Responses API request uses strict JSON Schema output, a 300-token output
+bound, a 30-second timeout, and `store: false`. The request payload and response
+are bounded in the triage helper. Model output is advisory and independently
+allowlisted before it can appear in an issue; missing, refused, malformed, or
+unsafe output uses the deterministic report instead. Sanitized evidence and
+triage artifacts are retained for 7 days; raw logs, raw prompts, and raw model
+responses are not retained by the workflow.
 
 The matrix is every current key in `ci/recipes.json` and is fail-fast false.
 Each case uses a private repository named
@@ -75,8 +92,8 @@ artifact. The disposable repository is not deleted until released bootstrap
 validation completes. Report jobs serialize by resolved release SHA, falling
 back to the validated tag when preparation cannot resolve one, and do not cancel
 an active run. GitHub API and every git/initializer subprocess have
-a 30-second operation timeout; job timeouts are 10 minutes for prepare and
-report, 30 minutes for the matrix, and 15 minutes for cleanup. API failures,
+a 30-second operation timeout; job timeouts are 10 minutes for prepare, triage,
+and report, 30 minutes for the matrix, and 15 minutes for cleanup. API failures,
 runner loss, forced cancellation, or missing credentials can leave cleanup
 pending; restore the credential, inspect the owner, and run
 `python3 scripts/bootstrap-e2e.py cleanup --owner "$BOOTSTRAP_E2E_OWNER" --run-id "$GITHUB_RUN_ID"`
@@ -86,6 +103,7 @@ The workflow pins every third-party action to a verified full commit SHA:
 
 - `actions/checkout` v4.2.2: `11bd71901bbe5b1630ceea73d27597364c9af683`
 - `actions/upload-artifact` v4.6.2: `ea165f8d65b6e75b540449e92b4886f43607fa02`
+- `actions/download-artifact` v4.3.0: `d3f86a106a0bac45b974a628896c90dbdf5c8093`
 - `actions/create-github-app-token` v2.2.2: `fee1f7d63c2ff003460e3d139729b119787bc349`
 
 Run `python3 scripts/check-bootstrap-workflow.py` to reject floating, branch,

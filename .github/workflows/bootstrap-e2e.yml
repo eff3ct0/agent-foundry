@@ -80,6 +80,7 @@ jobs:
         env:
           BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
           BOOTSTRAP_E2E_TOKEN: ${{ steps.app-token.outputs.token }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
@@ -221,9 +222,62 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  report:
+  triage:
     if: always()
     needs: [prepare, bootstrap, cleanup]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out trusted triage helper
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Download redacted evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bootstrap-e2e-${{ github.run_id }}-*
+          path: evidence
+          merge-multiple: true
+          if-no-artifact-found: warn
+      - name: Ask for bounded advisory triage
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag_name }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+          RUN_ID: ${{ github.run_id }}
+          PREPARE_STATUS: ${{ needs.prepare.result }}
+          BOOTSTRAP_STATUS: ${{ needs.bootstrap.result }}
+          CLEANUP_STATUS: ${{ needs.cleanup.result }}
+        run: |
+          mkdir -p triage
+          env -i "PATH=$PATH" "OPENAI_API_KEY=$OPENAI_API_KEY" "OPENAI_MODEL=$OPENAI_MODEL" python3 scripts/triage-bootstrap-failure.py \
+            --evidence-dir evidence \
+            --output triage/triage.json \
+            --repository "$REPOSITORY" \
+            --tag "$RELEASE_TAG" \
+            --sha "$RELEASE_SHA" \
+            --run-id "$RUN_ID" \
+            --prepare-status "$PREPARE_STATUS" \
+            --bootstrap-status "$BOOTSTRAP_STATUS" \
+            --cleanup-status "$CLEANUP_STATUS"
+      - name: Upload bounded triage result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-e2e-triage-${{ github.run_id }}
+          path: triage/triage.json
+          if-no-files-found: error
+          retention-days: 7
+
+  report:
+    if: always()
+    needs: [prepare, bootstrap, cleanup, triage]
     runs-on: ubuntu-latest
     concurrency:
       group: bootstrap-e2e-report-${{ github.repository }}-${{ needs.prepare.outputs.sha || github.event.release.tag_name || inputs.tag_name || github.run_id }}
@@ -246,6 +300,12 @@ jobs:
           path: evidence
           merge-multiple: true
           if-no-artifact-found: warn
+      - name: Download bounded triage result
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bootstrap-e2e-triage-${{ github.run_id }}
+          path: triage
+          if-no-artifact-found: warn
       - name: Report one canonical failure
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -267,4 +327,5 @@ jobs:
             --run-id "$RUN_ID" \
             --prepare-status "$PREPARE_STATUS" \
             --bootstrap-status "$BOOTSTRAP_STATUS" \
-            --cleanup-status "$CLEANUP_STATUS"
+            --cleanup-status "$CLEANUP_STATUS" \
+            --triage-file triage/triage.json
