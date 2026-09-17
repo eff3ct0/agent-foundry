@@ -243,30 +243,21 @@ def delete_repository(full_name, token):
     api_request("DELETE", "repos/%s" % full_name, token, expected=(204,))
 
 
-def list_repositories(owner, token):
-    account = api_request("GET", "users/%s" % urllib.parse.quote(owner, safe=""), token)
-    if (account.get("login") or "").lower() != owner.lower() or account.get("type") not in ("Organization", "User"):
-        raise HarnessError("disposable owner identity could not be verified")
-    collection = "orgs" if account.get("type") == "Organization" else "users"
-    repositories = []
-    for page in range(1, 11):
-        result = api_request(
-            "GET", "%s/%s/repos?type=all&per_page=100&page=%d" % (collection, urllib.parse.quote(owner, safe=""), page), token,
-        )
-        if not isinstance(result, list):
-            raise HarnessError("GitHub returned an invalid repository list")
-        repositories.extend(item for item in result if isinstance(item, dict))
-        if len(result) < 100:
-            return repositories
-    raise HarnessError("repository cleanup list is saturated; refusing a partial cleanup")
-
-
 def cleanup_prefix(owner, prefix, token):
     owner = validate_owner(owner)
     if not re.fullmatch(r"bootstrap-e2e-[0-9]+-", prefix):
         raise HarnessError("invalid disposable repository prefix")
-    allowed = {disposable_name(prefix, stack) for stack in recipe_keys()}
-    candidates = sorted(item.get("name", "") for item in list_repositories(owner, token) if item.get("name") in allowed)
+    account = api_request("GET", "users/%s" % urllib.parse.quote(owner, safe=""), token)
+    if ((account.get("login") or "").lower() != owner.lower() or
+            account.get("type") not in ("Organization", "User")):
+        raise HarnessError("disposable owner identity could not be verified")
+    candidates = []
+    for stack in recipe_keys():
+        name = disposable_name(prefix, stack)
+        if api_request("GET", "repos/%s/%s" % (urllib.parse.quote(owner, safe=""),
+                                                urllib.parse.quote(name, safe="")), token,
+                       expected=(200, 404)):
+            candidates.append(name)
     failures = []
     for name in candidates:
         try:
