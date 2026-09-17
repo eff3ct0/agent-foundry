@@ -29,8 +29,10 @@ MAX_TRIAGE_FILE_BYTES = 16 * 1024
 ALLOWED_CLASSIFICATIONS = frozenset({"cleanup", "environment", "initializer", "release", "workflow", "unknown"})
 SAFE_FAILURE_CODE = re.compile(r"[a-z0-9][a-z0-9_-]{0,48}")
 SAFE_CASE = re.compile(r"[a-z0-9][a-z0-9_-]{0,48}")
+SAFE_EXCEPTION_TYPE = re.compile(r"[A-Za-z_][A-Za-z0-9_.]{0,79}")
 SAFE_DIAGNOSTIC = re.compile(
-    r"(?i)(?:^(?:fatal|error|warning|traceback|remote|hint):|\b(?:failed|error|invalid|missing|mismatch|unavailable|refused|timeout)\b|"
+    r"(?i)(?:^(?:fatal|error|warning|traceback|remote|hint):|\b[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception):|"
+    r"\b(?:failed|error|invalid|missing|mismatch|unavailable|refused|timeout)\b|"
     r"\b(?:authorization|bearer|token|password|secret|api[_-]?key|credential)=<redacted>|<private-(?:path|address)>)"
 )
 
@@ -114,7 +116,13 @@ def sanitized_evidence(directory):
             raise TriageError("evidence matrix case is invalid")
         failure_code = safe_identifier(data.get("failure_code", "unknown"), SAFE_FAILURE_CODE) or "unknown"
         logs = data.get("logs", [])
-        if not isinstance(logs, list) or len(logs) > MAX_LOG_ITEMS:
+        exception_type = data.get("exception_type")
+        if exception_type is not None and not safe_identifier(exception_type, SAFE_EXCEPTION_TYPE):
+            raise TriageError("evidence exception type is invalid")
+        exception_location = sanitize_text(data.get("exception_location"))[:200] or None
+        exception_diagnostics = data.get("exception_diagnostics", [])
+        if (not isinstance(logs, list) or len(logs) > MAX_LOG_ITEMS or
+                not isinstance(exception_diagnostics, list) or len(exception_diagnostics) > MAX_LOG_ITEMS):
             raise TriageError("evidence logs are invalid")
         safe_logs = []
         for log in logs:
@@ -124,6 +132,14 @@ def sanitized_evidence(directory):
             if cleaned != "<untrusted-diagnostic>" and not SAFE_DIAGNOSTIC.search(cleaned):
                 cleaned = "<diagnostic-omitted>"
             safe_logs.append(cleaned)
+        safe_exception_diagnostics = []
+        for diagnostic in exception_diagnostics:
+            cleaned = sanitize_text(diagnostic)
+            if not cleaned:
+                continue
+            if cleaned != "<untrusted-diagnostic>" and not SAFE_DIAGNOSTIC.search(cleaned):
+                cleaned = "<diagnostic-omitted>"
+            safe_exception_diagnostics.append(cleaned)
         records.append({
             "matrix_case": case,
             "openai_model": model,
@@ -132,6 +148,9 @@ def sanitized_evidence(directory):
             "check_identifier": sanitize_text(data.get("check_identifier", "bootstrap-e2e/%s" % case))[:120],
             "exit_code": data.get("exit_code") if isinstance(data.get("exit_code"), int) and -255 <= data.get("exit_code") <= 255 else None,
             "logs": safe_logs,
+            "exception_type": exception_type,
+            "exception_location": exception_location,
+            "exception_diagnostics": safe_exception_diagnostics,
             "cleanup_status": data.get("cleanup_status", data.get("cleanup"))
             if data.get("cleanup_status", data.get("cleanup")) in ("passed", "failed", "not-created", "not-attempted")
             else "unknown",

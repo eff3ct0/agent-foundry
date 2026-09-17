@@ -60,6 +60,67 @@ def test_release_identity_and_environment_boundary():
             os.environ["BOOTSTRAP_E2E_TOKEN"] = old
 
 
+def test_unexpected_harness_exception_is_written_to_evidence():
+    sha = "a" * 40
+    old_owner = os.environ.get("TEST_OWNER")
+    old_token = os.environ.get("TEST_TOKEN")
+    old_model = os.environ.get("OPENAI_MODEL")
+    original_create = bootstrap.create_repository
+    original_git = bootstrap.git
+    original_delete = bootstrap.delete_repository
+    with tempfile.TemporaryDirectory() as directory:
+        evidence_path = Path(directory) / "python.json"
+        os.environ["TEST_OWNER"] = "acme"
+        os.environ["TEST_TOKEN"] = "supersecret"
+        os.environ["OPENAI_MODEL"] = "gpt-5.6-luna"
+
+        def fake_git(command, _cwd, _environment):
+            if tuple(command[:2]) == ("rev-parse", "HEAD"):
+                raise AttributeError("'NoneType' object has no attribute 'unlink'")
+            if tuple(command[:2]) == ("rev-parse", "FETCH_HEAD"):
+                return sha
+            return ""
+
+        bootstrap.create_repository = lambda *_args: None
+        bootstrap.git = fake_git
+        bootstrap.delete_repository = lambda *_args: None
+        args = SimpleNamespace(repository="acme/template", tag="v1.0.0", sha=sha, stack="python", run_id="123",
+                               evidence=str(evidence_path), source_dir=str(ROOT), workflow_url=None,
+                               owner_env="TEST_OWNER", token_env="TEST_TOKEN")
+        try:
+            try:
+                bootstrap.run_bootstrap(args)
+            except bootstrap.HarnessError:
+                pass
+            else:
+                raise AssertionError("failed bootstrap unexpectedly passed")
+        finally:
+            bootstrap.create_repository = original_create
+            bootstrap.git = original_git
+            bootstrap.delete_repository = original_delete
+            if old_owner is None:
+                os.environ.pop("TEST_OWNER", None)
+            else:
+                os.environ["TEST_OWNER"] = old_owner
+            if old_token is None:
+                os.environ.pop("TEST_TOKEN", None)
+            else:
+                os.environ["TEST_TOKEN"] = old_token
+            if old_model is None:
+                os.environ.pop("OPENAI_MODEL", None)
+            else:
+                os.environ["OPENAI_MODEL"] = old_model
+
+        data = json.loads(evidence_path.read_text(encoding="utf-8"))
+        serialized = json.dumps(data)
+        assert data["failure_code"] == "harness_exception"
+        assert data["exception_type"] == "AttributeError"
+        assert data["exception_location"].endswith(":fake_git")
+        assert any("AttributeError:" in diagnostic and "unlink" in diagnostic
+                   for diagnostic in data["exception_diagnostics"])
+        assert "supersecret" not in serialized and "/tmp" not in serialized
+
+
 def test_release_bootstrap_removes_askpass_before_released_code():
     sha = "a" * 40
     original_create = bootstrap.create_repository
@@ -263,6 +324,7 @@ def test_template_bootstrap_contract():
 
 if __name__ == "__main__":
     test_release_identity_and_environment_boundary()
+    test_unexpected_harness_exception_is_written_to_evidence()
     test_release_bootstrap_removes_askpass_before_released_code()
     test_reporter_is_idempotent_for_existing_issue()
     test_workflow_contract()
