@@ -263,7 +263,7 @@ def validate_result(result, model):
         raise TriageError("OpenAI structured output has an unexpected schema")
     if result["classification"] not in ALLOWED_CLASSIFICATIONS:
         raise TriageError("OpenAI classification is not allowlisted")
-    fields = {}
+    fields = {"classification": result["classification"]}
     for name, limit in (("summary", 600), ("reproduction", 1200)):
         value = result[name]
         if not isinstance(value, str) or not value.strip() or len(value) > limit:
