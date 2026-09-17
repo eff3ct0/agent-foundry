@@ -244,6 +244,58 @@ def test_openai_failure_fallback_and_prompt_injection():
     assert triage.fallback("OpenAI request failed")["status"] == "fallback"
 
 
+def test_reporter_links_matrix_and_triage_artifacts():
+    with tempfile.TemporaryDirectory() as directory:
+        evidence(directory)
+        triage_directory = Path(directory) / "triage"
+        triage_directory.mkdir()
+        triage_path = triage_directory / "triage.json"
+        triage_path.write_text(json.dumps({
+            "schema_version": reporter.TRIAGE_VERSION,
+            "status": "success",
+            "selected_model": "gpt-5.6-luna",
+            "classification": "initializer",
+            "summary": "The initializer failed.",
+            "reproduction": "Run the released initializer.",
+        }), encoding="utf-8")
+        created = {}
+        calls = []
+        matrix_url = "https://github.com/eff3ct0/factory-template/actions/runs/123/artifacts/10509217251"
+        triage_url = "https://github.com/eff3ct0/factory-template/actions/runs/123/artifacts/10509012904"
+
+        def fake(method, path, token, payload=None, expected=(200, 201), include_headers=False):
+            calls.append((method, path, payload))
+            if path == "repos/eff3ct0/factory-template":
+                result = {"full_name": "eff3ct0/factory-template"}
+            elif "/artifacts?" in path:
+                result = {"total_count": 2, "artifacts": [
+                    {"name": "bootstrap-e2e-123-python", "id": 10509217251},
+                    {"name": "bootstrap-e2e-triage-123", "id": 10509012904},
+                ]}
+            elif path.startswith("search/issues?"):
+                result = {"total_count": 0, "items": []}
+            elif method == "POST" and path.endswith("/issues"):
+                created.update(payload)
+                result = {"number": 9}
+            elif path.endswith("/issues/9"):
+                result = {"number": 9, "repository_url": "https://api.github.com/repos/eff3ct0/factory-template",
+                          "title": created["title"], "body": created["body"], "labels": [{"name": "type:bug"}]}
+            else:
+                raise AssertionError((method, path))
+            return (result, {}) if include_headers else result
+
+        original = reporter.request
+        reporter.request = fake
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                reporter.report(report_args(directory, triage_file=str(triage_path)))
+        finally:
+            reporter.request = original
+
+        assert "Evidence artifact: %s" % matrix_url in created["body"]
+        assert "Triage artifact: %s" % triage_url in created["body"]
+
+
 def test_closed_issue_pagination_and_exact_marker_search():
     pages = []
 
@@ -408,6 +460,7 @@ if __name__ == "__main__":
     test_issue_readback_rejects_mismatched_number()
     test_cleanup_failure_and_redaction()
     test_openai_failure_fallback_and_prompt_injection()
+    test_reporter_links_matrix_and_triage_artifacts()
     test_closed_issue_pagination_and_exact_marker_search()
     test_no_sha_markers_do_not_collide_across_tags_or_runs()
     test_arbitrary_secret_redaction_and_model_fail_closed()

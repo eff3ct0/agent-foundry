@@ -119,6 +119,64 @@ def test_unexpected_harness_exception_is_written_to_evidence():
         assert "supersecret" not in serialized and "/tmp" not in serialized
 
 
+def test_release_bootstrap_removes_askpass_before_released_code():
+    sha = "a" * 40
+    original_create = bootstrap.create_repository
+    original_delete = bootstrap.delete_repository
+    original_git = bootstrap.git
+    original_run = bootstrap.subprocess.run
+    old_environment = {name: os.environ.get(name) for name in ("BOOTSTRAP_E2E_OWNER", "BOOTSTRAP_E2E_TOKEN", "OPENAI_MODEL")}
+    calls = []
+
+    def fake_create(owner, name, token):
+        calls.append(("create", owner, name, token))
+
+    def fake_delete(repository, token):
+        calls.append(("delete", repository, token))
+
+    def fake_git(command, cwd, env):
+        calls.append(("git", command[0]))
+        if command[0] == "clone":
+            clone = Path(command[-1])
+            workflow = clone / ".github" / "workflows" / "ci.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text("jobs:\n  python:\n", encoding="utf-8")
+        return sha if command[0] == "rev-parse" else ""
+
+    def fake_run(command, cwd, env, **kwargs):
+        calls.append(("run", command[1]))
+        assert "BOOTSTRAP_E2E_TOKEN" not in env
+        assert "GIT_ASKPASS" not in env
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    bootstrap.create_repository = fake_create
+    bootstrap.delete_repository = fake_delete
+    bootstrap.git = fake_git
+    bootstrap.subprocess.run = fake_run
+    os.environ.update({"BOOTSTRAP_E2E_OWNER": "acme", "BOOTSTRAP_E2E_TOKEN": "token", "OPENAI_MODEL": "model"})
+    try:
+        with tempfile.TemporaryDirectory() as directory:
+            args = SimpleNamespace(repository="acme/template", tag="v1.0.0", sha=sha, stack="python", run_id="123",
+                                   evidence=str(Path(directory) / "evidence.json"), source_dir=str(ROOT),
+                                   workflow_url=None, owner_env="BOOTSTRAP_E2E_OWNER",
+                                   token_env="BOOTSTRAP_E2E_TOKEN")
+            bootstrap.run_bootstrap(args)
+            result = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
+            assert result["result"] == "passed"
+            assert result["cleanup"] == "passed"
+            assert [name for kind, name, *rest in calls if kind == "run"] == ["init.py"] * 3
+    finally:
+        bootstrap.create_repository = original_create
+        bootstrap.delete_repository = original_delete
+        bootstrap.git = original_git
+        bootstrap.subprocess.run = original_run
+        for name, value in old_environment.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
 def test_reporter_is_idempotent_for_existing_issue():
     with tempfile.TemporaryDirectory() as directory:
         data = evidence(directory)
@@ -265,6 +323,7 @@ def test_template_bootstrap_contract():
 if __name__ == "__main__":
     test_release_identity_and_environment_boundary()
     test_unexpected_harness_exception_is_written_to_evidence()
+    test_release_bootstrap_removes_askpass_before_released_code()
     test_reporter_is_idempotent_for_existing_issue()
     test_workflow_contract()
     test_cleanup_probes_only_run_scoped_repositories()

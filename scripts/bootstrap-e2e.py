@@ -408,15 +408,13 @@ def run_bootstrap(args):
             git(["push", target_url, "FETCH_HEAD:refs/heads/main"], source, git_env)
             clone = Path(temporary) / "clone"
             git(["clone", "--config", "credential.helper=", "--branch", "main", "--single-branch", target_url, str(clone)], source, git_env)
+            # Do not let the released checkout inherit the lifecycle credential.
             askpass.unlink(missing_ok=True)
             askpass = None
             head = git(["rev-parse", "HEAD"], clone, released_environment())
             evidence["tested_head_sha"] = head
             if head != sha:
                 raise HarnessError("disposable checkout HEAD does not match the released commit", "disposable_head_mismatch")
-            # Do not let the released checkout inherit the lifecycle credential.
-            askpass.unlink(missing_ok=True)
-            askpass = None
             git_env = None
             environment = released_environment()
             command = [sys.executable, "init.py", *initializer_arguments(full_name, stack)]
