@@ -19,6 +19,10 @@ Only manifest keys are replaced. Local template tokens (<TICKET_ID>, <CRITERION_
 a value is NOT touched (it remains <KEY> and required keys are reported by
 --check), not deleted. Optional keys may remain intentionally empty.
 
+The optional OpenCode startup plugin is generated only when the confirmed
+OPENCODE_PLUGIN value is true. The manual `python3 start.py` fallback remains
+available when it is false.
+
 FACTORY_REQUIRED policy: when FACTORY_REQUIRED=true, init.py fails closed (deterministic,
 offline) if FACTORY_SPEC is empty. init.py does NOT verify or create org repositories:
 actual provisioning is handled separately by `factory_bootstrap.py` (idempotent, uses `gh`).
@@ -52,6 +56,8 @@ SELF = os.path.basename(__file__)
 SKIP_DIRS = {".git"}
 SKIP_ROOT_FILES = {SELF, "placeholders.json", OWNERSHIP_MANIFEST_NAME}
 PROTECTED_VALIDATION_PREFIX = "scripts/check-"
+OPENCODE_PLUGIN_SOURCE = os.path.join("hooks", "opencode", "factory-start.ts")
+OPENCODE_PLUGIN_DESTINATION = os.path.join(".opencode", "plugins", "factory-start.ts")
 
 ARCHETYPE_ONLY_PATHS = (
     SELF,
@@ -548,6 +554,32 @@ def cleanup(root):
     return removed
 
 
+def configure_opencode_plugin(root, enabled, dry_run=False):
+    """Generate the OpenCode adapter only after an explicit opt-in."""
+    if str(enabled).strip().lower() != "true":
+        return False
+    source = os.path.join(root, OPENCODE_PLUGIN_SOURCE)
+    destination = os.path.join(root, OPENCODE_PLUGIN_DESTINATION)
+    if not os.path.isfile(source):
+        sys.exit("OpenCode plugin source is missing: %s" % OPENCODE_PLUGIN_SOURCE)
+    if dry_run:
+        print("Would generate %s" % OPENCODE_PLUGIN_DESTINATION)
+        return False
+    with open(source, encoding="utf-8") as source_file:
+        content = source_file.read()
+    changed = not os.path.isfile(destination)
+    if not changed:
+        with open(destination, encoding="utf-8") as destination_file:
+            changed = destination_file.read() != content
+    if changed:
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        with open(destination, "w", encoding="utf-8") as destination_file:
+            destination_file.write(content)
+    print("OpenCode plugin %s: %s" % (
+        "generated" if changed else "already current", OPENCODE_PLUGIN_DESTINATION))
+    return changed
+
+
 def self_check():
     d = tempfile.mkdtemp()
     try:
@@ -657,6 +689,23 @@ def self_check():
             assert _binding_fragment(d3, "task", "_contract").endswith("custom.md")
         finally:
             shutil.rmtree(d3)
+
+        d5 = tempfile.mkdtemp()
+        try:
+            source = os.path.join(d5, OPENCODE_PLUGIN_SOURCE)
+            destination = os.path.join(d5, OPENCODE_PLUGIN_DESTINATION)
+            os.makedirs(os.path.dirname(source), exist_ok=True)
+            with open(source, "w", encoding="utf-8") as f:
+                f.write("plugin\n")
+            assert not configure_opencode_plugin(d5, "false")
+            assert not os.path.exists(destination), "default setup installed OpenCode plugin"
+            assert configure_opencode_plugin(d5, "true")
+            assert open(destination, encoding="utf-8").read() == "plugin\n"
+            plugin_mtime = os.stat(destination).st_mtime_ns
+            assert not configure_opencode_plugin(d5, "true")
+            assert os.stat(destination).st_mtime_ns == plugin_mtime
+        finally:
+            shutil.rmtree(d5)
 
         d4 = tempfile.mkdtemp()
         try:
@@ -793,6 +842,7 @@ def main():
             dry_run=args.dry_run,
             code_intelligence=values.get("CODE_INTELLIGENCE", "none"),
         )
+    configure_opencode_plugin(ROOT, values.get("OPENCODE_PLUGIN", "false"), dry_run=args.dry_run)
     nonempty = {k: v for k, v in values.items() if v}
     changes = apply_values(ROOT, nonempty, dry_run=args.dry_run)
     total = sum(changes.values())

@@ -18,6 +18,7 @@ python3 scripts/check-determinism.py
 | `init.py --check` and `--self-check` | Deterministic, read-only, offline | Same result while inputs are unchanged | No state; fix the reported local input |
 | `init.py --dry-run` | Deterministic, read-only, offline | Same output; it does not compose, replace, or clean files | No state; rerun the same command to apply changes |
 | `init.py` replacement with `--no-clean` | Deterministic, local write, idempotent | Replaces supplied manifest tokens; unchanged files are not rewritten on later runs | Local files only; restore from VCS or a backup |
+| `OPENCODE_PLUGIN=true` | Explicit, deterministic, local write | Generates `.opencode/plugins/factory-start.ts` only after opt-in; false or absent leaves it absent | Local generated file; remove through VCS or a separate approved action |
 | Binding composition | Deterministic, local write, idempotent | Selected provider bytes produce the same `docs/bindings.md`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | CI composition | Deterministic, local write, idempotent | Selected recipe order produces the same `.github/workflows/ci.yml`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | Provider and CI recipe selection | Deterministic catalog lookup | Same selected fragments and job order for the same manifest values | No external state; invalid selections fail closed during a normal run |
