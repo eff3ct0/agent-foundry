@@ -40,6 +40,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -157,6 +158,113 @@ ARCHETYPE_ONLY_PATHS = archetype_only_paths()
 
 def token(key):
     return "<%s>" % key
+
+
+def _origin_url(root):
+    """Return the local origin URL, or None when Git metadata is unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", root, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _repository_identity(value):
+    value = (value or "").strip(" `").rstrip("/")
+    if not value or value.startswith("<"):
+        return None
+    if "://" in value:
+        value = value.split("://", 1)[1]
+    if "@" in value and ":" in value.split("/", 1)[0]:
+        value = value.split("@", 1)[1]
+    elif value.startswith("git@"):
+        value = value[4:]
+    if ":" in value and "/" not in value.split(":", 1)[0]:
+        value = value.replace(":", "/", 1)
+    return value.removesuffix(".git").lower()
+
+
+def _repository_matches(value, origin):
+    origin_identity = _repository_identity(origin)
+    if not origin_identity:
+        return True
+    identities = [
+        _repository_identity(candidate)
+        for candidate in re.split(r"[\s,]+", value or "")
+        if _repository_identity(candidate)
+    ]
+    return not identities or origin_identity in identities
+
+
+def _declared_repository_url(root):
+    path = os.path.join(root, "AGENT.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return ""
+    match = re.search(r"Repositories:\s*([^\n]+)", text, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
+
+def _replace_declared_repository_url(root, value, dry_run):
+    path = os.path.join(root, "AGENT.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return
+    updated, count = re.subn(
+        r"(Repositories:\s*)[^\n]+",
+        lambda match: match.group(1) + value,
+        text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    if not count or updated == text:
+        return
+    if dry_run:
+        print("Would update stale repository metadata in AGENT.md.")
+    else:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(updated)
+        print("Updated repository metadata in AGENT.md.")
+
+
+def reconcile_repository_metadata(root, values, dry_run=False, confirm=None):
+    """Require confirmation before replacing repository metadata that disagrees with origin."""
+    origin = _origin_url(root)
+    declared = _declared_repository_url(root)
+    selected = (values.get("REPO_URLS") or "").strip()
+    stale = (selected and not _repository_matches(selected, origin)) or (
+        not selected and declared and not _repository_matches(declared, origin)
+    )
+    declared_stale = declared and not _repository_matches(declared, origin)
+    if not origin or not stale:
+        if origin and declared_stale and selected:
+            values["REPO_URLS"] = origin
+            _replace_declared_repository_url(root, origin, dry_run)
+        return
+    if confirm is None:
+        confirm = _confirm_repository
+    if not confirm(
+        "Repository metadata conflicts with Git origin (%s vs %s). "
+        "Replace it with the actual origin? [y/N] " % (declared or selected, origin)
+    ):
+        sys.exit("Repository metadata conflict requires explicit confirmation.")
+    values["REPO_URLS"] = origin
+    _replace_declared_repository_url(root, origin, dry_run)
+
+
+def _confirm_repository(prompt):
+    try:
+        return input(prompt).strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
 
 
 def _is_protected_validation_source(path, root):
@@ -598,6 +706,34 @@ def self_check():
         finally:
             shutil.rmtree(d4)
 
+        d5 = tempfile.mkdtemp()
+        try:
+            subprocess.run(["git", "init", "-q", d5], check=True)
+            subprocess.run(
+                ["git", "remote", "add", "origin", "git@github.com:acme/project.git"],
+                cwd=d5,
+                check=True,
+            )
+            with open(os.path.join(d5, "AGENT.md"), "w", encoding="utf-8") as f:
+                f.write("- Name: Example - Repositories: https://github.com/stale/project\n")
+            values = {"REPO_URLS": ""}
+            try:
+                reconcile_repository_metadata(d5, values, confirm=lambda _: False)
+            except SystemExit as exc:
+                assert "explicit confirmation" in str(exc), exc
+            else:
+                raise AssertionError("stale repository metadata must require confirmation")
+            reconcile_repository_metadata(d5, values, confirm=lambda _: True)
+            assert values["REPO_URLS"] == "git@github.com:acme/project.git"
+            assert "git@github.com:acme/project.git" in open(
+                os.path.join(d5, "AGENT.md"), encoding="utf-8"
+            ).read()
+            assert _repository_matches(
+                "https://github.com/acme/project", values["REPO_URLS"]
+            )
+        finally:
+            shutil.rmtree(d5)
+
         print("self-check OK")
     finally:
         shutil.rmtree(d)
@@ -634,6 +770,7 @@ def main():
         return
 
     values = gather(ph, args)
+    reconcile_repository_metadata(ROOT, values, dry_run=args.dry_run)
     # Deterministic offline prerequisite: a required factory must have FACTORY_SPEC.
     if str(values.get("FACTORY_REQUIRED", "")).strip().lower() == "true" and not values.get("FACTORY_SPEC", "").strip():
         sys.exit("FACTORY_REQUIRED=true but FACTORY_SPEC is empty: declare the organization baseline (e.g. org/factory@v1) before initialization.")

@@ -9,7 +9,7 @@
     {"key": "REPO_URLS", "prompt": "Repository URL(s)", "default": "", "kind": "mechanical", "required": false},
     {"key": "LANGUAGES_AND_FRAMEWORKS", "prompt": "Stack languages and frameworks", "default": "", "kind": "mechanical", "required": false},
     {"key": "PACKAGE_MANAGER", "prompt": "Package manager", "default": "", "kind": "mechanical", "required": false},
-    {"key": "TRACKER", "prompt": "Task tracker (Jira / GitHub Issues / Linear / ...)", "default": "GitHub Issues", "kind": "mechanical", "required": false},
+    {"key": "TRACKER", "prompt": "Task tracker (Jira / GitHub Issues / Linear / ...)", "default": "", "kind": "mechanical", "required": false},
     {"key": "TRACKER_KEY", "prompt": "Project or board inside the tracker", "default": "", "kind": "mechanical", "required": false},
     {"key": "EPIC_ID", "prompt": "Default epic or milestone ID (if applicable)", "default": "", "kind": "mechanical", "required": false},
     {"key": "TASK_TRACKER", "prompt": "Task provider", "default": "", "kind": "mechanical", "required": true, "enum": ["jira", "github-issues", "github-projects", "linear", "custom"]},
