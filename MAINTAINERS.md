@@ -57,7 +57,8 @@ Configure these repository settings before enabling the workflow:
 - `BOOTSTRAP_E2E_PRIVATE_KEY` (Actions secret): the dedicated GitHub App
   private key. The workflow mints a short-lived installation token separately
   in bootstrap and cleanup, restricts it to `BOOTSTRAP_E2E_OWNER`, and grants
-  only `administration: write` and `contents: write`. Never use a personal or
+  `administration: write`, `contents: write`, and `workflows: write` for the
+  bootstrap token; cleanup needs only the first two. Never use a personal or
   long-lived broad-scope token.
 - `OPENAI_MODEL` (Actions variable): any configured model identifier. The
   workflow validates that it is a non-empty string of at most 128 characters

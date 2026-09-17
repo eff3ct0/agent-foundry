@@ -41,8 +41,9 @@ identified report.
 - `BOOTSTRAP_E2E_APP_ID` and `BOOTSTRAP_E2E_PRIVATE_KEY` are dedicated Actions
   secrets for a GitHub App. The workflow mints a short-lived installation token
   separately in bootstrap and cleanup, restricts it to the disposable owner,
-  and grants only `administration: write` and `contents: write`. It is available
-  only to lifecycle steps. An ephemeral askpass file is removed before released
+  and grants `administration: write`, `contents: write`, and `workflows: write`
+  to bootstrap; cleanup needs only the first two. It is available only to
+  lifecycle steps. An ephemeral askpass file is removed before released
   code runs, clone configuration does not persist credentials, and the released
   subprocess uses an environment allowlist with no inherited token or secret
   variables. The released checkout never receives this token.
