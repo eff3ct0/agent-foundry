@@ -61,7 +61,7 @@ identified report.
   missing or rejected configuration, timeout, refusal, malformed/schema-invalid
   output, and unsafe model text all use the deterministic reporter fallback.
 - The failure envelope is versioned as `bootstrap-e2e-failure/v1` and includes
-  the allowlisted selected `OPENAI_MODEL` when available, release tag, immutable
+  the validated selected `OPENAI_MODEL` when available, release tag, immutable
   SHA when available, matrix case, normalized failure code, bounded exit-code
   evidence, sanitized logs, and cleanup status. Missing or invalid model
   configuration fails the bootstrap case; it cannot turn the E2E green. The

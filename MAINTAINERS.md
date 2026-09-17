@@ -59,9 +59,10 @@ Configure these repository settings before enabling the workflow:
   in bootstrap and cleanup, restricts it to `BOOTSTRAP_E2E_OWNER`, and grants
   only `administration: write` and `contents: write`. Never use a personal or
   long-lived broad-scope token.
-- `OPENAI_MODEL` (Actions variable): one of the explicitly allowlisted model
-  IDs in `scripts/triage-bootstrap-failure.py`. The workflow fails closed when
-  it is absent or not allowlisted.
+- `OPENAI_MODEL` (Actions variable): any configured model identifier. The
+  workflow validates that it is a non-empty string of at most 128 characters
+  and free of control characters, then fails closed when it is absent or
+  malformed.
 - `OPENAI_API_KEY` (Actions secret): used only by the isolated advisory triage
   job. It is never passed to bootstrap, cleanup, or reporting.
 
@@ -79,7 +80,7 @@ follows `.github/ISSUE_TEMPLATE/bug.yml`.
 The Responses API request uses strict JSON Schema output, a 300-token output
 bound, a 30-second timeout, and `store: false`. The request payload and response
 are bounded in the triage helper. Model output is advisory and independently
-allowlisted before it can appear in an issue; missing, refused, malformed, or
+ validated before it can appear in an issue; missing, refused, malformed, or
 unsafe output uses the deterministic report instead. Sanitized evidence and
 triage artifacts are retained for 7 days; raw logs, raw prompts, and raw model
 responses are not retained by the workflow.
