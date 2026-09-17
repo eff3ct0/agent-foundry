@@ -13,16 +13,85 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 - [`docs/agent-init.md`](docs/agent-init.md) - agent-mode initialization procedure.
 - [`docs/org-factory.md`](docs/org-factory.md) - organization layer (`.github` repo and `FACTORY_SPEC` pin).
 - [`docs/determinism.md`](docs/determinism.md) - repeat-run guarantees, limits, and focused checks.
+- [`hooks/README.md`](hooks/README.md) - optional Claude Code, Pi, and OpenCode startup adapters.
 - [`templates/`](templates/) - ticket, pull request, Definition of Done, ADR, spec, and agent runbook templates.
 - [`.github/`](.github/) - issue and pull request templates for GitHub.
 - [`init.py`](init.py) + [`placeholders.json`](placeholders.json) - Python 3 stdlib initializer that fills placeholders; `placeholders.json` is the single source of truth for project-level placeholders.
 - [`.github/labels.json`](.github/labels.json) + [`scripts/`](scripts/) - canonical GitHub labels, idempotent synchronization, and PR governance validation.
 - [`docs/github-governance.md`](docs/github-governance.md) - the stable required check and the separate `main` branch enforcement settings.
 
-## How to use it
-1. **As a GitHub template:** mark this repo as a *Template repository* (Settings -> Template repository). Then use *Use this template -> Create a new repository* for each project.
-2. **By cloning:** copy the contents to a new repo without this template's history.
-3. Fill `<PLACEHOLDER>` values with the initializer: `python3 init.py` (interactive), or let an agent run it and resolve judgment values. Then choose tooling and make the first commit. See [`docs/bootstrap.md`](docs/bootstrap.md).
+## Quickstart
+
+### Create a repository
+
+Use GitHub's template UI, copy the contents without this template's history, or
+run this explicit command after confirming the owner, name, visibility, and
+template source:
+
+```sh
+gh repo create OWNER/PROJECT --template eff3ct0/factory-template --private --clone
+cd PROJECT
+```
+
+This is the only repository-creation step. It is an outward action and is not
+run by `start.py`, `init.py`, or any harness adapter. Use `--public` or
+`--internal` only when that visibility is an intentional project decision.
+
+### Start the first agent session
+
+Inside the new repository, start with the manual fallback:
+
+```sh
+python3 start.py
+```
+
+In **SETUP** mode, follow [`docs/agent-init.md`](docs/agent-init.md). Review
+the proposed changes first with `python3 init.py --dry-run --no-clean`, then
+run the chosen initialization command and finish with `python3 init.py --check`.
+The agent should ask the owner to confirm project identity, stack and base
+commands when unclear, task and secrets providers, persistence language,
+branching and CI policy, and approval-gated actions. It may infer existing
+choices from repository evidence such as `Cargo.toml`, `package.json`,
+`pyproject.toml`, `go.mod`, and existing tracker or CI configuration, but must
+show inferred values before writing them. Greenfield choices must be supplied
+or confirmed by the owner.
+
+### Optional harness startup
+
+Hooks and plugins are opt-in. Copy only the adapter for the harness you intend
+to use; none is installed silently, and every adapter only runs `start.py`.
+
+For **OpenCode**, explicitly install the local plugin before starting the
+session:
+
+```sh
+mkdir -p .opencode/plugins
+cp hooks/opencode/factory-start.ts .opencode/plugins/factory-start.ts
+```
+
+Then start OpenCode in the repository. For the equivalent paths, follow the
+[Claude Code instructions](hooks/README.md#claude-code) or the [Pi
+instructions](hooks/README.md#pi). If no adapter is enabled, run
+`python3 start.py` manually for every new session.
+
+### One-command decision
+
+The transparent multi-command path remains canonical. A new onboarding
+wrapper would combine a non-atomic GitHub mutation with local initialization,
+so it cannot provide a safe all-or-nothing rollback.
+
+| Concern | Existing path | Decision |
+| --- | --- | --- |
+| Idempotency | `start.py` and `init.py --dry-run` are repeatable; `gh repo create` is an explicit create and should not be repeated for an existing target. | Keep separate steps so each state is visible. |
+| Dry run | `init.py --dry-run --no-clean` previews local changes; `gh repo create` has no equivalent safe preview. | Never hide repository creation behind a wrapper. |
+| Permissions | Creation needs GitHub repository-create permission; local initialization needs filesystem write access; adapters need local files and harness trust. | Request only the permission for the selected step. |
+| Rollback | Restore local changes with VCS; deleting a GitHub repository is separate and requires human approval. | Do not claim atomic rollback. |
+| Outward action | Only the user-run `gh repo create` creates a repository; hooks and `start.py` do not call the network. | No new wrapper or automatic creation. |
+
+The existing [`factory_bootstrap.py`](factory_bootstrap.py) is a separate,
+archetype-only maintainer tool for organization repositories; it is not the
+project onboarding command and is removed during initialization. For the full
+initializer checklist, see [`docs/bootstrap.md`](docs/bootstrap.md).
 
 ## Placeholder convention
 `<UPPER_SNAKE>` = value to fill. `<!-- guide: ... -->` = instruction for the person filling it. Sections marked `OPTIONAL` are removed when they do not apply. A correctly initialized project has no unresolved required manifest `<PLACEHOLDER>` values; optional values may remain intentionally empty (see the final checklist in [`docs/bootstrap.md`](docs/bootstrap.md)).
