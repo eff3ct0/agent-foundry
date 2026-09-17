@@ -30,6 +30,10 @@ binding, generated-CI, and no-clean results. Failed records use the existing bou
 searches open and closed bug issues and comments or creates exactly one marker-
 identified report.
 
+The parent contract for the cold real-agent journey is [`real-agent-journey.md`](real-agent-journey.md). It
+reuses the disposable-owner, immutable-action, credential-boundary, and bounded-evidence patterns above while
+leaving provider/runtime selection and the child adapters to issues #88-#90.
+
 ## Release E2E contract
 
 - The matrix reads every key in `ci/recipes.json` and runs all cases with

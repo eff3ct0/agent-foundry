@@ -114,6 +114,13 @@ artifact and rerun exact recovery with:
 Never replace the evidence directory with a prefix scan or delete a repository
 whose proof is missing or mismatched.
 
+The real-agent user journey is defined in [`docs/real-agent-journey.md`](docs/real-agent-journey.md) and
+`.github/workflows/real-agent-journey.yml`. It is initially manual/nightly, not release-triggered. The parent
+workflow owns stage ordering, run identity, credential separation, fail-closed aggregation, and bounded evidence;
+the provisioning, agent, assertion, and cleanup adapters are delivered by issues #88-#90. It deliberately does
+not select an agent provider or runtime. Configure `REAL_AGENT_JOURNEY_RUNTIME` only when a reviewed adapter is
+available; an absent adapter must fail closed rather than use a mock.
+
 The workflow pins every third-party action to a verified full commit SHA:
 
 - `actions/checkout` v4.2.2: `11bd71901bbe5b1630ceea73d27597364c9af683`
