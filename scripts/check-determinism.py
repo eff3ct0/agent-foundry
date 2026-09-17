@@ -46,17 +46,8 @@ def assert_repeatable_command(command):
     assert first.stderr == second.stderr, (command, "stderr differs")
 
 
-def check_initializer_lifecycle():
-    cleanup_paths = (
-        "init.py",
-        "placeholders.json",
-        "factory_bootstrap.py",
-        "MAINTAINERS.md",
-        "docs/smoke-test.md",
-        "scripts/check-determinism.py",
-        "ci",
-        "providers",
-    )
+def check_initializer_lifecycle(init):
+    cleanup_paths = tuple(init.ARCHETYPE_ONLY_PATHS)
     for no_clean in (False, True):
         root = tempfile.mkdtemp()
         try:
@@ -106,7 +97,11 @@ def check_initializer_lifecycle():
             assert result.returncode == 0, (command, result.stdout, result.stderr)
 
             if no_clean:
-                assert all(os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
+                expected = [
+                    path for path in cleanup_paths
+                    if os.path.exists(os.path.join(root, path))
+                ]
+                assert all(os.path.exists(os.path.join(root, path)) for path in expected), expected
                 check = subprocess.run(
                     [sys.executable, "init.py", "--check"],
                     cwd=root,
@@ -196,6 +191,49 @@ def check_initializer(init):
         shutil.rmtree(root)
 
 
+def check_ownership_boundary(init):
+    """Prove normal cleanup removes registered archetype-only paths only."""
+    ownership = init.load_ownership()
+    entries = init.ownership_entries(ownership)
+    covered = {entry["path"] for _, _, entry in entries}
+    directories = {entry["path"] for _, _, entry in entries if entry["kind"] == "directory"}
+    tracked = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+    tracked.append(init.OWNERSHIP_MANIFEST_NAME)
+    missing = [
+        path for path in tracked
+        if path not in covered and not any(path.startswith(directory + "/") for directory in directories)
+    ]
+    assert not missing, "unclassified tracked paths: %s" % ", ".join(missing)
+    root = tempfile.mkdtemp()
+    try:
+        for _, _, entry in entries:
+            path = os.path.join(root, entry["path"])
+            if entry["path"] == init.OWNERSHIP_MANIFEST_NAME:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(ownership, f, indent=2)
+                    f.write("\n")
+            elif entry["kind"] == "directory":
+                os.makedirs(path, exist_ok=True)
+                with open(os.path.join(path, "fixture.txt"), "w", encoding="utf-8") as f:
+                    f.write("fixture")
+            else:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("fixture")
+
+        init.cleanup(root)
+        for _, disposition, entry in entries:
+            path = os.path.join(root, entry["path"])
+            if disposition == "removed":
+                assert not os.path.exists(path), entry["path"]
+            else:
+                assert os.path.exists(path), entry["path"]
+        print("ownership coverage and boundary self-check OK")
+    finally:
+        shutil.rmtree(root)
+
+
 def check_factory_bootstrap(factory):
     assert_same_output(lambda: factory.plan("acme", "factory"))
 
@@ -227,17 +265,19 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(start, labels, governance, delivery, bootstrap, reporter, triage, workflow):
+def check_scripts(start, labels, governance, delivery, release_scripts=()):
     catalog = labels.load_labels()
     assert_same_output(start.self_check)
     assert_same_output(lambda: labels.sync(
         catalog, repo="acme/example", dry_run=True))
     assert_same_output(governance.self_check)
     assert_same_output(delivery.self_check)
-    assert_same_output(bootstrap.self_check)
-    assert_same_output(reporter.self_check)
-    assert_same_output(triage.self_check)
-    assert_same_output(workflow.check)
+    if release_scripts:
+        bootstrap, reporter, triage, workflow = release_scripts
+        assert_same_output(bootstrap.self_check)
+        assert_same_output(reporter.self_check)
+        assert_same_output(triage.self_check)
+        assert_same_output(workflow.check)
 
 
 def check_cli_commands():
@@ -260,15 +300,27 @@ def self_check():
     labels = load_module("sync_github_labels", "scripts/sync-github-labels.py")
     governance = load_module("check_pr_governance", "scripts/check-pr-governance.py")
     delivery = load_module("check_delivery_contract", "scripts/check-delivery-contract.py")
-    bootstrap = load_module("bootstrap_e2e", "scripts/bootstrap-e2e.py")
-    reporter = load_module("report_bootstrap_failure", "scripts/report-bootstrap-failure.py")
-    triage = load_module("triage_bootstrap_failure", "scripts/triage-bootstrap-failure.py")
-    workflow = load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py")
+    release_paths = (
+        "scripts/bootstrap-e2e.py",
+        "scripts/report-bootstrap-failure.py",
+        "scripts/triage-bootstrap-failure.py",
+        "scripts/check-bootstrap-workflow.py",
+    )
+    release_scripts = ()
+    if all(os.path.isfile(os.path.join(ROOT, path)) for path in release_paths):
+        release_scripts = (
+            load_module("bootstrap_e2e", "scripts/bootstrap-e2e.py"),
+            load_module("report_bootstrap_failure", "scripts/report-bootstrap-failure.py"),
+            load_module("triage_bootstrap_failure", "scripts/triage-bootstrap-failure.py"),
+            load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
+        )
     check_initializer(init)
     if not os.environ.get(SKIP_LIFECYCLE):
-        check_initializer_lifecycle()
+        check_ownership_boundary(init)
+    if not os.environ.get(SKIP_LIFECYCLE):
+        check_initializer_lifecycle(init)
     check_factory_bootstrap(factory)
-    check_scripts(start, labels, governance, delivery, bootstrap, reporter, triage, workflow)
+    check_scripts(start, labels, governance, delivery, release_scripts)
     check_cli_commands()
     print("determinism self-check OK")
 

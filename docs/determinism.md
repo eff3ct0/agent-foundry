@@ -23,13 +23,15 @@ python3 scripts/check-determinism.py
 | Provider and CI recipe selection | Deterministic catalog lookup | Same selected fragments and job order for the same manifest values | No external state; invalid selections fail closed during a normal run |
 | `scripts/check-determinism.py` | Template-only, deterministic, read-only, offline | Run before cleanup; `--no-clean` retains it for further template checks | No state |
 | `scripts/check-delivery-contract.py`, `scripts/check-pr-governance.py --self-check`, `start.py --self-check`, `scripts/sync-github-labels.py --self-check` | Deterministic, read-only, offline | Same validation result for unchanged files and catalog | No state |
+| Ownership-boundary fixture in `scripts/check-determinism.py` | Deterministic, read-only, offline | Every inventory entry is checked after cleanup; removed paths are absent and inherited/generated paths remain | Temporary fixture only |
 
-Normal initialization also performs cleanup unless `--no-clean` is supplied. That
-cleanup is intentionally one-shot: it removes `init.py`, `placeholders.json`,
-`factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `ci/`, and
-`providers/`, and `scripts/check-determinism.py`, so it is not a repeatable
-operation. The checker is not supported after normal cleanup because its
-template-only dependencies are removed with it.
+Normal initialization also performs cleanup unless `--no-clean` is supplied. The
+single authoritative ownership contract is `archetype-ownership.json`; `init.py`
+consumes its `removed` entries after replacement and composition. The fixture
+check above protects the boundary: provider/CI inputs are present before
+cleanup, while generic workflows and generated project files are retained.
+Cleanup is intentionally one-shot for the removed source-only inputs and is not
+part of dry-run mode.
 
 ## Network, workflows, and procedures
 

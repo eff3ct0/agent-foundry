@@ -53,6 +53,16 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 - The agent's conversation language is independent of `<REPO_LANGUAGE>`.
 - Specs, docs, tickets, tasks, code, comments, commits, and pull requests MUST use `<REPO_LANGUAGE>` (default: English).
 
+## 11. Template ownership boundary
+
+An initialized project contains the generic workflow contracts and generated
+project outputs it needs. Source-template maintainers classify every tracked
+asset before merging it: archetype-only governance and release tooling are
+removed during initialization, provider/CI recipes are consumed before removal,
+and inherited generic assets plus generated bindings and CI remain. New files
+must follow that classification; downstream projects must not receive
+archetype-only release E2E or OpenAI triage procedures.
+
 ## Structural code intelligence
 - For structural, dependency, or impact questions, prefer an available structural index over blind grep.
 - The capability is optional and defaults to `none`; without a configured provider, use native repository tools.
