@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -29,8 +30,12 @@ MAX_LOG_CHARS = 2000
 MAX_API_RESPONSE_BYTES = 64 * 1024
 MAX_API_REQUEST_BYTES = 16 * 1024
 MAX_EVIDENCE_BYTES = 64 * 1024
+SAFE_FAILURE_CODE = re.compile(r"[a-z0-9][a-z0-9_-]{0,48}")
+SAFE_EXCEPTION_TYPE = re.compile(r"[A-Za-z_][A-Za-z0-9_.]{0,79}")
+MAX_EXCEPTION_LOCATION_CHARS = 200
 SAFE_DIAGNOSTIC = re.compile(
-    r"(?i)(?:^(?:fatal|error|warning|traceback|remote|hint):|\b(?:failed|error|invalid|missing|mismatch|unavailable|refused|timeout)\b|"
+    r"(?i)(?:^(?:fatal|error|warning|traceback|remote|hint):|\b[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception):|"
+    r"\b(?:failed|error|invalid|missing|mismatch|unavailable|refused|timeout)\b|"
     r"\b(?:authorization|bearer|token|password|secret|api[_-]?key|credential)=<redacted>|<private-(?:path|address)>)"
 )
 RELEASE_ENV_NAMES = (
@@ -121,7 +126,7 @@ def redacted(value, secrets=()):
 
 
 def failure_logs(error, secrets=()):
-    values = list(getattr(error, "logs", ())) + [str(error)]
+    values = list(getattr(error, "logs", ())) + ["%s: %s" % (type(error).__name__, error)]
     logs = []
     for value in values:
         cleaned = redacted(value, secrets)
@@ -134,6 +139,33 @@ def failure_logs(error, secrets=()):
         if cleaned not in logs:
             logs.append(cleaned)
     return logs[:3]
+
+
+def exception_details(error, secrets=()):
+    frames = traceback.extract_tb(error.__traceback__) if error.__traceback__ else ()
+    if frames:
+        frame = frames[-1]
+        location = "%s:%s:%s" % (Path(frame.filename).name, frame.lineno, frame.name)
+    else:
+        location = "unknown"
+    exception_type = type(error).__name__
+    if not SAFE_EXCEPTION_TYPE.fullmatch(exception_type):
+        exception_type = "Exception"
+    return {
+        "exception_type": exception_type,
+        "exception_location": redacted(location, secrets)[:MAX_EXCEPTION_LOCATION_CHARS],
+        "exception_diagnostics": failure_logs(error, secrets),
+    }
+
+
+def capture_failure(evidence, error, secrets=()):
+    evidence["failure"] = redacted(error, secrets)
+    failure_code = str(getattr(error, "failure_code", "harness_exception") or "harness_exception").strip().lower()
+    evidence["failure_code"] = failure_code if SAFE_FAILURE_CODE.fullmatch(failure_code) else "harness_exception"
+    evidence["exit_code"] = bounded_exit_code(getattr(error, "exit_code", None))
+    details = exception_details(error, secrets)
+    evidence.update(details)
+    evidence["logs"] = details["exception_diagnostics"]
 
 
 def bounded_exit_code(value):
@@ -340,7 +372,8 @@ def run_bootstrap(args):
         "matrix_case": stack, "disposable_repository": full_name or "not-configured", "tested_head_sha": None,
         "check_identifier": "bootstrap-e2e/%s" % stack, "result": "failed", "failure_code": "not-run",
         "openai_model": None,
-        "exit_code": None, "logs": [], "cleanup": "not-attempted", "cleanup_status": "not-attempted",
+        "exit_code": None, "logs": [], "exception_type": None, "exception_location": None,
+        "exception_diagnostics": [], "cleanup": "not-attempted", "cleanup_status": "not-attempted",
         "workflow_url": args.workflow_url or None,
     }
     temporary = tempfile.mkdtemp(prefix="bootstrap-e2e-")
@@ -406,15 +439,25 @@ def run_bootstrap(args):
             if before != (workflow.read_bytes(), workflow.stat().st_mtime_ns):
                 raise HarnessError("repeat initializer rewrote unchanged CI output", "non_deterministic_output")
             evidence["result"] = "passed"
-    except (OSError, HarnessError, subprocess.SubprocessError) as error:
-        evidence["failure"] = redacted(error, [lifecycle_token])
-        evidence["failure_code"] = getattr(error, "failure_code", "unknown")
-        evidence["exit_code"] = bounded_exit_code(getattr(error, "exit_code", None))
-        evidence["logs"] = failure_logs(error, [lifecycle_token])
+    except Exception as error:
+        capture_failure(evidence, error, [lifecycle_token])
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
         if askpass:
-            askpass.unlink(missing_ok=True)
+            try:
+                askpass.unlink(missing_ok=True)
+            except Exception as error:
+                details = exception_details(error, [lifecycle_token])
+                evidence.update({"cleanup_%s" % key: value for key, value in details.items()})
+                if not evidence["exception_type"]:
+                    capture_failure(evidence, error, [lifecycle_token])
+                evidence["cleanup"] = "failed"
+                evidence["cleanup_status"] = "failed"
+                evidence["cleanup_error"] = redacted(error, [lifecycle_token])
+                evidence["cleanup_logs"] = details["exception_diagnostics"]
+                evidence["failure"] = evidence.get("failure", evidence["cleanup_error"])
+                evidence["failure_code"] = "cleanup_failed"
+                evidence["result"] = "failed"
         if created and lifecycle_token and not cleanup_attempted:
             cleanup_attempted = True
             try:
@@ -422,11 +465,13 @@ def run_bootstrap(args):
                 evidence["cleanup"] = "passed"
                 evidence["cleanup_status"] = "passed"
                 created = False
-            except HarnessError as error:
+            except Exception as error:
+                details = exception_details(error, [lifecycle_token])
                 evidence["cleanup"] = "failed"
                 evidence["cleanup_status"] = "failed"
                 evidence["cleanup_error"] = redacted(error, [lifecycle_token])
-                evidence["cleanup_logs"] = failure_logs(error, [lifecycle_token])
+                evidence["cleanup_logs"] = details["exception_diagnostics"]
+                evidence.update({"cleanup_%s" % key: value for key, value in details.items()})
                 if evidence["result"] == "passed":
                     evidence["result"] = "failed"
                     evidence["failure"] = "disposable repository cleanup failed"
@@ -525,6 +570,7 @@ def run_template(args):
         "disposable_repository": full_name, "tested_head_sha": None,
         "check_identifier": "template-bootstrap-e2e/%s" % stack, "result": "failed",
         "failure_code": "not-run", "openai_model": None, "exit_code": None, "logs": [],
+        "exception_type": None, "exception_location": None, "exception_diagnostics": [],
         "checks": [], "selected_bindings": {"task": args.task_tracker, "secrets": args.secrets_provider,
                                                "code-intelligence": args.code_intelligence},
         "selected_stacks": [stack], "cleanup": "not-attempted", "cleanup_status": "not-attempted",
@@ -589,12 +635,9 @@ def run_template(args):
             if all(check["status"] == "passed" for check in evidence["checks"]):
                 evidence["result"] = "passed"
                 evidence["failure_code"] = ""
-    except (OSError, HarnessError, subprocess.SubprocessError) as caught:
+    except Exception as caught:
         error = caught
-        evidence["failure"] = redacted(caught, [token])
-        evidence["failure_code"] = getattr(caught, "failure_code", "unknown")
-        evidence["exit_code"] = bounded_exit_code(getattr(caught, "exit_code", None))
-        evidence["logs"] = failure_logs(caught, [token])
+        capture_failure(evidence, caught, [token])
     finally:
         if created:
             try:

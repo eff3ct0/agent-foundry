@@ -158,6 +158,26 @@ def test_invalid_evidence_model_fails_closed():
             raise AssertionError("invalid evidence model accepted")
 
 
+def test_exception_evidence_is_sanitized_and_sent_to_triage():
+    with tempfile.TemporaryDirectory() as directory:
+        data = evidence(directory)
+        data.update({
+            "exception_type": "AttributeError",
+            "exception_location": "bootstrap-e2e.py:385:run_bootstrap",
+            "exception_diagnostics": ["AttributeError: 'NoneType' object has no attribute 'unlink'; token=secret /home/alice/private"],
+        })
+        Path(directory, "python.json").write_text(json.dumps(data), encoding="utf-8")
+        payload = triage.build_payload(directory, data["source_repository"], data["release_tag"],
+                                       data["release_sha"], "123", "success", "failure", "success",
+                                       data["openai_model"])
+        record = payload["failures"][0]
+        assert record["exception_type"] == "AttributeError"
+        assert record["exception_location"] == data["exception_location"]
+        assert "AttributeError:" in record["exception_diagnostics"][0]
+        assert "secret" not in json.dumps(record)
+        assert "/home" not in json.dumps(record)
+
+
 def test_issue_readback_rejects_mismatched_number():
     original = reporter.request
     reporter.request = lambda *args, **kwargs: {
@@ -384,6 +404,7 @@ if __name__ == "__main__":
     test_duplicate_canonical_link()
     test_comment_and_issue_creation_paths()
     test_invalid_evidence_model_fails_closed()
+    test_exception_evidence_is_sanitized_and_sent_to_triage()
     test_issue_readback_rejects_mismatched_number()
     test_cleanup_failure_and_redaction()
     test_openai_failure_fallback_and_prompt_injection()
