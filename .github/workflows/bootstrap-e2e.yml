@@ -77,6 +77,7 @@ jobs:
           owner: ${{ vars.BOOTSTRAP_E2E_OWNER }}
           permission-administration: write
           permission-contents: write
+          permission-workflows: write
       - name: Run released bootstrap
         env:
           BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}

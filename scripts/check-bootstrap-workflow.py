@@ -32,8 +32,10 @@ def check():
             raise AssertionError("required action pin is missing: %s" % action)
     if "permissions: {}" not in text:
         raise AssertionError("workflow must default to no permissions")
-    if "permission-administration: write" not in text or "permission-contents: write" not in text:
-        raise AssertionError("lifecycle App token must be restricted to administration and contents write")
+    if ("permission-administration: write" not in text or
+            "permission-contents: write" not in text or
+            text.count("permission-workflows: write") != 1):
+        raise AssertionError("bootstrap App token must request administration, contents, and workflows write")
     if text.count("actions/create-github-app-token@") != 2:
         raise AssertionError("bootstrap and cleanup must mint separate lifecycle tokens")
     if "group: bootstrap-e2e-report-${{ github.repository }}-${{ needs.prepare.outputs.sha ||" not in text:
