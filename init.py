@@ -10,7 +10,7 @@ Usage:
   python3 init.py --check               # check required manifest placeholders (CI; nonzero if any)
   python3 init.py --dry-run             # show changes without writing
   python3 init.py --self-check          # internal replacement test
-Options: --no-clean (do not remove init.py/placeholders.json/factory_bootstrap.py/MAINTAINERS.md/docs/smoke-test.md/ci/providers/scripts/check-determinism.py at the end),
+Options: --no-clean (do not remove the ownership manifest's removed paths at the end),
          --no-ci (do not compose the CI workflow).
 
 Value precedence: --set  >  --answers  >  interactive prompt  >  manifest default.
@@ -45,10 +45,31 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 MANIFEST = os.path.join(ROOT, "placeholders.json")
+OWNERSHIP_MANIFEST_NAME = "archetype-ownership.json"
+OWNERSHIP_MANIFEST = os.path.join(ROOT, OWNERSHIP_MANIFEST_NAME)
 SELF = os.path.basename(__file__)
 SKIP_DIRS = {".git"}
-SKIP_ROOT_FILES = {SELF, "placeholders.json"}
+SKIP_ROOT_FILES = {SELF, "placeholders.json", OWNERSHIP_MANIFEST_NAME}
 PROTECTED_VALIDATION_PREFIX = "scripts/check-"
+
+ARCHETYPE_ONLY_PATHS = (
+    SELF,
+    "placeholders.json",
+    "factory_bootstrap.py",
+    "MAINTAINERS.md",
+    "docs/smoke-test.md",
+    "ci",
+    "providers",
+    # Release E2E and triage paths are added by the archetype repository and
+    # are intentionally absent from older template revisions.
+    ".github/workflows/bootstrap-e2e.yml",
+    "scripts/bootstrap-e2e.py",
+    "scripts/check-bootstrap-workflow.py",
+    "scripts/release_ref.py",
+    "scripts/report-bootstrap-failure.py",
+    "scripts/triage-bootstrap-failure.py",
+    "scripts/test-bootstrap-triage.py",
+)
 
 TRACKER_DISPLAY = {
     "jira": "Jira",
@@ -82,6 +103,56 @@ BINDINGS_HEADER = (
 def load_manifest():
     with open(MANIFEST, encoding="utf-8") as f:
         return json.load(f)["placeholders"]
+
+
+def load_ownership(path=OWNERSHIP_MANIFEST):
+    with open(path, encoding="utf-8") as f:
+        ownership = json.load(f)
+    if ownership.get("schema_version") != 1:
+        raise ValueError("unsupported archetype ownership manifest version")
+    categories = ownership.get("categories")
+    if not isinstance(categories, dict) or not categories:
+        raise ValueError("ownership manifest must define categories")
+    seen = set()
+    for category, definition in categories.items():
+        if definition.get("disposition") not in {"removed", "inherited", "generated"}:
+            raise ValueError("invalid ownership disposition for %s" % category)
+        paths = definition.get("paths")
+        if not isinstance(paths, list) or not paths:
+            raise ValueError("ownership category %s must define paths" % category)
+        for entry in paths:
+            relative = entry.get("path")
+            if (not isinstance(relative, str) or not relative or os.path.isabs(relative)
+                    or ".." in relative.split(os.sep)):
+                raise ValueError("invalid ownership path: %r" % relative)
+            if entry.get("kind") not in {"file", "directory"}:
+                raise ValueError("invalid ownership kind for %s" % relative)
+            if relative in seen:
+                raise ValueError("ownership path appears more than once: %s" % relative)
+            seen.add(relative)
+    return ownership
+
+
+def ownership_entries(ownership=None):
+    ownership = ownership or load_ownership()
+    return [
+        (category, definition["disposition"], entry)
+        for category, definition in ownership["categories"].items()
+        for entry in definition["paths"]
+    ]
+
+
+def archetype_only_paths(path=OWNERSHIP_MANIFEST):
+    ownership = load_ownership(path)
+    return tuple(
+        entry["path"]
+        for _, disposition, entry in ownership_entries(ownership)
+        if disposition == "removed"
+    )
+
+
+# Compatibility name for callers that need the source checkout's contract.
+ARCHETYPE_ONLY_PATHS = archetype_only_paths()
 
 
 def token(key):
@@ -357,25 +428,15 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False, code_i
 
 def cleanup(root):
     removed = []
-    for f in (SELF, "placeholders.json", "factory_bootstrap.py", "MAINTAINERS.md"):
-        p = os.path.join(root, f)
-        if os.path.exists(p):
-            os.remove(p)
-            removed.append(f)
-    # Nested self-governance file for THIS repo; it does not travel downstream.
-    smoke = os.path.join(root, "docs", "smoke-test.md")
-    if os.path.exists(smoke):
-        os.remove(smoke)
-        removed.append("docs/smoke-test.md")
-    checker = os.path.join(root, "scripts", "check-determinism.py")
-    if os.path.exists(checker):
-        os.remove(checker)
-        removed.append("scripts/check-determinism.py")
-    for d in ("ci", "providers"):
-        dp = os.path.join(root, d)
-        if os.path.isdir(dp):
-            shutil.rmtree(dp)
-            removed.append(d + "/")
+    manifest = os.path.join(root, OWNERSHIP_MANIFEST_NAME)
+    for relative in archetype_only_paths(manifest):
+        path = os.path.join(root, relative)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+            removed.append(relative + "/")
+        elif os.path.isfile(path):
+            os.remove(path)
+            removed.append(relative)
     return removed
 
 
@@ -488,6 +549,54 @@ def self_check():
             assert _binding_fragment(d3, "task", "_contract").endswith("custom.md")
         finally:
             shutil.rmtree(d3)
+
+        d4 = tempfile.mkdtemp()
+        try:
+            with open(OWNERSHIP_MANIFEST, encoding="utf-8") as source:
+                with open(os.path.join(d4, OWNERSHIP_MANIFEST_NAME), "w", encoding="utf-8") as target:
+                    target.write(source.read())
+            for relative in ARCHETYPE_ONLY_PATHS:
+                if relative == OWNERSHIP_MANIFEST_NAME:
+                    continue
+                path = os.path.join(d4, relative)
+                if relative in {entry["path"] for _, _, entry in ownership_entries()
+                                if entry["kind"] == "directory"}:
+                    os.makedirs(path, exist_ok=True)
+                    path = os.path.join(path, "fixture.txt")
+                else:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("archetype-only fixture")
+
+            inherited = {
+                "AGENT.md": "# Agent\n",
+                "README.md": "# Example project\n",
+                ".github/workflows/ci.yml": "name: CI\n",
+                "docs/bindings.md": "# Bindings\n",
+                "scripts/check-determinism.py": "print('retained')\n",
+            }
+            for relative, content in inherited.items():
+                path = os.path.join(d4, relative)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+            removed = cleanup(d4)
+            directories = {
+                entry["path"] for _, _, entry in ownership_entries()
+                if entry["kind"] == "directory"
+            }
+            expected = {
+                relative + "/" if relative in directories else relative
+                for relative in ARCHETYPE_ONLY_PATHS
+            }
+            assert set(removed) == expected, removed
+            assert all(not os.path.exists(os.path.join(d4, relative))
+                       for relative in ARCHETYPE_ONLY_PATHS)
+            assert all(os.path.exists(os.path.join(d4, relative))
+                       for relative in inherited)
+        finally:
+            shutil.rmtree(d4)
 
         print("self-check OK")
     finally:
