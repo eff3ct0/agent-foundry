@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RECIPES = ROOT / "ci" / "recipes.json"
 WORKFLOW = ROOT / ".github" / "workflows" / "bootstrap-e2e.yml"
 ENVELOPE_VERSION = "bootstrap-e2e-failure/v1"
+CLEANUP_ENVELOPE_VERSION = "template-bootstrap-e2e-cleanup/v1"
 MAX_LOG_CHARS = 2000
 MAX_API_RESPONSE_BYTES = 64 * 1024
 MAX_API_REQUEST_BYTES = 16 * 1024
@@ -106,6 +107,16 @@ def validate_owner(owner):
     if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", owner):
         raise HarnessError("disposable owner must be a GitHub account name")
     return owner
+
+
+def owner_identity(owner, token):
+    owner = validate_owner(owner)
+    account = api_request("GET", "users/%s" % urllib.parse.quote(owner, safe=""), token)
+    if (not isinstance(account, dict) or
+            (account.get("login") or "").lower() != owner.lower() or
+            account.get("type") not in ("Organization", "User")):
+        raise HarnessError("disposable owner identity could not be verified", "owner_identity_failed")
+    return {"login": account["login"], "type": account["type"]}
 
 
 def redacted(value, secrets=()):
@@ -252,9 +263,7 @@ def disposable_name(prefix, stack):
 
 def create_repository(owner, name, token):
     owner = validate_owner(owner)
-    account = api_request("GET", "users/%s" % urllib.parse.quote(owner, safe=""), token)
-    if not isinstance(account, dict) or (account.get("login") or "").lower() != owner.lower():
-        raise HarnessError("disposable owner identity could not be verified")
+    account = owner_identity(owner, token)
     if account.get("type") == "Organization":
         endpoint = "orgs/%s/repos" % urllib.parse.quote(owner, safe="")
     elif (account.get("login") or "").lower() == owner.lower():
@@ -266,7 +275,7 @@ def create_repository(owner, name, token):
         {"name": name, "private": True, "has_issues": False,
          "has_projects": False, "has_wiki": False, "auto_init": False},
     )
-    if result.get("full_name") != "%s/%s" % (owner, name):
+    if (result.get("full_name") or "").lower() != ("%s/%s" % (owner, name)).lower():
         raise HarnessError("GitHub created an unexpected disposable repository")
     return result["full_name"]
 
@@ -316,7 +325,7 @@ def askpass_environment(token, directory):
         encoding="utf-8",
     )
     askpass.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-    environment = os.environ.copy()
+    environment = released_environment()
     environment["BOOTSTRAP_E2E_TOKEN"] = token
     environment["GIT_ASKPASS"] = str(askpass)
     environment["GIT_TERMINAL_PROMPT"] = "0"
@@ -527,15 +536,178 @@ def template_repository(template, owner, name, token):
 
 
 def template_sha(repository, token):
+    details = template_details(repository, token)
+    return details["initial_revision"]
+
+
+def template_details(repository, token):
+    repository = validate_repository(repository)
     details = api_request("GET", "repos/%s" % repository, token)
     if not isinstance(details, dict) or details.get("is_template") is not True:
         raise HarnessError("source repository is not a published GitHub template", "template_invalid")
-    branch = details.get("default_branch") if isinstance(details, dict) else None
+    if (details.get("full_name") or "").lower() != repository.lower():
+        raise HarnessError("source template identity could not be verified", "template_identity_failed")
+    branch = details.get("default_branch")
     if not isinstance(branch, str) or not re.fullmatch(r"[A-Za-z0-9._/-]+", branch):
         raise HarnessError("published template has no valid default branch", "template_invalid")
     ref = api_request("GET", "repos/%s/git/ref/heads/%s" % (repository, urllib.parse.quote(branch, safe="")), token)
     target = ref.get("object", {}) if isinstance(ref, dict) else {}
-    return validate_sha(target.get("sha", ""))
+    return {"full_name": details["full_name"], "default_branch": branch,
+            "initial_revision": validate_sha(target.get("sha", ""))}
+
+
+def validate_template_identity(details, template, owner, name):
+    expected = "%s/%s" % (owner, name)
+    if (not isinstance(details, dict) or
+            (details.get("full_name") or "").lower() != expected.lower()):
+        raise HarnessError("generated repository identity could not be verified", "repository_identity_failed")
+    repository_owner = details.get("owner")
+    if (not isinstance(repository_owner, dict) or
+            (repository_owner.get("login") or "").lower() != owner.lower()):
+        raise HarnessError("generated repository owner could not be verified", "owner_identity_failed")
+    if details.get("name") != name or details.get("private") is not True:
+        raise HarnessError("generated repository visibility or name is unexpected", "repository_identity_failed")
+    branch = details.get("default_branch")
+    if not isinstance(branch, str) or not re.fullmatch(r"[A-Za-z0-9._/-]+", branch):
+        raise HarnessError("generated repository has no valid default branch", "repository_identity_failed")
+    relation = details.get("template_repository")
+    if relation is not None:
+        if not isinstance(relation, dict) or (relation.get("full_name") or "").lower() != template.lower():
+            raise HarnessError("generated repository template relationship could not be verified",
+                               "template_relationship_failed")
+    return branch, relation.get("full_name") if isinstance(relation, dict) else None
+
+
+def template_readback(template, owner, name, token):
+    details = api_request("GET", "repos/%s" % (owner + "/" + name), token)
+    branch, relation = validate_template_identity(details, template, owner, name)
+    ref = api_request("GET", "repos/%s/git/ref/heads/%s" % (
+        owner + "/" + name, urllib.parse.quote(branch, safe="")), token)
+    target = ref.get("object", {}) if isinstance(ref, dict) else {}
+    return {
+        "owner": owner,
+        "name": name,
+        "full_name": "%s/%s" % (owner, name),
+        "template": template,
+        "default_branch": branch,
+        "initial_revision": validate_sha(target.get("sha", "")),
+        "template_relationship": relation or "unavailable",
+        "created_at": details.get("created_at") or "unavailable",
+    }
+
+
+def provision_template_repository(template, owner, name, run_id, token):
+    owner = validate_owner(owner)
+    run_id = str(run_id)
+    prefix = disposable_prefix(run_id)
+    if name not in {disposable_name(prefix, stack) for stack in recipe_keys()}:
+        raise HarnessError("repository name is not scoped to this run", "repository_scope_failed")
+    owner_identity(owner, token)
+    template_details(template, token)
+    full_name = template_repository(template, owner, name, token)
+    return template_readback(template, owner, name, token)
+
+
+def clean_checkout(clone, secrets=()):
+    config = Path(clone) / ".git" / "config"
+    if not config.is_file():
+        raise HarnessError("fresh checkout has no Git configuration", "checkout_invalid")
+    text = config.read_text(encoding="utf-8")
+    if (re.search(r"(?im)^\s*(helper|extraheader)\s*=", text) or
+            "x-access-token:" in text or any(secret and secret in text for secret in secrets)):
+        raise HarnessError("lifecycle credentials persisted in checkout", "credential_leak")
+
+
+def cleanup_template_repository(proof, owner, run_id, token):
+    if not isinstance(proof, dict):
+        raise HarnessError("template cleanup proof is missing", "cleanup_proof_missing")
+    name = proof.get("name")
+    expected = disposable_name(disposable_prefix(run_id), proof.get("stack", "")) if proof.get("stack") else None
+    if (proof.get("owner") != owner or proof.get("run_id") != str(run_id) or
+            not expected or name != expected or proof.get("full_name") != "%s/%s" % (owner, name)):
+        raise HarnessError("template cleanup proof does not match this run", "cleanup_proof_mismatch")
+    owner_identity(owner, token)
+    current = api_request("GET", "repos/%s" % proof["full_name"], token, expected=(200, 404))
+    if current is None:
+        return "already-absent"
+    validate_template_identity(current, proof["template"], owner, name)
+    if (proof.get("created_at") not in (None, "unavailable") and
+            current.get("created_at") != proof["created_at"]):
+        raise HarnessError("repository creation identity changed", "cleanup_identity_failed")
+    delete_repository(proof["full_name"], token)
+    return "deleted"
+
+
+def cleanup_template_evidence(directory, output, template, owner, run_id, token):
+    directory = Path(directory)
+    evidence = {"schema_version": CLEANUP_ENVELOPE_VERSION, "owner": owner or None,
+                "run_id": str(run_id) if str(run_id).isdigit() else None,
+                "template": template or None, "status": "failed", "deleted": [],
+                "already_absent": [], "failures": [],
+                "manual_recovery": "Set BOOTSTRAP_E2E_TOKEN and rerun cleanup-template with the exact owner, run ID, template, and evidence directory."}
+    try:
+        owner = validate_owner(owner)
+        run_id = str(run_id)
+        disposable_prefix(run_id)
+        template = validate_repository(template)
+    except (HarnessError, ValueError) as error:
+        evidence["failures"].append(redacted(error))
+        evidence["manual_recovery"] = "Validate the sandbox owner, numeric run ID, and source template before retrying exact cleanup."
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(json.dumps(evidence, sort_keys=True) + "\n", encoding="utf-8")
+        return evidence
+    if not token:
+        evidence["failures"].append("required lifecycle credential is missing")
+        evidence["manual_recovery"] = (
+            "BOOTSTRAP_E2E_TOKEN=<short-lived-token> python3 scripts/bootstrap-e2e.py cleanup-template "
+            "--owner %s --run-id %s --template %s --evidence-dir <downloaded-evidence>" %
+            (owner, run_id, template))
+    else:
+        evidence["manual_recovery"] = (
+            "BOOTSTRAP_E2E_TOKEN=<short-lived-token> python3 scripts/bootstrap-e2e.py cleanup-template "
+            "--owner %s --run-id %s --template %s --evidence-dir <downloaded-evidence> --output cleanup.json" %
+            (owner, run_id, template))
+    proofs = []
+    evidence_files = []
+    if not evidence["failures"]:
+        for path in sorted(directory.glob("*.json")):
+            try:
+                evidence_files.append(path)
+                if path.stat().st_size > MAX_EVIDENCE_BYTES:
+                    raise HarnessError("template evidence is too large")
+                data = json.loads(path.read_text(encoding="utf-8"))
+                proof = data.get("provisioning") if isinstance(data, dict) else None
+                if isinstance(proof, dict) and proof.get("status") == "verified":
+                    proof = dict(proof)
+                    proof["stack"] = data.get("matrix_case")
+                    proofs.append(proof)
+                elif isinstance(proof, dict) and proof.get("status") not in (None, "not-attempted"):
+                    evidence["failures"].append("unverified provisioning proof in %s" % path.name)
+            except (OSError, ValueError, HarnessError) as error:
+                evidence["failures"].append(redacted("%s: %s" % (path.name, error)))
+    seen = set()
+    for proof in proofs:
+        if proof.get("full_name") in seen:
+            continue
+        seen.add(proof.get("full_name"))
+        try:
+            result = cleanup_template_repository(proof, owner, run_id, token)
+            evidence["already_absent" if result == "already-absent" else "deleted"].append(proof["full_name"])
+        except Exception as error:
+            evidence["failures"].append(redacted("%s: %s" % (proof.get("full_name", "unknown"), error), [token]))
+    if not evidence_files and not evidence["failures"]:
+        evidence["failures"].append("no provisioning evidence was available")
+        evidence["status"] = "recovery-required"
+    elif not proofs and not evidence["failures"]:
+        evidence["status"] = "nothing-to-clean"
+    else:
+        evidence["status"] = "passed" if not evidence["failures"] else "recovery-required"
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(evidence, sort_keys=True) + "\n"
+    if len(serialized.encode("utf-8")) > MAX_EVIDENCE_BYTES:
+        raise HarnessError("cleanup evidence is too large")
+    Path(output).write_text(serialized, encoding="utf-8")
+    return evidence
 
 
 def readback_result(clone, stacks, task_tracker, secrets_provider, code_intelligence):
@@ -558,10 +730,10 @@ def readback_result(clone, stacks, task_tracker, secrets_provider, code_intellig
 def run_template(args):
     template = validate_repository(args.template)
     stack = validate_stack(args.stack)
-    owner = validate_owner(os.environ.get(args.owner_env, ""))
+    owner = os.environ.get(args.owner_env, "").strip()
     token = os.environ.get(args.token_env, "")
     name = disposable_name(disposable_prefix(args.run_id), stack)
-    full_name = "%s/%s" % (owner, name)
+    full_name = "%s/%s" % (owner, name) if owner else None
     evidence = {
         "schema_version": ENVELOPE_VERSION, "source_repository": template, "release_tag": "main",
         "release_sha": None, "release_archive_url": None, "matrix_case": stack,
@@ -574,6 +746,10 @@ def run_template(args):
         "selected_stacks": [stack], "cleanup": "not-attempted", "cleanup_status": "not-attempted",
         "workflow_url": args.workflow_url or None,
     }
+    evidence["provisioning"] = {
+        "status": "not-attempted", "owner": owner, "name": name, "full_name": full_name,
+        "template": template, "run_id": str(args.run_id), "stack": stack,
+    }
     temporary = tempfile.mkdtemp(prefix="template-bootstrap-e2e-")
     created = False
     error = None
@@ -582,21 +758,33 @@ def run_template(args):
             raise HarnessError("%s is not configured" % args.token_env, "configuration_missing")
         if not owner:
             raise HarnessError("%s is not configured" % args.owner_env, "configuration_missing")
-        template_commit = template_sha(template, token)
+        owner = validate_owner(owner)
+        full_name = "%s/%s" % (owner, name)
+        evidence["disposable_repository"] = full_name
+        evidence["provisioning"].update({"owner": owner, "full_name": full_name})
+        source = template_details(template, token)
+        template_commit = source["initial_revision"]
         evidence["release_sha"] = template_commit
-        template_repository(template, owner, name, token)
+        evidence["provisioning"]["status"] = "creating"
+        proof = provision_template_repository(template, owner, name, args.run_id, token)
         created = True
+        evidence["provisioning"].update(proof)
+        evidence["provisioning"]["status"] = "verified"
         with tempfile.TemporaryDirectory(dir=temporary) as git_temp:
             askpass, git_environment = askpass_environment(token, git_temp)
             target_url = "https://github.com/%s" % full_name
-            git(["clone", "--config", "credential.helper=", "--branch", "main", "--single-branch",
+            git(["clone", "--config", "credential.helper=", "--no-tags", "--branch",
+                 proof["default_branch"], "--single-branch",
                  target_url, str(Path(temporary) / "clone")], ROOT, git_environment)
             askpass.unlink(missing_ok=True)
             clone = Path(temporary) / "clone"
             environment = released_environment()
             evidence["tested_head_sha"] = git(["rev-parse", "HEAD"], clone, environment)
-            if evidence["tested_head_sha"] != template_commit:
-                raise HarnessError("generated repository HEAD does not match template", "template_head_mismatch")
+            if evidence["tested_head_sha"] != proof["initial_revision"]:
+                raise HarnessError("generated repository HEAD does not match readback", "template_head_mismatch")
+            clean_checkout(clone, [token])
+            evidence["checks"].append(assertion_result(
+                "credential-boundary", True, "lifecycle credentials are absent from checkout configuration and released environment"))
             start = command_result("cold-start", ["python3", "start.py"], clone, environment)
             evidence["checks"].append(start)
             evidence["checks"].append(assertion_result(
@@ -639,11 +827,7 @@ def run_template(args):
     finally:
         if created:
             try:
-                current = api_request("GET", "repos/%s" % full_name, token, expected=(200, 404))
-                if current:
-                    if current.get("full_name") != full_name:
-                        raise HarnessError("cleanup identity mismatch", "cleanup_identity_failed")
-                    delete_repository(full_name, token)
+                cleanup_template_repository(evidence["provisioning"], owner, args.run_id, token)
                 evidence["cleanup"] = "passed"
                 evidence["cleanup_status"] = "passed"
             except HarnessError as caught:
@@ -654,8 +838,14 @@ def run_template(args):
                 evidence["failure_code"] = "cleanup_failed"
                 evidence["result"] = "failed"
         else:
-            evidence["cleanup"] = "not-created"
-            evidence["cleanup_status"] = "not-created"
+            if evidence["provisioning"]["status"] not in ("not-attempted",):
+                evidence["cleanup"] = "recovery-required"
+                evidence["cleanup_status"] = "recovery-required"
+                evidence["cleanup_error"] = "repository creation was not independently verified"
+                evidence["failure_code"] = "cleanup_recovery_required"
+            else:
+                evidence["cleanup"] = "not-created"
+                evidence["cleanup_status"] = "not-created"
         shutil.rmtree(temporary, ignore_errors=True)
         Path(args.evidence).parent.mkdir(parents=True, exist_ok=True)
         Path(args.evidence).write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -757,6 +947,23 @@ def main():
     cleanup.add_argument("--token-env", default="BOOTSTRAP_E2E_TOKEN")
     cleanup.set_defaults(handler=lambda args: print(json.dumps(cleanup_prefix(
         args.owner, disposable_prefix(args.run_id), os.environ.get(args.token_env, "")))))
+    template_cleanup = subparsers.add_parser("cleanup-template")
+    template_cleanup.add_argument("--template", required=True)
+    template_cleanup.add_argument("--owner", required=True)
+    template_cleanup.add_argument("--run-id", required=True)
+    template_cleanup.add_argument("--evidence-dir", required=True)
+    template_cleanup.add_argument("--output", required=True)
+    template_cleanup.add_argument("--token-env", default="BOOTSTRAP_E2E_TOKEN")
+
+    def template_cleanup_command(args):
+        result = cleanup_template_evidence(
+            args.evidence_dir, args.output, args.template, args.owner, args.run_id,
+            os.environ.get(args.token_env, ""))
+        print(json.dumps(result, sort_keys=True))
+        if result["status"] not in ("passed", "nothing-to-clean"):
+            raise HarnessError("template cleanup requires bounded manual recovery", "cleanup_failed")
+
+    template_cleanup.set_defaults(handler=template_cleanup_command)
     args = parser.parse_args()
     try:
         if args.self_check:
