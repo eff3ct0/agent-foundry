@@ -75,7 +75,9 @@ def test_unexpected_harness_exception_is_written_to_evidence():
         os.environ["OPENAI_MODEL"] = "gpt-5.6-luna"
 
         def fake_git(command, _cwd, _environment):
-            if tuple(command[:2]) in (("rev-parse", "FETCH_HEAD"), ("rev-parse", "HEAD")):
+            if tuple(command[:2]) == ("rev-parse", "HEAD"):
+                raise AttributeError("'NoneType' object has no attribute 'unlink'")
+            if tuple(command[:2]) == ("rev-parse", "FETCH_HEAD"):
                 return sha
             return ""
 
@@ -113,7 +115,7 @@ def test_unexpected_harness_exception_is_written_to_evidence():
         serialized = json.dumps(data)
         assert data["failure_code"] == "harness_exception"
         assert data["exception_type"] == "AttributeError"
-        assert data["exception_location"].endswith(":run_bootstrap")
+        assert data["exception_location"].endswith(":fake_git")
         assert any("AttributeError:" in diagnostic and "unlink" in diagnostic
                    for diagnostic in data["exception_diagnostics"])
         assert "supersecret" not in serialized and "/tmp" not in serialized
