@@ -67,6 +67,7 @@ def check_initializer_lifecycle(init):
                 for placeholder in manifest
             }
             answers.update(PROJECT_NAME="Example", TASK_TRACKER="github-issues", CI_STACKS="python")
+            answers.pop("OPENCODE_PLUGIN", None)
             with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
                 json.dump(answers, answers_file)
             missing_required = subprocess.run(
@@ -95,6 +96,8 @@ def check_initializer_lifecycle(init):
                 command.insert(2, "--no-clean")
             result = subprocess.run(command, cwd=root, capture_output=True, text=True)
             assert result.returncode == 0, (command, result.stdout, result.stderr)
+            plugin = os.path.join(root, ".opencode", "plugins", "factory-start.ts")
+            assert not os.path.exists(plugin), "default setup installed OpenCode plugin"
 
             if no_clean:
                 expected = [
@@ -109,6 +112,30 @@ def check_initializer_lifecycle(init):
                     text=True,
                 )
                 assert check.returncode == 0, (check.stdout, check.stderr)
+                answers["OPENCODE_PLUGIN"] = "true"
+                with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
+                    json.dump(answers, answers_file)
+                opt_in = subprocess.run(
+                    [sys.executable, "init.py", "--no-clean", "--answers", "answers.json"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert opt_in.returncode == 0, (opt_in.stdout, opt_in.stderr)
+                assert os.path.isfile(plugin), "explicit OpenCode opt-in did not install plugin"
+                plugin_content = open(plugin, encoding="utf-8").read()
+                assert plugin_content == open(
+                    os.path.join(root, "hooks", "opencode", "factory-start.ts"), encoding="utf-8"
+                ).read()
+                plugin_mtime = os.stat(plugin).st_mtime_ns
+                repeat_opt_in = subprocess.run(
+                    [sys.executable, "init.py", "--no-clean", "--answers", "answers.json"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert repeat_opt_in.returncode == 0, (repeat_opt_in.stdout, repeat_opt_in.stderr)
+                assert os.stat(plugin).st_mtime_ns == plugin_mtime
                 contract = subprocess.run(
                     [sys.executable, "scripts/check-delivery-contract.py"],
                     cwd=root,
