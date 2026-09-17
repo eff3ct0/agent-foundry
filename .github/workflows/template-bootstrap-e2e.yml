@@ -95,6 +95,14 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+      - name: Download provisioning evidence
+        if: always()
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: template-bootstrap-e2e-${{ github.run_id }}-*
+          path: evidence
+          merge-multiple: true
+          if-no-artifact-found: warn
       - name: Mint lifecycle app token
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
@@ -104,13 +112,29 @@ jobs:
           owner: ${{ vars.BOOTSTRAP_E2E_OWNER }}
           permission-administration: write
           permission-contents: write
-      - name: Delete this run's disposable repositories
+      - name: Delete this run's independently verified repositories
         if: always()
         env:
           BOOTSTRAP_E2E_TOKEN: ${{ steps.app-token.outputs.token }}
           BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
+          REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-        run: python3 scripts/bootstrap-e2e.py cleanup --owner "$BOOTSTRAP_E2E_OWNER" --run-id "$RUN_ID"
+        run: |
+          mkdir -p cleanup
+          python3 scripts/bootstrap-e2e.py cleanup-template \
+            --template "$REPOSITORY" \
+            --owner "$BOOTSTRAP_E2E_OWNER" \
+            --run-id "$RUN_ID" \
+            --evidence-dir evidence \
+            --output cleanup/cleanup.json
+      - name: Upload cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: template-bootstrap-cleanup-${{ github.run_id }}
+          path: cleanup/cleanup.json
+          if-no-files-found: error
+          retention-days: 7
 
   report:
     if: always()

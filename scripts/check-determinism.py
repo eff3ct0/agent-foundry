@@ -381,7 +381,7 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(start, labels, governance, delivery, release_scripts=()):
+def check_scripts(start, labels, governance, delivery, release_scripts=(), real_agent=()):
     catalog = labels.load_labels()
     assert_same_output(start.self_check)
     assert_same_output(lambda: labels.sync(
@@ -394,6 +394,10 @@ def check_scripts(start, labels, governance, delivery, release_scripts=()):
         assert_same_output(reporter.self_check)
         assert_same_output(triage.self_check)
         assert_same_output(workflow.check)
+    if real_agent:
+        checker, focused = real_agent
+        assert_same_output(checker.check)
+        assert_repeatable_command([sys.executable, focused])
 
 
 def check_cli_commands():
@@ -430,6 +434,13 @@ def self_check():
             load_module("triage_bootstrap_failure", "scripts/triage-bootstrap-failure.py"),
             load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
         )
+    real_agent = ()
+    real_agent_paths = ("scripts/check-real-agent-workflow.py", "scripts/test-real-agent-e2e.py")
+    if all(os.path.isfile(os.path.join(ROOT, path)) for path in real_agent_paths):
+        real_agent = (
+            load_module("check_real_agent_workflow", real_agent_paths[0]),
+            real_agent_paths[1],
+        )
     check_initializer(init)
     check_initializer_metadata(init)
     if not os.environ.get(SKIP_LIFECYCLE):
@@ -437,7 +448,7 @@ def self_check():
     if not os.environ.get(SKIP_LIFECYCLE):
         check_initializer_lifecycle(init)
     check_factory_bootstrap(factory)
-    check_scripts(start, labels, governance, delivery, release_scripts)
+    check_scripts(start, labels, governance, delivery, release_scripts, real_agent)
     check_cli_commands()
     print("determinism self-check OK")
 
