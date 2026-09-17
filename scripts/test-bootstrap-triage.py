@@ -190,6 +190,19 @@ def test_cleanup_failure_and_redaction():
 
 
 def test_openai_failure_fallback_and_prompt_injection():
+    successful = {"classification": "initializer", "summary": "The initializer failed.", "reproduction": "Run it."}
+    validated = triage.validate_result(successful, "gpt-5.6-luna")
+    assert all(validated[name] == successful[name] for name in successful)
+    with tempfile.TemporaryDirectory() as directory:
+        triage_file = Path(directory) / "triage.json"
+        triage_file.write_text(json.dumps(validated), encoding="utf-8")
+        loaded = reporter.load_triage(triage_file)
+        body = reporter.build_body(
+            "eff3ct0/factory-template", "v1.0.0", "a" * 40, ["python"],
+            "https://github.com/eff3ct0/factory-template/actions/runs/123",
+            "https://github.com/eff3ct0/factory-template/actions/runs/123", "marker", loaded)
+        assert all(value in body for value in successful.values())
+
     bad_response = {"status": "completed", "output_text": "not-json"}
 
     def fake_openai(_request, timeout=None):
