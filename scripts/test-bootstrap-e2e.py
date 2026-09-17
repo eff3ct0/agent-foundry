@@ -35,6 +35,7 @@ def evidence(directory):
         "check_identifier": "bootstrap-e2e/python",
         "result": "failed",
         "failure_code": "initializer_failed",
+        "openai_model": "gpt-5.6-luna",
         "exit_code": 1,
         "logs": ["token=secret /home/alice/private"],
         "cleanup": "passed",
@@ -114,6 +115,37 @@ def test_workflow_contract():
     assert "OPENAI_API_KEY" in triage_job and "OPENAI_MODEL" in triage_job
     assert "env -i" in triage_job
     assert "cancel-in-progress: false" in text
+    assert "fetch-depth: 0" in bootstrap_job
+    assert "/repos?type=all" not in cleanup_job
+    assert 'path = "repos/%s/%s"' in cleanup_job
+
+
+def test_cleanup_probes_only_run_scoped_repositories():
+    calls = []
+    original_request = bootstrap.api_request
+
+    def fake_request(method, path, token, payload=None, expected=(200, 201, 204)):
+        calls.append((method, path, expected))
+        if method == "DELETE":
+            return {}
+        if path == "users/acme":
+            return {"login": "acme", "type": "Organization"}
+        if path == "repos/acme/bootstrap-e2e-123-python":
+            return {"full_name": "acme/bootstrap-e2e-123-python"}
+        if path.startswith("repos/acme/bootstrap-e2e-123-"):
+            assert expected == (200, 404)
+            return None
+        raise AssertionError(path)
+
+    bootstrap.api_request = fake_request
+    try:
+        assert bootstrap.cleanup_prefix("acme", "bootstrap-e2e-123-", "token") == [
+            "bootstrap-e2e-123-python"
+        ]
+    finally:
+        bootstrap.api_request = original_request
+    assert not any("/repos?" in path for _, path, _ in calls)
+    assert ("DELETE", "repos/acme/bootstrap-e2e-123-python", (204,)) in calls
 
 
 def test_template_bootstrap_contract():
@@ -175,5 +207,6 @@ if __name__ == "__main__":
     test_release_identity_and_environment_boundary()
     test_reporter_is_idempotent_for_existing_issue()
     test_workflow_contract()
+    test_cleanup_probes_only_run_scoped_repositories()
     test_template_bootstrap_contract()
     print("bootstrap E2E offline tests OK")
