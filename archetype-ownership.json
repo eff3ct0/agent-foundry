@@ -18,13 +18,17 @@
         {"path": ".github/workflows/bootstrap-e2e.yml", "kind": "file"},
         {"path": ".github/workflows/template-bootstrap-e2e.yml", "kind": "file"},
         {"path": "docs/smoke-test.md", "kind": "file"},
+        {"path": "docs/real-agent-journey.md", "kind": "file"},
         {"path": "scripts/bootstrap-e2e.py", "kind": "file"},
         {"path": "scripts/check-bootstrap-workflow.py", "kind": "file"},
         {"path": "scripts/release_ref.py", "kind": "file"},
         {"path": "scripts/report-bootstrap-failure.py", "kind": "file"},
         {"path": "scripts/test-bootstrap-e2e.py", "kind": "file"},
         {"path": "scripts/triage-bootstrap-failure.py", "kind": "file"},
-        {"path": "scripts/test-bootstrap-triage.py", "kind": "file"}
+        {"path": "scripts/test-bootstrap-triage.py", "kind": "file"},
+        {"path": ".github/workflows/real-agent-journey-assertions.yml", "kind": "file"},
+        {"path": "scripts/real-agent-journey.py", "kind": "file"},
+        {"path": "scripts/test-real-agent-journey.py", "kind": "file"}
       ]
     },
     "initializer_inputs": {

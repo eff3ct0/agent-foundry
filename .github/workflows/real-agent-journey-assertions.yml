@@ -1,0 +1,86 @@
+name: Real-agent journey assertions
+
+on:
+  workflow_call:
+    inputs:
+      generated-repository:
+        required: true
+        type: string
+      implementation-branch:
+        required: true
+        type: string
+      metadata-artifact:
+        required: true
+        type: string
+      metadata-path:
+        required: true
+        type: string
+      cleanup-artifact:
+        required: true
+        type: string
+      cleanup-path:
+        required: true
+        type: string
+      artifact-url:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      JOURNEY_READ_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  assert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out trusted assertion helper
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Download agent metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ inputs.metadata-artifact }}
+          path: journey-input
+          if-no-artifact-found: warn
+      - name: Download cleanup evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ inputs.cleanup-artifact }}
+          path: journey-cleanup
+          if-no-artifact-found: warn
+      - name: Check out generated implementation
+        continue-on-error: true
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ inputs.generated-repository }}
+          token: ${{ secrets.JOURNEY_READ_TOKEN }}
+          path: generated
+          persist-credentials: false
+      - name: Assert independent journey state
+        env:
+          GITHUB_TOKEN: ${{ secrets.JOURNEY_READ_TOKEN }}
+        run: |
+          mkdir -p journey-evidence
+          python3 scripts/real-agent-journey.py \
+            --input "journey-input/${{ inputs.metadata-path }}" \
+            --checkout generated \
+            --cleanup-evidence "journey-cleanup/${{ inputs.cleanup-path }}" \
+            --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --artifact-url "${{ inputs.artifact-url }}" \
+            --evidence journey-evidence/evidence.json
+      - name: Upload bounded journey evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-journey-evidence-${{ github.run_id }}
+          path: journey-evidence/evidence.json
+          if-no-files-found: error
+          retention-days: 7

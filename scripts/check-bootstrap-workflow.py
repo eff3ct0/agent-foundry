@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "bootstrap-e2e.yml"
 TEMPLATE_WORKFLOW = ROOT / ".github" / "workflows" / "template-bootstrap-e2e.yml"
+JOURNEY_WORKFLOW = ROOT / ".github" / "workflows" / "real-agent-journey-assertions.yml"
 PINNED_ACTIONS = {
     "actions/checkout": "11bd71901bbe5b1630ceea73d27597364c9af683",  # v4.2.2
     "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02",  # v4.6.2
@@ -63,6 +64,19 @@ def check():
     if "OPENAI_API_KEY" in template:
         raise AssertionError("template bootstrap must not receive OpenAI credentials")
     print("template bootstrap workflow static check OK")
+
+    journey = JOURNEY_WORKFLOW.read_text(encoding="utf-8")
+    journey_uses = USE.findall(journey)
+    if not journey_uses or any(not re.fullmatch(r"[^@]+@[0-9a-f]{40}", reference) for reference in journey_uses):
+        raise AssertionError("journey assertion action is not pinned to a full commit SHA")
+    for required in ("workflow_call:", "permissions: {}", "actions: read", "contents: read",
+                     "JOURNEY_READ_TOKEN", "if: always()", "retention-days: 7",
+                     "scripts/real-agent-journey.py", "implementation-branch"):
+        if required not in journey:
+            raise AssertionError("journey assertion workflow is missing %s" % required)
+    if any(value in journey for value in ("OPENAI_API_KEY", "status:approved", "bootstrap-e2e.py template")):
+        raise AssertionError("journey assertion workflow contains an out-of-scope authority or lifecycle operation")
+    print("real-agent journey assertion workflow static check OK")
 
 
 if __name__ == "__main__":
