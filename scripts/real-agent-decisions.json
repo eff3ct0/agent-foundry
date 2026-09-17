@@ -1,0 +1,32 @@
+{
+  "confirm": true,
+  "decisions": {
+    "PROJECT_NAME": "Cold agent journey",
+    "REPO_LANGUAGE": "en",
+    "INTEGRATION_BRANCH": "main",
+    "LANGUAGES_AND_FRAMEWORKS": "Python 3",
+    "PACKAGE_MANAGER": "none",
+    "TASK_TRACKER": "github-issues",
+    "TRACKER_KEY": "repository issues",
+    "SECRETS_PROVIDER": "none",
+    "CODE_INTELLIGENCE": "none",
+    "SECRETS_PATH": "none",
+    "BRANCHING_MODEL": "GitHub flow",
+    "BRANCH_NAMING": "feature/<TICKET_ID>-<short-slug>",
+    "TEST_CMD": "python3 -m unittest test_hello.py",
+    "TDD_POLICY": "tests-first for non-trivial logic",
+    "APPROVAL_GATED_ACTIONS": "merge, release publication, deletion, and protected approval labels require a real human approval",
+    "CI_SYSTEM": "GitHub Actions",
+    "CI_STACKS": "python"
+  },
+  "feature": {
+    "slug": "hello-command",
+    "title": "Add a deterministic hello helper",
+    "acceptance": [
+      "hello('world') returns 'Hello, world!'",
+      "the behavior is covered by test_hello.py",
+      "the configured test command passes"
+    ],
+    "implementation_files": ["hello.py", "test_hello.py"]
+  }
+}

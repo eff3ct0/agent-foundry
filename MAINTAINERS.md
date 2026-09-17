@@ -106,6 +106,35 @@ one disposable repository per recipe from the published template, runs the
 cold-start and `--no-clean` validation matrix, records redacted evidence, and
 uses the same exact-prefix cleanup and deduplicated reporter as release E2E.
 
+## Cold real-agent journey contract
+
+The `.github/workflows/real-agent-e2e.yml` workflow is a reusable/manual
+invocation boundary for issue #89. Provisioning and cleanup are supplied by the
+journey owner; this workflow only checks out the already-created repository and
+runs the agent helper. Its inputs are `repository`, the fresh checkout's full
+`expected_sha`, and an explicit scripted decision fixture. The caller supplies
+`AGENT_API_KEY` and a repository-scoped `AGENT_GITHUB_TOKEN`; no lifecycle token,
+secrets-manager credential, or source checkout credential is passed to Codex.
+
+The selected runtime is Codex CLI `@openai/codex@0.148.0`, invoked with
+`codex exec --json --ephemeral --ignore-user-config --sandbox workspace-write
+--ask-for-approval never`. Each run gets a new `CODEX_HOME`; discovery is a
+read-only cold turn and execution is a second cold turn. The agent must run
+`python3 start.py` first and read `AGENT.md`, `CLAUDE.md`, and
+`docs/agent-init.md`. The scripted fixture supplies every required configuration
+decision explicitly, then permits exactly one feature issue, feature branch,
+implementation, commit, and test flow.
+
+The helper guards `gh` and `git` command paths and fails closed on approval
+labels, merge, release, deletion, protected-branch pushes, refusal, timeout,
+malformed output, or provider failure. Routine issue creation, branch pushes,
+implementation, and verification do not require invented intermediate approval.
+Evidence contains only bounded event classifications and redacted identifiers;
+raw prompts, responses, credentials, and private paths are not retained.
+The CLI contract and safety flags are based on the current official Codex
+documentation: https://learn.chatgpt.com/docs/developer-commands#codex-exec and
+https://learn.chatgpt.com/docs/agent-approvals-security.
+
 The workflow pins every third-party action to a verified full commit SHA:
 
 - `actions/checkout` v4.2.2: `11bd71901bbe5b1630ceea73d27597364c9af683`

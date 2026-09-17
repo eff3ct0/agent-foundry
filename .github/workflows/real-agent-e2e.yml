@@ -1,0 +1,84 @@
+name: Cold real-agent journey
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        required: true
+        type: string
+      expected_sha:
+        required: true
+        type: string
+      decisions_file:
+        required: false
+        type: string
+        default: scripts/real-agent-decisions.json
+    secrets:
+      AGENT_API_KEY:
+        required: true
+      AGENT_GITHUB_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Existing fresh generated repository owner/name
+        required: true
+        type: string
+      expected_sha:
+        description: Full SHA of the fresh checkout before the agent starts
+        required: true
+        type: string
+      decisions_file:
+        description: Scripted decision fixture in this repository
+        required: false
+        default: scripts/real-agent-decisions.json
+        type: string
+
+permissions: {}
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {}
+    steps:
+      - name: Check out trusted journey harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          path: harness
+      - name: Check out fresh generated repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ inputs.repository || github.event.inputs.repository }}
+          token: ${{ secrets.AGENT_GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+          path: journey
+      - name: Install pinned Codex CLI
+        run: npm install --global @openai/codex@0.148.0
+      - name: Invoke cold agent with scripted user
+        env:
+          OPENAI_API_KEY: ${{ secrets.AGENT_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          AGENT_GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN }}
+          REPOSITORY: ${{ inputs.repository || github.event.inputs.repository }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || github.event.inputs.expected_sha }}
+          DECISIONS_FILE: ${{ inputs.decisions_file || github.event.inputs.decisions_file }}
+        run: |
+          mkdir -p evidence
+          python3 harness/scripts/real-agent-e2e.py run \
+            --repository "$REPOSITORY" \
+            --workspace "$GITHUB_WORKSPACE/journey" \
+            --expected-sha "$EXPECTED_SHA" \
+            --decisions "$GITHUB_WORKSPACE/harness/$DECISIONS_FILE" \
+            --evidence evidence/real-agent.json
+      - name: Upload redacted interaction evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-e2e-${{ github.run_id }}
+          path: evidence/real-agent.json
+          if-no-files-found: error
+          retention-days: 7
