@@ -1,7 +1,8 @@
 # Agent mode - initialize a project from the template
 
-Procedure for an **agent** turning this template into a real project: fill
-`<PLACEHOLDER>` values with judgment, including CI stack mapping. Complements
+Procedure for an **agent** turning this template into a real project: propose
+`<PLACEHOLDER>` values with judgment, including CI stack mapping, then present
+the complete configuration for explicit confirmation before applying it. Complements
 [`bootstrap.md`](bootstrap.md), which gives the overview; this is the operating
 step-by-step.
 
@@ -15,7 +16,8 @@ value; `judgment` = decision to justify).
 
 ## Step 1 - Detect the stack
 - **Greenfield** (empty repo): ask for languages/frameworks, package manager, and base commands.
-- **Brownfield** (existing repo): infer from the repository and do not ask what is already clear:
+- **Brownfield** (existing repo): use repository files as proposals and ask for confirmation; do not treat
+  existing metadata as consent:
   - `Cargo.toml` -> `rust`
   - `package.json` / `tsconfig.json` -> `typescript`
   - `pyproject.toml` / `requirements.txt` -> `python`
@@ -28,7 +30,7 @@ Fix the **bound capabilities** (provider contract) before filling values:
 - **Tasks:** `<TASK_TRACKER>` (`jira` / `github-issues` / `github-projects` / `linear` / `custom`) and board `<TRACKER_KEY>`.
 - **Secrets:** `<SECRETS_PROVIDER>` (`infisical` / `vault` / `doppler` / `none` / `custom`) and `<SECRETS_PATH>` when applicable.
 - **Code intelligence:** `<CODE_INTELLIGENCE>` (`none` / `codegraph` / `custom`), defaulting to `none` so the template adds no dependency unless selected.
-- **Brownfield:** choose from explicit project configuration or ask the user. A local `.github/` directory contains repository-local templates/workflows and is not proof of a separate organization `.github` repository or a GitHub Issues/Projects provider. Do not trust stale provider text. Likewise, repository identity is checked against the local Git `origin` before initialization continues.
+- **Brownfield:** choose from explicit project configuration or ask the user. Repository files may suggest candidates, but the owner must explicitly choose each provider. A local `.github/` directory contains repository-local templates/workflows and is not proof of a separate organization `.github` repository or a GitHub Issues/Projects provider. Do not trust stale provider text. Repository identity is checked against the local Git `origin` before initialization continues.
 
 The shape of each fragment is defined by the abstract capability contracts:
 [`providers/task/_contract.md`](../providers/task/_contract.md),
@@ -84,10 +86,31 @@ Run the script with `kind: mechanical` values (including `TASK_TRACKER`,
 `SECRETS_PROVIDER`, `CI_STACKS`, `CI_SYSTEM`, and `REPO_LANGUAGE`):
 
 ```
-python3 init.py --set PROJECT_NAME=<...> --set REPO_LANGUAGE=en --set CI_STACKS=rust,typescript --set CI_SYSTEM='GitHub Actions' ...
+python3 init.py --set PROJECT_NAME=<...> --set REPO_LANGUAGE=en --set CI_STACKS=rust,typescript --set CI_SYSTEM='GitHub Actions' --confirm ...
 ```
 
-Or use a file: `python3 init.py --answers answers.json`.
+For non-interactive use, every required decision must be supplied and the final
+configuration must be confirmed. `--confirm` confirms CLI values and defaults;
+an answers file keeps the existing flat key/value shape and adds a JSON boolean:
+
+```json
+{
+  "PROJECT_NAME": "Example",
+  "TASK_TRACKER": "github-issues",
+  "confirm": true
+}
+```
+
+Run it with `python3 init.py --answers answers.json`. Missing confirmation or
+missing required decisions fails closed before provider, tracker, repository,
+CI, workflow, replacement, or cleanup actions. Interactive runs show the same
+proposal and ask `Apply this configuration? [y/N]`. Manifest defaults and
+existing `AGENT.md` values are proposals only.
+
+If `REPO_URLS` or an existing rendered `AGENT.md` repository value conflicts
+with the local `origin`, initialization stops before any write. Resolve the
+value explicitly and confirm it. `init.py` reads only local git metadata and
+never creates or verifies a remote repository.
 
 ## Step 4 - Resolve judgment values
 Provide one sentence of justification for each, aligned with existing

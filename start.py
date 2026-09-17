@@ -41,7 +41,7 @@ MESSAGES = {
         "SETUP mode - uninitialized instance (placeholders.json exists).\n"
         "  - Follow docs/agent-init.md; detect the stack.\n"
         "  - Run init.py with --no-clean (to verify with --check).\n"
-        "  - Compose bindings + CI; ask about anything you cannot infer.\n"
+        "  - Present and explicitly confirm all configuration proposals before composing bindings + CI.\n"
         "  - No outward action without explicit approval."
     ),
     WORK: (

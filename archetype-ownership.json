@@ -71,7 +71,8 @@
         {"path": "scripts/sync-github-labels.py", "kind": "file"},
         {"path": "start.py", "kind": "file"},
         {"path": "templates", "kind": "directory"},
-        {"path": "test_factory_bootstrap.py", "kind": "file"}
+        {"path": "test_factory_bootstrap.py", "kind": "file"},
+        {"path": "test_init.py", "kind": "file"}
       ]
     },
     "generated_outputs": {

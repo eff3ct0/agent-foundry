@@ -47,7 +47,8 @@ python3 start.py
 
 In **SETUP** mode, follow [`docs/agent-init.md`](docs/agent-init.md). Review
 the proposed changes first with `python3 init.py --dry-run --no-clean`, then
-run the chosen initialization command and finish with `python3 init.py --check`.
+run the chosen initialization command with explicit confirmation and finish
+with `python3 init.py --check`.
 The agent should ask the owner to confirm project identity, stack and base
 commands when unclear, task and secrets providers, persistence language,
 branching and CI policy, and approval-gated actions. It may infer existing
@@ -61,12 +62,10 @@ or confirmed by the owner.
 Hooks and plugins are opt-in. Copy only the adapter for the harness you intend
 to use; none is installed silently, and every adapter only runs `start.py`.
 
-For **OpenCode**, explicitly install the local plugin before starting the
-session:
+For **OpenCode**, explicitly enable the local plugin during initialization:
 
 ```sh
-mkdir -p .opencode/plugins
-cp hooks/opencode/factory-start.ts .opencode/plugins/factory-start.ts
+python3 init.py --set OPENCODE_PLUGIN=true --confirm
 ```
 
 Then start OpenCode in the repository. For the equivalent paths, follow the

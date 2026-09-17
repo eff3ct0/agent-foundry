@@ -67,6 +67,7 @@ def check_initializer_lifecycle(init):
                 for placeholder in manifest
             }
             answers.update(PROJECT_NAME="Example", TASK_TRACKER="github-issues", CI_STACKS="python")
+            answers["confirm"] = True
             answers.pop("OPENCODE_PLUGIN", None)
             with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
                 json.dump(answers, answers_file)
@@ -257,10 +258,12 @@ def check_initializer_metadata(init):
         assert rejected.returncode != 0
         assert "explicit confirmation" in rejected.stderr, rejected.stderr
 
+        answers["confirm"] = True
+        with open(answers_path, "w", encoding="utf-8") as f:
+            json.dump(answers, f)
         accepted = subprocess.run(
             [sys.executable, "init.py", "--no-clean", "--defaults", "--answers", "answers.json"],
             cwd=root,
-            input="y\n",
             capture_output=True,
             text=True,
         )

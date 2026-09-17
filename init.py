@@ -4,9 +4,9 @@
 
 Usage:
   python3 init.py                       # interactive (asks for each placeholder)
-  python3 init.py --defaults            # use manifest defaults, do not ask
-  python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='pytest -q'
-  python3 init.py --answers answers.json
+  python3 init.py --defaults --confirm  # use manifest proposals after confirmation
+  python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='pytest -q' --confirm
+  python3 init.py --answers answers.json # answers.json must contain "confirm": true
   python3 init.py --check               # check required manifest placeholders (CI; nonzero if any)
   python3 init.py --dry-run             # show changes without writing
   python3 init.py --self-check          # internal replacement test
@@ -14,6 +14,10 @@ Options: --no-clean (do not remove the ownership manifest's removed paths at the
          --no-ci (do not compose the CI workflow).
 
 Value precedence: --set  >  --answers  >  interactive prompt  >  manifest default.
+Every normal run presents the resulting proposals before writing. Interactive runs
+require a final yes/no confirmation; non-interactive runs require --confirm or a
+JSON boolean "confirm": true in the answers file. Manifest defaults and existing
+AGENT.md values are proposals, never consent.
 Only manifest keys are replaced. Local template tokens (<TICKET_ID>, <CRITERION_1>,
 <DATE>, <NNN>, ...) remain for filling when each template is used. A key without
 a value is NOT touched (it remains <KEY> and required keys are reported by
@@ -47,6 +51,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 MANIFEST = os.path.join(ROOT, "placeholders.json")
@@ -183,15 +188,17 @@ def _repository_identity(value):
     value = (value or "").strip(" `").rstrip("/")
     if not value or value.startswith("<"):
         return None
-    if "://" in value:
-        value = value.split("://", 1)[1]
-    if "@" in value and ":" in value.split("/", 1)[0]:
-        value = value.split("@", 1)[1]
-    elif value.startswith("git@"):
-        value = value[4:]
-    if ":" in value and "/" not in value.split(":", 1)[0]:
-        value = value.replace(":", "/", 1)
-    return value.removesuffix(".git").lower()
+    if value.startswith("git@") and ":" in value:
+        host, path = value[4:].split(":", 1)
+    else:
+        parsed = urlsplit(value if "://" in value else "https://github.com/" + value)
+        host, path = parsed.hostname or parsed.netloc, parsed.path
+    path = path.strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
+    if not host or not path:
+        return None
+    return "%s/%s" % (host.lower(), path.lower())
 
 
 def _repository_matches(value, origin):
@@ -241,7 +248,7 @@ def _replace_declared_repository_url(root, value, dry_run):
         print("Updated repository metadata in AGENT.md.")
 
 
-def reconcile_repository_metadata(root, values, dry_run=False, confirm=None):
+def reconcile_repository_metadata(root, values, dry_run=False, confirm=None, apply=True):
     """Require confirmation before replacing repository metadata that disagrees with origin."""
     origin = _origin_url(root)
     declared = _declared_repository_url(root)
@@ -253,7 +260,12 @@ def reconcile_repository_metadata(root, values, dry_run=False, confirm=None):
     if not origin or not stale:
         if origin and declared_stale and selected:
             values["REPO_URLS"] = origin
-            _replace_declared_repository_url(root, origin, dry_run)
+            if apply:
+                _replace_declared_repository_url(root, origin, dry_run)
+        return
+    if dry_run:
+        values["REPO_URLS"] = origin
+        _replace_declared_repository_url(root, origin, dry_run)
         return
     if confirm is None:
         confirm = _confirm_repository
@@ -263,7 +275,8 @@ def reconcile_repository_metadata(root, values, dry_run=False, confirm=None):
     ):
         sys.exit("Repository metadata conflict requires explicit confirmation.")
     values["REPO_URLS"] = origin
-    _replace_declared_repository_url(root, origin, dry_run)
+    if apply:
+        _replace_declared_repository_url(root, origin, dry_run)
 
 
 def _confirm_repository(prompt):
@@ -352,11 +365,21 @@ def gather(ph, args):
             sys.exit("--set expects KEY=VALUE, received: %r" % pair)
         k, v = pair.split("=", 1)
         cli[k.strip()] = v
+    unknown = set(cli) - {p["key"] for p in ph}
+    if unknown:
+        sys.exit("Unknown --set keys: %s" % ", ".join(sorted(unknown)))
     answers = {}
     if args.answers:
         with open(args.answers, encoding="utf-8") as f:
             answers = json.load(f)
+        if not isinstance(answers, dict):
+            sys.exit("Answers file must contain a JSON object.")
+        unknown = set(answers) - {p["key"] for p in ph} - {"confirm"}
+        if unknown:
+            sys.exit("Unknown answers: %s" % ", ".join(sorted(unknown)))
+    args.answers_confirmed = answers.get("confirm") is True
     values = {}
+    interactive = not (args.defaults or args.answers or args.set) and sys.stdin.isatty()
     for p in ph:
         key = p["key"]
         default = p.get("default", "")
@@ -364,7 +387,7 @@ def gather(ph, args):
             val = cli[key]
         elif key in answers:
             val = str(answers[key])
-        elif args.defaults:
+        elif args.defaults or not interactive:
             val = default
         else:
             kind = p.get("kind", "")
@@ -384,6 +407,76 @@ def gather(ph, args):
     if missing:
         sys.exit("Missing required placeholders: %s" % ", ".join(missing))
     return values
+
+
+def repository_conflict(root, configured):
+    """Return a conflict message when metadata disagrees with the local origin."""
+    origin = _origin_url(root)
+    origin_identity = _repository_identity(origin)
+    if not origin_identity:
+        return ""
+    proposed = configured.strip() or _declared_repository_url(root)
+    if proposed and not _repository_matches(proposed, origin):
+        return (
+            "Repository metadata conflicts with git origin: origin=%s; proposed=%s. "
+            "Set REPO_URLS to the intended repository and confirm it explicitly."
+            % (origin, proposed)
+        )
+    return ""
+
+
+def show_configuration(ph, values):
+    print("Configuration proposals (not consent; no files changed yet):")
+    for placeholder in ph:
+        key = placeholder["key"]
+        print("  %-28s %s" % (key, values.get(key) or "(empty)"))
+    ci_system = values.get("CI_SYSTEM", "")
+    stacks = values.get("CI_STACKS", "")
+    workflow = ".github/workflows/ci.yml" if "github" in ci_system.lower() and stacks.strip() else "not generated"
+    print("  %-28s %s" % ("GENERATED_WORKFLOW", workflow))
+    print("Existing AGENT.md values and manifest defaults are proposals only.")
+
+
+def confirm_configuration(ph, values, args, display=True):
+    if display:
+        show_configuration(ph, values)
+    if args.dry_run:
+        print("(dry-run: confirmation is not required; nothing will be written)")
+        return
+    if getattr(args, "confirm", False) or getattr(args, "answers_confirmed", False):
+        return
+    if not sys.stdin.isatty() or args.answers or args.defaults or args.set:
+        sys.exit(
+            "Non-interactive initialization requires --confirm or JSON boolean "
+            '\"confirm\": true in --answers; no files were changed.'
+        )
+    try:
+        accepted = input("Apply this configuration? [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:
+        accepted = False
+    if not accepted:
+        sys.exit("Initialization cancelled; no files were changed.")
+
+
+def apply_repository_metadata(root, repository, dry_run=False):
+    """Replace a rendered AGENT repository proposal after confirmation."""
+    if not repository:
+        return False
+    path = os.path.join(root, "AGENT.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return False
+    pattern = re.compile(r"(Repositories:\s*`)([^`]+)(`)")
+    match = pattern.search(text)
+    if not match or match.group(2) == repository:
+        return False
+    updated = pattern.sub(r"\g<1>" + repository + r"\g<3>", text, count=1)
+    if not dry_run:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(updated)
+    return True
 
 
 def parse_stacks(value):
@@ -581,6 +674,7 @@ def configure_opencode_plugin(root, enabled, dry_run=False):
 
 
 def self_check():
+    global _origin_url
     d = tempfile.mkdtemp()
     try:
         fp = os.path.join(d, "x.md")
@@ -757,29 +851,42 @@ def self_check():
 
         d5 = tempfile.mkdtemp()
         try:
-            subprocess.run(["git", "init", "-q", d5], check=True)
-            subprocess.run(
-                ["git", "remote", "add", "origin", "git@github.com:acme/project.git"],
-                cwd=d5,
-                check=True,
-            )
             with open(os.path.join(d5, "AGENT.md"), "w", encoding="utf-8") as f:
-                f.write("- Name: Example - Repositories: https://github.com/stale/project\n")
-            values = {"REPO_URLS": ""}
+                f.write("- Name: Example - Repositories: `acme/stale`\n")
+            original_origin = _origin_url
+            _origin_url = lambda root: "git@github.com:acme/current.git"
             try:
-                reconcile_repository_metadata(d5, values, confirm=lambda _: False)
+                conflict = repository_conflict(d5, "")
+                assert "acme/current.git" in conflict and "acme/stale" in conflict, conflict
+                assert repository_conflict(d5, "https://github.com/acme/current") == ""
+            finally:
+                _origin_url = original_origin
+
+            os.makedirs(os.path.join(d5, ".github"))
+            no_provider = type("Args", (), {
+                "set": [], "answers": None, "defaults": False,
+            })()
+            try:
+                gather(load_manifest(), no_provider)
             except SystemExit as exc:
-                assert "explicit confirmation" in str(exc), exc
+                assert "TASK_TRACKER" in str(exc), exc
             else:
-                raise AssertionError("stale repository metadata must require confirmation")
-            reconcile_repository_metadata(d5, values, confirm=lambda _: True)
-            assert values["REPO_URLS"] == "git@github.com:acme/project.git"
-            assert "git@github.com:acme/project.git" in open(
-                os.path.join(d5, "AGENT.md"), encoding="utf-8"
-            ).read()
-            assert _repository_matches(
-                "https://github.com/acme/project", values["REPO_URLS"]
-            )
+                raise AssertionError("local .github must not select a task provider")
+
+            noninteractive = type("Args", (), {
+                "set": ["PROJECT_NAME=Example", "TASK_TRACKER=custom"],
+                "answers": None, "defaults": True, "confirm": False,
+                "dry_run": False,
+            })()
+            values = gather(load_manifest(), noninteractive)
+            try:
+                confirm_configuration(load_manifest(), values, noninteractive, display=False)
+            except SystemExit as exc:
+                assert "--confirm" in str(exc), exc
+            else:
+                raise AssertionError("non-interactive initialization must require confirmation")
+            noninteractive.confirm = True
+            confirm_configuration(load_manifest(), values, noninteractive, display=False)
         finally:
             shutil.rmtree(d5)
 
@@ -793,6 +900,8 @@ def main():
     ap.add_argument("--set", action="append", metavar="KEY=VALUE")
     ap.add_argument("--answers", metavar="FILE.json")
     ap.add_argument("--defaults", action="store_true")
+    ap.add_argument("--confirm", action="store_true",
+                    help="confirm the displayed configuration (required non-interactively)")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-clean", action="store_true")
@@ -819,7 +928,17 @@ def main():
         return
 
     values = gather(ph, args)
-    reconcile_repository_metadata(ROOT, values, dry_run=args.dry_run)
+    show_configuration(ph, values)
+    reconcile_repository_metadata(
+        ROOT,
+        values,
+        dry_run=args.dry_run,
+        confirm=(lambda _prompt: True if args.confirm or args.answers_confirmed
+                 else _confirm_repository(_prompt)),
+        apply=False,
+    )
+    confirm_configuration(ph, values, args, display=False)
+    reconcile_repository_metadata(ROOT, values, confirm=lambda _prompt: True)
     # Deterministic offline prerequisite: a required factory must have FACTORY_SPEC.
     if str(values.get("FACTORY_REQUIRED", "")).strip().lower() == "true" and not values.get("FACTORY_SPEC", "").strip():
         sys.exit("FACTORY_REQUIRED=true but FACTORY_SPEC is empty: declare the organization baseline (e.g. org/factory@v1) before initialization.")
@@ -845,6 +964,8 @@ def main():
     configure_opencode_plugin(ROOT, values.get("OPENCODE_PLUGIN", "false"), dry_run=args.dry_run)
     nonempty = {k: v for k, v in values.items() if v}
     changes = apply_values(ROOT, nonempty, dry_run=args.dry_run)
+    if apply_repository_metadata(ROOT, values.get("REPO_URLS", ""), dry_run=args.dry_run):
+        changes[os.path.join(ROOT, "AGENT.md")] = changes.get(os.path.join(ROOT, "AGENT.md"), 0) + 1
     total = sum(changes.values())
     print("%d placeholders %s in %d file(s)." % (
         total, "would change" if args.dry_run else "replaced", len(changes)))
