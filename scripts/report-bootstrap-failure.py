@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deduplicate and report failed release bootstrap E2E runs."""
+"""Deduplicate and report failed bootstrap E2E runs."""
 import argparse
 import hashlib
 import json
@@ -383,7 +383,8 @@ def artifact_url(repository, run_id, token, fallback):
     artifacts = paginate("repos/%s/actions/runs/%s/artifacts?per_page=100" % (repository, run_id), token, "artifacts")
     if len(artifacts) > MAX_ARTIFACT_RESULTS:
         raise ReporterError("too many artifacts")
-    matches = [item for item in artifacts if item.get("name", "").startswith("bootstrap-e2e-%s-" % run_id)]
+    prefixes = ("bootstrap-e2e-%s-" % run_id, "template-bootstrap-e2e-%s-" % run_id)
+    matches = [item for item in artifacts if any(item.get("name", "").startswith(prefix) for prefix in prefixes)]
     if not matches or not isinstance(matches[0].get("id"), int):
         return fallback
     return "https://github.com/%s/actions/runs/%s/artifacts/%s" % (repository, run_id, matches[0]["id"])
@@ -416,6 +417,32 @@ def build_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_t
         lines.append("Advisory triage: unavailable; deterministic evidence is authoritative.")
     lines.extend(["", "### Severity", "High"])
     body = "\n".join(lines)
+    if len(body) > MAX_BODY_CHARS:
+        raise ReporterError("generated issue body is too large")
+    validate_body(body)
+    return body
+
+
+def build_template_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_text):
+    tag_text = "`%s`" % tag if tag else "the published default branch"
+    sha_text = "`%s`" % sha if sha else "unavailable (template revision was not resolved)"
+    body = "\n".join([
+        "### Steps to reproduce",
+        "1. Run the template bootstrap E2E for %s in `%s`." % (tag_text, repository),
+        "2. Observe the workflow at %s." % workflow_url,
+        "3. Review the redacted evidence artifact at %s." % artifact_url,
+        "", "### Expected behavior",
+        "A disposable repository generated from the published template initializes successfully and passes the validation matrix.",
+        "", "### Actual behavior",
+        "The template bootstrap E2E failed for: %s." % ", ".join("`%s`" % case for case in cases),
+        "Template revision: %s" % sha_text,
+        "Workflow: %s" % workflow_url,
+        "Evidence artifact: %s" % artifact_url,
+        marker_text,
+        "", "### Environment",
+        "GitHub Actions template bootstrap E2E for `%s`; generated from %s." % (repository, sha_text),
+        "", "### Severity", "High",
+    ])
     if len(body) > MAX_BODY_CHARS:
         raise ReporterError("generated issue body is too large")
     validate_body(body)
@@ -525,7 +552,12 @@ def report(args):
         triage = load_triage(getattr(args, "triage_file", None))
     except ReporterError:
         triage = {"status": "fallback", "selected_model": None}
-    body = build_body(repository, tag, sha, cases, workflow_url, artifact, marker_text, triage)
+    if getattr(args, "template_e2e", False):
+        body = build_template_body(repository, tag, sha, cases, workflow_url, artifact, marker_text)
+        title = "[Bug] Template bootstrap E2E failed: %s" % (tag or "published template")
+    else:
+        body = build_body(repository, tag, sha, cases, workflow_url, artifact, marker_text, triage)
+        title = "[Bug] Release bootstrap E2E failed: %s" % (tag or "release preparation")
     matches = search_issues(repository, marker_text, token, fingerprints)
     if matches:
         issue = matches[0]
@@ -541,7 +573,6 @@ def report(args):
         confirm_comment(repository, issue_number, comment_id, marker_text, token)
         print("commented canonical issue #%s" % issue_number)
         return
-    title = "[Bug] Release bootstrap E2E failed: %s" % (tag or "release preparation")
     created = request("POST", "repos/%s/issues" % repository, token,
                       {"title": title, "body": body, "labels": ["type:bug"]}, expected=(201,))
     issue_number = created.get("number") if isinstance(created, dict) else None
@@ -571,6 +602,10 @@ def self_check():
                       "https://github.com/eff3ct0/factory-template/actions/runs/123", failure_marker)
     assert "token=" not in body.lower()
     assert "### Severity\nHigh" in body
+    template_body = build_template_body("eff3ct0/factory-template", "main", commit, ["python"],
+                                         "https://github.com/eff3ct0/factory-template/actions/runs/123",
+                                         "https://github.com/eff3ct0/factory-template/actions/runs/123", failure_marker)
+    assert "generated from" in template_body
     advisory = {"status": "success", "selected_model": "gpt-4o-mini", "classification": "initializer",
                 "summary": "The initializer failed.", "reproduction": "Run the released initializer for the matrix case."}
     advisory_body = build_body("eff3ct0/factory-template", "v0.1.0", commit, ["python"],
@@ -591,6 +626,7 @@ def main():
     report_parser.add_argument("--tag")
     report_parser.add_argument("--sha")
     report_parser.add_argument("--triage-file")
+    report_parser.add_argument("--template-e2e", action="store_true")
     report_parser.add_argument("--workflow-url", required=True)
     report_parser.add_argument("--artifact-url", required=True)
     report_parser.add_argument("--evidence-dir")

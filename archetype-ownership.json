@@ -16,6 +16,7 @@
       "disposition": "removed",
       "paths": [
         {"path": ".github/workflows/bootstrap-e2e.yml", "kind": "file"},
+        {"path": ".github/workflows/template-bootstrap-e2e.yml", "kind": "file"},
         {"path": "docs/smoke-test.md", "kind": "file"},
         {"path": "scripts/bootstrap-e2e.py", "kind": "file"},
         {"path": "scripts/check-bootstrap-workflow.py", "kind": "file"},

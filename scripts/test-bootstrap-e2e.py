@@ -90,7 +90,7 @@ def test_reporter_is_idempotent_for_existing_issue():
                                artifact_url="https://github.com/eff3ct0/factory-template/actions/runs/123",
                                evidence_dir=directory, failed_case=[], prepare_status="success",
                                bootstrap_status="success", cleanup_status="success", run_id="123",
-                               token_env="TEST_TOKEN", tag_env="TEST_TAG", sha_env="TEST_SHA")
+                               token_env="TEST_TOKEN", tag_env="TEST_TAG", sha_env="TEST_SHA", template_e2e=True)
         old_request = reporter.request
         reporter.request = fake
         try:
@@ -116,8 +116,64 @@ def test_workflow_contract():
     assert "cancel-in-progress: false" in text
 
 
+def test_template_bootstrap_contract():
+    arguments = bootstrap.initializer_arguments(
+        "acme/bootstrap", "python", "github-issues", "none", "codegraph"
+    )
+    assert "--no-clean" in arguments
+    assert "--set" in arguments
+    assert "CODE_INTELLIGENCE=codegraph" in arguments
+    assert "TASK_TRACKER=github-issues" in arguments
+    assert "SECRETS_PROVIDER=none" in arguments
+
+    calls = []
+    original_request = bootstrap.api_request
+
+    def fake_request(method, path, token, payload=None, expected=(200, 201, 204)):
+        calls.append((method, path, payload, expected))
+        if method == "GET":
+            return None
+        return {"full_name": "acme/bootstrap-e2e-1-python"}
+
+    bootstrap.api_request = fake_request
+    try:
+        assert bootstrap.template_repository(
+            "eff3ct0/factory-template", "acme", "bootstrap-e2e-1-python", "token"
+        ) == "acme/bootstrap-e2e-1-python"
+    finally:
+        bootstrap.api_request = original_request
+    assert calls[0][1] == "repos/acme/bootstrap-e2e-1-python"
+    assert calls[1][1] == "repos/eff3ct0/factory-template/generate"
+    assert calls[1][2]["private"] is True
+
+    text = (ROOT / ".github" / "workflows" / "template-bootstrap-e2e.yml").read_text(encoding="utf-8")
+    for marker in (
+        "workflow_dispatch:", "scripts/bootstrap-e2e.py template",
+        "template-bootstrap-e2e-", "if: always()", "issues: write",
+    ):
+        assert marker in text, marker
+
+    with tempfile.TemporaryDirectory() as directory:
+        bindings = Path(directory) / "docs"
+        workflow = Path(directory) / ".github" / "workflows"
+        bindings.mkdir(parents=True)
+        workflow.mkdir(parents=True)
+        (bindings / "bindings.md").write_text(
+            "> **Provider:** `github-issues`\n> **Provider:** `none`\n> **Provider:** `codegraph`\n",
+            encoding="utf-8",
+        )
+        (workflow / "ci.yml").write_text(
+            "jobs:\n  python:\n    runs-on: ubuntu-latest\n", encoding="utf-8"
+        )
+        checks = bootstrap.readback_result(
+            Path(directory), ["python"], "github-issues", "none", "codegraph"
+        )
+        assert all(check["status"] == "passed" for check in checks), checks
+
+
 if __name__ == "__main__":
     test_release_identity_and_environment_boundary()
     test_reporter_is_idempotent_for_existing_issue()
     test_workflow_contract()
+    test_template_bootstrap_contract()
     print("bootstrap E2E offline tests OK")

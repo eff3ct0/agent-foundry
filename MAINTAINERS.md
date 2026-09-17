@@ -15,7 +15,7 @@ workflows and generated project files remain.
 | Category | Lifecycle | Examples and rule |
 | --- | --- | --- |
 | Archetype governance | Removed after initialization | `init.py`, `factory_bootstrap.py`, this file, and source change records exist only to operate the archetype. |
-| Release E2E / OpenAI triage | Removed after initialization | The release workflow, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/factory-template`. |
+| Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/factory-template`. |
 | Initializer inputs | Removed after initialization | `placeholders.json` is consumed before cleanup; it must not be deleted before replacement, validation, or composition. |
 | Provider and CI recipes | Removed after initialization | `providers/` and `ci/` are composition inputs. They stay available until bindings and CI are generated, then are removed as a unit. |
 | Inherited generic assets | Retained | `start.py`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic checkers belong to every initialized project. |
@@ -98,6 +98,11 @@ runner loss, forced cancellation, or missing credentials can leave cleanup
 pending; restore the credential, inspect the owner, and run
 `python3 scripts/bootstrap-e2e.py cleanup --owner "$BOOTSTRAP_E2E_OWNER" --run-id "$GITHUB_RUN_ID"`
 with the exact run ID. Do not broaden the prefix or delete unrelated repos.
+
+The template bootstrap workflow is a manual, maintainer-only check. It generates
+one disposable repository per recipe from the published template, runs the
+cold-start and `--no-clean` validation matrix, records redacted evidence, and
+uses the same exact-prefix cleanup and deduplicated reporter as release E2E.
 
 The workflow pins every third-party action to a verified full commit SHA:
 
