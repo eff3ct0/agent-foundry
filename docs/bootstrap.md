@@ -16,7 +16,7 @@ is the single source of truth for project-level placeholders:
 - **Script (`init.py`, Python 3 stdlib):** deterministic and repeatable replacement.
   - Interactive: `python3 init.py`
   - Non-interactive: `python3 init.py --set PROJECT_NAME=Foo --set TEST_CMD='...'`, `--answers answers.json`, or `--defaults`.
-  - `python3 init.py --dry-run` shows changes without writing. Normal initialization consumes the source template's ownership contract during cleanup; `--no-clean` keeps all source-only inputs for verification.
+  - `python3 init.py --dry-run` shows changes without writing. Normal initialization consumes the source template's ownership contract during cleanup, removing source-only governance, provider/CI inputs, and release E2E/triage assets while retaining generic checkers, workflows, and generated outputs; `--no-clean` keeps source-only inputs for verification.
   - Release bootstrap E2E and OpenAI triage are maintainer-only operations for `eff3ct0/factory-template`; initialized projects do not receive their workflow, helpers, or tests.
   - An empty value remains `<KEY>` (it is not deleted), so the checklist can detect it.
   - Before normal cleanup, run [`scripts/check-determinism.py`](../scripts/check-determinism.py) for repeatability and generated-file timestamp guarantees. With `--no-clean`, the checker remains available for further template checks.

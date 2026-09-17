@@ -30,6 +30,8 @@ single authoritative ownership contract is `archetype-ownership.json`; `init.py`
 consumes its `removed` entries after replacement and composition. The fixture
 check above protects the boundary: provider/CI inputs are present before
 cleanup, while generic workflows and generated project files are retained.
+Cleanup is intentionally one-shot for the removed source-only inputs and is not
+part of dry-run mode.
 
 ## Network, workflows, and procedures
 
