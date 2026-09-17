@@ -113,7 +113,7 @@ match real languages and adjust commands if the project uses custom scripts.
 
 ## Step 7 - Finish
 - Make the first commit using conventional commits.
-- The script auto-cleans `init.py`, `placeholders.json`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, `scripts/check-determinism.py`, `ci/`, and `providers/`; generated `ci.yml` and `docs/bindings.md` remain. Use `--no-clean` if the determinism checker must remain available for further template checks.
+- The script applies the source ownership contract during cleanup: archetype-only governance, release tooling, initializer inputs, and provider/CI recipes are removed after use; generic contracts and generated `.github/workflows/ci.yml` plus `docs/bindings.md` remain.
 - No required manifest `<KEY>` should remain unresolved; optional keys may remain intentionally empty.
 
 ## Anti-error note
