@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate the mechanical GitHub pull-request governance contract."""
+
 import json
 import os
 import re
@@ -22,7 +23,9 @@ def issue_numbers(body, repository):
     numbers = []
     for match in CLOSE_REFERENCE.finditer(body or ""):
         qualified = match.group("owner") and "%s/%s" % (
-            match.group("owner"), match.group("repo"))
+            match.group("owner"),
+            match.group("repo"),
+        )
         if qualified and qualified.lower() != repository:
             continue
         number = int(match.group("number"))
@@ -44,7 +47,9 @@ def validate_pr(pull_request, issue_labels, repository=None):
     for number in references:
         labels_for_issue = issue_labels.get(number, [])
         if "status:approved" not in labels_for_issue:
-            errors.append("linked issue #%d must have the human status:approved label" % number)
+            errors.append(
+                "linked issue #%d must have the human status:approved label" % number
+            )
     return errors
 
 
@@ -71,9 +76,13 @@ def validate_event(event, repository, token):
 
 def self_check():
     root = Path(__file__).resolve().parents[1]
-    workflow = (root / ".github" / "workflows" / "governance.yml").read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "governance.yml").read_text(
+        encoding="utf-8"
+    )
     assert re.search(r"^  %s:$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE)
-    assert re.search(r"^    name: %s$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE)
+    assert re.search(
+        r"^    name: %s$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE
+    )
     for template in (
         root / ".github" / "pull_request_template.md",
         root / "templates" / "pull-request.md",
@@ -89,7 +98,9 @@ def self_check():
     assert validate_pr(valid, {42: ["status:approved"]}, "acme/example") == []
     assert validate_pr(valid, {42: []}, "acme/example")
     assert validate_pr({"body": "Closes #42", "labels": []}, {42: []}, "acme/example")
-    assert issue_numbers("Fixes acme/example#7 and closes other/repo#8", "acme/example") == [7]
+    assert issue_numbers(
+        "Fixes acme/example#7 and closes other/repo#8", "acme/example"
+    ) == [7]
     print("self-check OK")
 
 

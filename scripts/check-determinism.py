@@ -69,12 +69,23 @@ def check_initializer_lifecycle():
             with open(os.path.join(root, "placeholders.json"), encoding="utf-8") as manifest_file:
                 manifest = json.load(manifest_file)["placeholders"]
             answers = {
-                placeholder["key"]: placeholder.get("default") or "Example"
+                placeholder["key"]: (
+                    placeholder.get("default") or "Example"
+                    if placeholder.get("required") else ""
+                )
                 for placeholder in manifest
             }
             answers.update(PROJECT_NAME="Example", TASK_TRACKER="github-issues", CI_STACKS="python")
             with open(os.path.join(root, "answers.json"), "w", encoding="utf-8") as answers_file:
                 json.dump(answers, answers_file)
+            missing_required = subprocess.run(
+                [sys.executable, "init.py", "--check"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            assert missing_required.returncode != 0
+            assert "PROJECT_NAME" in missing_required.stdout, missing_required.stdout
             checker = subprocess.run(
                 [sys.executable, "scripts/check-determinism.py"],
                 cwd=root,
@@ -103,6 +114,13 @@ def check_initializer_lifecycle():
                     text=True,
                 )
                 assert check.returncode == 0, (check.stdout, check.stderr)
+                contract = subprocess.run(
+                    [sys.executable, "scripts/check-delivery-contract.py"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert contract.returncode == 0, (contract.stdout, contract.stderr)
             else:
                 assert all(not os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
         finally:
@@ -127,10 +145,27 @@ def check_initializer(init):
         dry_file = os.path.join(root, "README.md")
         with open(dry_file, "w", encoding="utf-8") as f:
             f.write("Project <PROJECT_NAME>\n")
+        scripts = os.path.join(root, "scripts")
+        os.makedirs(scripts)
+        protected_fixture = os.path.join(scripts, "check-determinism.py")
+        with open(protected_fixture, "w", encoding="utf-8") as f:
+            f.write("Project <PROJECT_NAME>\n")
+        protected_validation = os.path.join(scripts, "check-delivery-contract.py")
+        with open(protected_validation, "w", encoding="utf-8") as f:
+            f.write("Validation <PROJECT_NAME>\n")
+        executable = os.path.join(root, "app.py")
+        with open(executable, "w", encoding="utf-8") as f:
+            f.write("Project <PROJECT_NAME>\n")
         before = open(dry_file, encoding="utf-8").read()
         assert_same_output(lambda: init.apply_values(
             root, {"PROJECT_NAME": "Example"}, dry_run=True))
         assert open(dry_file, encoding="utf-8").read() == before
+
+        changes = init.apply_values(root, {"PROJECT_NAME": "Example"})
+        assert open(protected_fixture, encoding="utf-8").read() == "Project <PROJECT_NAME>\n"
+        assert open(protected_validation, encoding="utf-8").read() == "Validation <PROJECT_NAME>\n"
+        assert open(executable, encoding="utf-8").read() == "Project Example\n"
+        assert protected_fixture not in changes and protected_validation not in changes, changes
 
         assert_same_output(lambda: init.compose_ci(
             root, ["python"], "GitHub Actions", dry_run=True))
@@ -150,6 +185,9 @@ def check_initializer(init):
         init.compose_bindings(root, "github-issues", "none", dry_run=False)
         bindings = os.path.join(root, "docs", "bindings.md")
         bindings_content = open(bindings, encoding="utf-8").read()
+        assert "(../providers/task/_contract.md)" in bindings_content, bindings_content
+        assert "(../providers/secrets/_contract.md)" in bindings_content, bindings_content
+        assert "(../ci/_contract.md)" in bindings_content, bindings_content
         bindings_mtime = os.stat(bindings).st_mtime_ns
         init.compose_bindings(root, "github-issues", "none", dry_run=False)
         assert open(bindings, encoding="utf-8").read() == bindings_content
