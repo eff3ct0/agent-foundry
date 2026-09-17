@@ -21,6 +21,7 @@
         {"path": "scripts/check-bootstrap-workflow.py", "kind": "file"},
         {"path": "scripts/release_ref.py", "kind": "file"},
         {"path": "scripts/report-bootstrap-failure.py", "kind": "file"},
+        {"path": "scripts/test-bootstrap-e2e.py", "kind": "file"},
         {"path": "scripts/triage-bootstrap-failure.py", "kind": "file"},
         {"path": "scripts/test-bootstrap-triage.py", "kind": "file"}
       ]

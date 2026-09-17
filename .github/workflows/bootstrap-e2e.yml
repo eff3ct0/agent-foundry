@@ -1,0 +1,270 @@
+name: Release bootstrap E2E
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Published release tag to verify
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: bootstrap-e2e-${{ github.repository }}-${{ github.event.release.tag_name || inputs.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Check out trusted harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Validate harness
+        run: |
+          python3 scripts/bootstrap-e2e.py --self-check
+          python3 scripts/report-bootstrap-failure.py --self-check
+      - name: Resolve published release commit
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
+          EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          RESOLVED="$(python3 scripts/bootstrap-e2e.py resolve-release --repository "$REPOSITORY" --tag "$TAG_NAME")"
+          RESOLVED_SHA="${RESOLVED#sha=}"
+          printf 'tag=%s\nsha=%s\n' "$TAG_NAME" "$RESOLVED_SHA" >> "$GITHUB_OUTPUT"
+      - name: Build recipe matrix
+        id: matrix
+        run: printf 'matrix=%s\n' "$(python3 scripts/bootstrap-e2e.py matrix)" >> "$GITHUB_OUTPUT"
+  bootstrap:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Mint lifecycle app token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
+          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
+          owner: ${{ vars.BOOTSTRAP_E2E_OWNER }}
+          permission-administration: write
+          permission-contents: write
+      - name: Run released bootstrap
+        env:
+          BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
+          BOOTSTRAP_E2E_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+          STACK: ${{ matrix.stack }}
+          RUN_ID: ${{ github.run_id }}
+          EVIDENCE_PATH: evidence/${{ matrix.stack }}.json
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p evidence
+          python3 scripts/bootstrap-e2e.py run \
+            --repository "$REPOSITORY" \
+            --tag "$RELEASE_TAG" \
+            --sha "$RELEASE_SHA" \
+            --stack "$STACK" \
+            --run-id "$RUN_ID" \
+            --evidence "$EVIDENCE_PATH" \
+            --workflow-url "$WORKFLOW_URL"
+      - name: Upload redacted evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-e2e-${{ github.run_id }}-${{ matrix.stack }}
+          path: evidence/${{ matrix.stack }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  cleanup:
+    if: always()
+    needs: [prepare, bootstrap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Mint lifecycle app token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
+          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
+          owner: ${{ vars.BOOTSTRAP_E2E_OWNER }}
+          permission-administration: write
+          permission-contents: write
+      - name: Delete this run's disposable repositories
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
+          RUN_ID: ${{ github.run_id }}
+          MATRIX: ${{ needs.prepare.outputs.matrix }}
+        run: |
+          mkdir -p cleanup
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          output = "cleanup/cleanup.json"
+          owner = os.environ.get("BOOTSTRAP_E2E_OWNER", "").strip()
+          run_id = os.environ.get("RUN_ID", "").strip()
+          token = os.environ.get("GH_TOKEN", "")
+          evidence = {"schema_version": "bootstrap-e2e-cleanup/v1", "owner": owner or None,
+                      "run_id": run_id or None, "prefix": "bootstrap-e2e-%s-" % run_id,
+                      "status": "failed", "deleted": [], "failures": []}
+
+          def write(status):
+              evidence["status"] = status
+              with open(output, "w", encoding="utf-8") as handle:
+                  json.dump(evidence, handle, sort_keys=True)
+                  handle.write("\n")
+
+          if not token or not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", owner) or not re.fullmatch(r"[0-9]{1,20}", run_id):
+              evidence["failures"].append("missing or invalid cleanup configuration")
+              write("failed")
+              raise SystemExit(1)
+          try:
+              cases = json.loads(os.environ.get("MATRIX", ""))
+          except json.JSONDecodeError:
+              cases = []
+          allowed = {"bootstrap-e2e-%s-%s" % (run_id, case) for case in cases
+                     if isinstance(case, str) and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", case)} if isinstance(cases, list) else set()
+          if not allowed:
+              write("skipped")
+              raise SystemExit(0)
+
+          def api(method, path):
+              request = urllib.request.Request(
+                  "https://api.github.com/" + path, method=method,
+                  headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + token,
+                           "X-GitHub-Api-Version": "2022-11-28"})
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      raw = response.read(64 * 1024 + 1)
+                      if len(raw) > 64 * 1024:
+                          raise RuntimeError("cleanup API response is too large")
+                      if response.status not in (200, 204):
+                          raise RuntimeError("cleanup API returned HTTP %s" % response.status)
+                      return json.loads(raw.decode("utf-8")) if raw else {}
+              except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
+                  if isinstance(error, urllib.error.HTTPError):
+                      error.read(64 * 1024 + 1)
+                  raise RuntimeError("cleanup API request failed") from error
+
+          try:
+              account = api("GET", "users/" + urllib.parse.quote(owner, safe=""))
+              collection = "orgs" if account.get("type") == "Organization" else "users" if account.get("type") == "User" else ""
+              if (account.get("login") or "").lower() != owner.lower() or not collection:
+                  raise RuntimeError("cleanup owner identity could not be verified")
+              for page in range(1, 11):
+                  items = api("GET", "%s/%s/repos?type=all&per_page=100&page=%d" % (collection, urllib.parse.quote(owner, safe=""), page))
+                  if not isinstance(items, list) or len(items) > 100:
+                      raise RuntimeError("cleanup repository list is invalid")
+                  for item in items:
+                      name = item.get("name") if isinstance(item, dict) else None
+                      if name in allowed:
+                          try:
+                              api("DELETE", "repos/%s/%s" % (urllib.parse.quote(owner, safe=""), urllib.parse.quote(name, safe="")))
+                              evidence["deleted"].append(name)
+                          except RuntimeError:
+                              evidence["failures"].append(name)
+                  if len(items) < 100:
+                      break
+              else:
+                  raise RuntimeError("cleanup repository list is saturated")
+          except RuntimeError as error:
+              evidence["failures"].append(str(error))
+          write("passed" if not evidence["failures"] else "failed")
+          raise SystemExit(0 if not evidence["failures"] else 1)
+          PY
+      - name: Upload cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-e2e-cleanup-${{ github.run_id }}
+          path: cleanup/cleanup.json
+          if-no-files-found: error
+          retention-days: 7
+
+  report:
+    if: always()
+    needs: [prepare, bootstrap, cleanup]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: bootstrap-e2e-report-${{ github.repository }}-${{ needs.prepare.outputs.sha || github.event.release.tag_name || inputs.tag_name || github.run_id }}
+      cancel-in-progress: false
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - name: Check out trusted reporter
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Download redacted evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bootstrap-e2e-${{ github.run_id }}-*
+          path: evidence
+          merge-multiple: true
+          if-no-artifact-found: warn
+      - name: Report one canonical failure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag_name }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+          RUN_ID: ${{ github.run_id }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PREPARE_STATUS: ${{ needs.prepare.result }}
+          BOOTSTRAP_STATUS: ${{ needs.bootstrap.result }}
+          CLEANUP_STATUS: ${{ needs.cleanup.result }}
+        run: |
+          python3 scripts/report-bootstrap-failure.py report \
+            --repository "$REPOSITORY" \
+            --workflow-url "$WORKFLOW_URL" \
+            --artifact-url "$ARTIFACT_URL" \
+            --evidence-dir evidence \
+            --run-id "$RUN_ID" \
+            --prepare-status "$PREPARE_STATUS" \
+            --bootstrap-status "$BOOTSTRAP_STATUS" \
+            --cleanup-status "$CLEANUP_STATUS"

@@ -47,6 +47,8 @@ part of dry-run mode.
 | `docs/bootstrap.md`, `docs/agent-init.md`, `docs/org-factory.md` | Deterministic procedures with outward steps | Repeating read/planning steps is safe; repository creation, cleanup, and branch protection remain explicit steps | Local setup and GitHub lifecycle; rollback through VCS or a separate approved GitHub action |
 | `docs/workflow.md`, `templates/agent-runbook.md`, `docs/bindings.md`, provider contracts, and `ci/_contract.md` | Read-only governance and composition contracts | Same instructions and catalog shape for unchanged files | No state; contract changes are reviewed as normal repository changes |
 | `docs/smoke-test.md` | Intentionally one-shot, outward, approval-gated procedure | Creates a disposable repository once; cleanup is a separate explicit deletion step | GitHub repository lifecycle; deletion requires explicit human approval |
+| `.github/workflows/bootstrap-e2e.yml` and `scripts/bootstrap-e2e.py` | Network-dependent, release-triggered, disposable validation | A published or explicitly supplied tag resolves to one commit SHA; every recipe case tests that SHA in its own private repository; repeated runs use a new run prefix | Creates and deletes only `bootstrap-e2e-<run-id>-<case>` repositories in the configured owner; final cleanup is always attempted and exact-prefix recovery is documented |
+| `scripts/report-bootstrap-failure.py` | Network-dependent, deduplicated issue reporting | A release-SHA marker, or a tag/run preparation marker when no SHA resolves, searches open and closed issues; one existing canonical issue receives one marker-bearing comment, otherwise one bug-form issue is created | Uses only issue write permission; no source or disposable repository mutation; a rerun is a no-op after the marker-bearing comment exists |
 
 ## Boundaries
 
@@ -61,3 +63,18 @@ part of dry-run mode.
   one-shot and is not part of dry-run mode.
 - Generated files are written only when bytes change. This preserves stable
   content and avoids unnecessary filesystem side effects on repeat runs.
+- The release E2E does not use the template API: that API follows the default
+  branch and cannot prove the published artifact. The trusted harness checks a
+  published event's `github.sha`, resolves the tag to that same full commit (or
+  resolves the tag independently for manual dispatch), fetches and pushes only
+  that commit, verifies disposable `HEAD`, and executes released code with an
+  environment allowlist.
+- Release E2E operations have 30-second API/subprocess timeouts and job limits
+  of 10/30/15 minutes for prepare/matrix/cleanup and 10 minutes for report. Cleanup is attempted
+  after validation and independently by the always-on cleanup job; forced
+  cancellation, runner loss, credential failure, and API failure require the
+  documented exact-run-ID recovery command. Third-party workflow actions are
+  pinned to verified full SHAs and checked by `scripts/check-bootstrap-workflow.py`.
+- Failure envelopes are versioned and bounded. Fingerprints are derived from the
+  release SHA when available, matrix case, normalized failure code, and check
+  identifier. Only deterministic reporter code searches or mutates GitHub.
