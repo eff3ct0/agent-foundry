@@ -382,21 +382,27 @@ def is_bug_issue(issue):
     return isinstance(labels, list) and "type:bug" in {label.get("name") for label in labels if isinstance(label, dict)}
 
 
-def artifact_url(repository, run_id, token, fallback):
+def artifact_urls(repository, run_id, token, fallback):
     if not run_id:
-        return fallback
+        return fallback, None
     run_id = validate_run_id(run_id)
     artifacts = paginate("repos/%s/actions/runs/%s/artifacts?per_page=100" % (repository, run_id), token, "artifacts")
     if len(artifacts) > MAX_ARTIFACT_RESULTS:
         raise ReporterError("too many artifacts")
     prefixes = ("bootstrap-e2e-%s-" % run_id, "template-bootstrap-e2e-%s-" % run_id)
-    matches = [item for item in artifacts if any(item.get("name", "").startswith(prefix) for prefix in prefixes)]
-    if not matches or not isinstance(matches[0].get("id"), int):
-        return fallback
-    return "https://github.com/%s/actions/runs/%s/artifacts/%s" % (repository, run_id, matches[0]["id"])
+    matrix = next((item for item in artifacts if any(item.get("name", "").startswith(prefix) for prefix in prefixes)), None)
+    triage = next((item for item in artifacts if item.get("name") == "bootstrap-e2e-triage-%s" % run_id), None)
+
+    def link(item, fallback_url):
+        if not isinstance(item, dict) or not isinstance(item.get("id"), int):
+            return fallback_url
+        return "https://github.com/%s/actions/runs/%s/artifacts/%s" % (repository, run_id, item["id"])
+
+    return link(matrix, fallback), link(triage, None)
 
 
-def build_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_text, triage=None):
+def build_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_text, triage=None,
+               triage_artifact_url=None):
     tag_text = "`%s`" % tag if tag else "unavailable (release preparation failed)"
     sha_text = "`%s`" % sha if sha else "unavailable (no release commit was resolved)"
     lines = [
@@ -413,6 +419,8 @@ def build_body(repository, tag, sha, cases, workflow_url, artifact_url, marker_t
         marker_text, "", "### Environment",
         "GitHub Actions release bootstrap E2E for `%s`; the release commit was %s." % (repository, sha_text),
     ]
+    if triage_artifact_url:
+        lines.append("Triage artifact: %s" % triage_artifact_url)
     if triage and triage.get("status") == "success":
         lines.extend([
             "Advisory classification: `%s` (untrusted, non-authoritative)." % triage["classification"],
@@ -553,7 +561,7 @@ def report(args):
     workflow_url = validate_run_url(args.workflow_url, repository, run_id)
     fallback_artifact = validate_run_url(args.artifact_url, repository, run_id)
     verify_repository(repository, token)
-    artifact = artifact_url(repository, run_id, token, fallback_artifact)
+    artifact, triage_artifact = artifact_urls(repository, run_id, token, fallback_artifact)
     try:
         triage = load_triage(getattr(args, "triage_file", None))
     except ReporterError:
@@ -562,7 +570,7 @@ def report(args):
         body = build_template_body(repository, tag, sha, cases, workflow_url, artifact, marker_text)
         title = "[Bug] Template bootstrap E2E failed: %s" % (tag or "published template")
     else:
-        body = build_body(repository, tag, sha, cases, workflow_url, artifact, marker_text, triage)
+        body = build_body(repository, tag, sha, cases, workflow_url, artifact, marker_text, triage, triage_artifact)
         title = "[Bug] Release bootstrap E2E failed: %s" % (tag or "release preparation")
     matches = search_issues(repository, marker_text, token, fingerprints)
     if matches:
