@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "bootstrap-e2e.yml"
 TEMPLATE_WORKFLOW = ROOT / ".github" / "workflows" / "template-bootstrap-e2e.yml"
+JOURNEY_WORKFLOW = ROOT / ".github" / "workflows" / "real-agent-journey.yml"
 PINNED_ACTIONS = {
     "actions/checkout": "11bd71901bbe5b1630ceea73d27597364c9af683",  # v4.2.2
     "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02",  # v4.6.2
@@ -63,6 +64,23 @@ def check():
     if "OPENAI_API_KEY" in template:
         raise AssertionError("template bootstrap must not receive OpenAI credentials")
     print("template bootstrap workflow static check OK")
+    journey = JOURNEY_WORKFLOW.read_text(encoding="utf-8")
+    journey_uses = USE.findall(journey)
+    if not journey_uses or any(not re.fullmatch(r"[^@]+@[0-9a-f]{40}", reference) for reference in journey_uses):
+        raise AssertionError("real-agent journey action is not pinned to a full commit SHA")
+    for action, sha in PINNED_ACTIONS.items():
+        if "%s@%s" % (action, sha) not in journey_uses:
+            raise AssertionError("real-agent journey is missing required action pin: %s" % action)
+    for required in ("schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false",
+                     "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.py collect",
+                     "retention-days: 7"):
+        if required not in journey:
+            raise AssertionError("real-agent journey is missing %s" % required)
+    if "release:" in journey or "OPENAI_API_KEY" in journey:
+        raise AssertionError("real-agent journey must not be a release gate or receive model credentials")
+    if "scripts/real-agent-journey-cleanup.py" not in journey:
+        raise AssertionError("real-agent journey cleanup adapter is missing")
+    print("real-agent journey workflow static check OK")
 
 
 if __name__ == "__main__":

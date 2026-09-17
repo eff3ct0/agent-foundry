@@ -1,0 +1,278 @@
+name: Real-agent user journey
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type RUN to start a real-agent journey
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: real-agent-journey-${{ github.repository }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+env:
+  JOURNEY_RUN_ID: ${{ github.run_id }}
+  JOURNEY_TEMPLATE: eff3ct0/factory-template
+  JOURNEY_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
+  JOURNEY_RUNTIME: ${{ vars.REAL_AGENT_JOURNEY_RUNTIME }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      repository: ${{ steps.plan.outputs.repository }}
+    steps:
+      - name: Check out trusted journey contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Validate parent contract
+        run: |
+          python3 scripts/real-agent-journey.py --self-check
+          python3 scripts/test-real-agent-journey.py
+      - name: Write run plan
+        id: plan
+        env:
+          RUN_ID: ${{ env.JOURNEY_RUN_ID }}
+          TEMPLATE: ${{ env.JOURNEY_TEMPLATE }}
+          OWNER: ${{ env.JOURNEY_OWNER }}
+          RUNTIME: ${{ env.JOURNEY_RUNTIME }}
+          EVENT_NAME: ${{ github.event_name }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$CONFIRM" != "RUN" ]; then
+            printf 'manual dispatch requires confirmation\n' >&2
+            exit 1
+          fi
+          test -n "$OWNER" || { printf 'BOOTSTRAP_E2E_OWNER is missing\n' >&2; exit 1; }
+          test -n "$RUNTIME" || { printf 'REAL_AGENT_JOURNEY_RUNTIME is missing\n' >&2; exit 1; }
+          mkdir -p journey
+          python3 scripts/real-agent-journey.py plan \
+            --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" \
+            --runtime "$RUNTIME" --output journey/contract.json
+          printf 'repository=%s\n' "${OWNER:+$OWNER/real-agent-journey-$RUN_ID}" >> "$GITHUB_OUTPUT"
+      - name: Upload run plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-journey-${{ github.run_id }}-plan
+          path: journey/contract.json
+          if-no-files-found: error
+          retention-days: 7
+
+  provision:
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted journey contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Mint provisioning token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
+          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
+          owner: ${{ env.JOURNEY_OWNER }}
+          permission-administration: write
+          permission-contents: write
+      - name: Run provisioning adapter
+        env:
+          JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_OUTPUT: stage/provision.json
+        run: |
+          mkdir -p stage
+          python3 scripts/real-agent-journey-provision.py \
+            --template "$JOURNEY_TEMPLATE" --owner "$JOURNEY_OWNER" \
+            --run-id "$JOURNEY_RUN_ID" --output "$JOURNEY_OUTPUT"
+      - name: Upload provisioning evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-journey-${{ github.run_id }}-provision
+          path: stage/provision.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  agent:
+    needs: [prepare, provision]
+    if: needs.provision.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted journey contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Mint agent token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
+          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
+          owner: ${{ env.JOURNEY_OWNER }}
+          permission-contents: write
+          permission-issues: write
+      - name: Run cold-agent adapter
+        env:
+          JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_OUTPUT: stage/agent.json
+        run: |
+          mkdir -p stage
+          env -i "PATH=$PATH" "HOME=$HOME" "LANG=$LANG" \
+            JOURNEY_RUN_ID="$JOURNEY_RUN_ID" JOURNEY_REPOSITORY="${{ needs.prepare.outputs.repository }}" \
+            JOURNEY_RUNTIME="$JOURNEY_RUNTIME" JOURNEY_TOKEN="$JOURNEY_TOKEN" \
+            python3 scripts/real-agent-journey-agent.py \
+              --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
+              --runtime "$JOURNEY_RUNTIME" --output "$JOURNEY_OUTPUT"
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-journey-${{ github.run_id }}-agent
+          path: stage/agent.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  assert:
+    needs: [prepare, agent]
+    if: needs.agent.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: read
+      actions: read
+    steps:
+      - name: Check out trusted journey contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Mint readback token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
+          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
+          owner: ${{ env.JOURNEY_OWNER }}
+          permission-actions: read
+          permission-contents: read
+          permission-issues: read
+      - name: Run independent assertion adapter
+        env:
+          JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_OUTPUT: stage/assert.json
+        run: |
+          mkdir -p stage
+          python3 scripts/real-agent-journey-assert.py \
+            --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
+            --output "$JOURNEY_OUTPUT"
+      - name: Upload assertion evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-journey-${{ github.run_id }}-assert
+          path: stage/assert.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  cleanup:
+    if: always()
+    needs: [prepare, provision, agent, assert]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted journey contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Mint cleanup token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        with:
+          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
+          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
+          owner: ${{ env.JOURNEY_OWNER }}
+          permission-administration: write
+          permission-contents: write
+      - name: Run exact cleanup adapter
+        if: always()
+        env:
+          JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_OUTPUT: stage/cleanup.json
+        run: |
+          mkdir -p stage
+          python3 scripts/real-agent-journey-cleanup.py \
+            --owner "$JOURNEY_OWNER" --run-id "$JOURNEY_RUN_ID" \
+            --output "$JOURNEY_OUTPUT"
+      - name: Upload cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-journey-${{ github.run_id }}-cleanup
+          path: stage/cleanup.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  report:
+    if: always()
+    needs: [prepare, provision, agent, assert, cleanup]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out trusted journey contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Download stage evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: real-agent-journey-${{ github.run_id }}-*
+          path: stage
+          merge-multiple: true
+          if-no-artifact-found: warn
+      - name: Aggregate bounded journey evidence
+        env:
+          JOURNEY_REPOSITORY: ${{ needs.prepare.outputs.repository }}
+          JOURNEY_RUNTIME: ${{ env.JOURNEY_RUNTIME }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p evidence
+          python3 scripts/real-agent-journey.py collect \
+            --run-id "$JOURNEY_RUN_ID" --repository "$JOURNEY_REPOSITORY" \
+            --runtime "$JOURNEY_RUNTIME" \
+            --stage-dir stage --workflow-url "$WORKFLOW_URL" --output evidence/journey.json
+      - name: Upload bounded journey evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-agent-journey-${{ github.run_id }}-evidence
+          path: evidence/journey.json
+          if-no-files-found: error
+          retention-days: 7
