@@ -12,6 +12,7 @@ repository**: create a new repo from this structure and fill the `<PLACEHOLDER>`
 - [`docs/bootstrap.md`](docs/bootstrap.md) - how to initialize a project from this template.
 - [`docs/agent-init.md`](docs/agent-init.md) - agent-mode initialization procedure.
 - [`docs/org-factory.md`](docs/org-factory.md) - organization layer (`.github` repo and `FACTORY_SPEC` pin).
+- [`docs/factory-layout.md`](docs/factory-layout.md) - root allowlist and `.factory/` support-directory contract.
 - [`docs/determinism.md`](docs/determinism.md) - repeat-run guarantees, limits, and focused checks.
 - [`hooks/README.md`](hooks/README.md) - optional Claude Code, Pi, and OpenCode startup adapters.
 - [`templates/`](templates/) - ticket, pull request, Definition of Done, ADR, spec, and agent runbook templates.

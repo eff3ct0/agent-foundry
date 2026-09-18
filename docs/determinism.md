@@ -23,7 +23,7 @@ python3 scripts/check-determinism.py
 | CI composition | Deterministic, local write, idempotent | Selected recipe order produces the same `.github/workflows/ci.yml`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | Provider and CI recipe selection | Deterministic catalog lookup | Same selected fragments and job order for the same manifest values | No external state; invalid selections fail closed during a normal run |
 | `scripts/check-determinism.py` | Template-only, deterministic, read-only, offline | Run before cleanup; `--no-clean` retains it for further template checks | No state |
-| `scripts/check-delivery-contract.py`, `scripts/check-pr-governance.py --self-check`, `start.py --self-check`, `scripts/sync-github-labels.py --self-check` | Deterministic, read-only, offline | Same validation result for unchanged files and catalog | No state |
+| `scripts/check-delivery-contract.py`, `scripts/check-factory-layout.py`, `scripts/check-pr-governance.py --self-check`, `start.py --self-check`, `scripts/sync-github-labels.py --self-check` | Deterministic, read-only, offline | Same validation result for unchanged files and catalog; the layout check builds its fixture in a temporary directory | No state |
 | Ownership-boundary fixture in `scripts/check-determinism.py` | Deterministic, read-only, offline | Every inventory entry is checked after cleanup; removed paths are absent and inherited/generated paths remain | Temporary fixture only |
 
 Normal initialization also performs cleanup unless `--no-clean` is supplied. The

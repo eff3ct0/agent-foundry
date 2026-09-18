@@ -30,6 +30,7 @@ It is not tied to any language or stack.
 - [`docs/bootstrap.md`](docs/bootstrap.md) - **how to initialize** a new project from this template (placeholders, tooling, first commit, checklist).
 - [`docs/bindings.md`](docs/bindings.md) - **provider contract**: the task tracker and secrets manager bound to the project (composed from `providers/` during initialization). Mandatory and exclusive use.
 - [`docs/org-factory.md`](docs/org-factory.md) - **organization layer**: how projects reference the org spec (the `.github` repo and `FACTORY_SPEC` pin).
+- [`docs/factory-layout.md`](docs/factory-layout.md) - **layout contract**: root allowlist and `.factory/` support boundary.
 - [`docs/agent-init.md`](docs/agent-init.md) - **agent mode**: procedure for initializing a project from the template (stack detection, bindings, verification).
 - [`templates/`](templates/) - reusable task, pull request, Definition of Done, ADR, and agent runbook templates. The runbook is the project's **loop execution contract**.
 - [`hooks/README.md`](hooks/README.md) - optional harness startup adapters; they always delegate to `start.py`.
