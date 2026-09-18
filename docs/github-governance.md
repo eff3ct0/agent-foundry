@@ -13,6 +13,17 @@ check. GitHub `main` protection requires this exact check to pass.
 The validator checks the pull request closing reference, exactly one `type:*` label, and the linked issue's
 `status:approved` label. It never assigns approval and does not replace branch protection.
 
+## Candidate validation
+
+The workflow remains `pull_request_target` so its definition is read from the trusted base branch, but it
+checks out `github.event.pull_request.merge_commit_sha`. This makes the required check exercise the proposed
+governance contract, including migrations of the validator or pull-request template, instead of silently
+running the default branch copy. If GitHub cannot provide a merge candidate, checkout fails closed.
+
+The candidate validator receives only the explicitly read-only workflow token. The workflow grants no write
+permissions or secrets, and checkout does not persist credentials in the candidate worktree. Do not loosen
+those boundaries when changing the governance workflow.
+
 ## `main` enforcement
 
 The effective GitHub settings for `main` must provide all of the following:
