@@ -6,8 +6,10 @@ import tempfile
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-CONTRACT = ROOT / "docs" / "factory-layout.md"
+SCRIPT_PATH = Path(__file__).resolve()
+ROOT = SCRIPT_PATH.parents[2] if SCRIPT_PATH.parent.parent.name == ".factory" else SCRIPT_PATH.parents[1]
+CONTRACT = (ROOT / ".factory" / "docs" / "factory-layout.md"
+            if (ROOT / ".factory").is_dir() else ROOT / "docs" / "factory-layout.md")
 
 ROOT_FILES = {
     ".gitignore",
@@ -48,9 +50,9 @@ LEGACY_SUPPORT_FILES = {
 }
 GENERATED_FILES = {
     ".github/workflows/ci.yml",
-    ".opencode/plugins/factory-start.ts",
     "docs/bindings.md",
 }
+OPTIONAL_GENERATED_FILES = {".opencode/plugins/factory-start.ts"}
 
 
 def _relative_entries(root):
@@ -92,7 +94,7 @@ def check(root):
             errors.append(".factory must not contain a second layout manifest")
 
     text = CONTRACT.read_text(encoding="utf-8")
-    for path in sorted(ROOT_FILES | GENERATED_FILES):
+    for path in sorted(ROOT_FILES | GENERATED_FILES | OPTIONAL_GENERATED_FILES):
         if "`%s`" % path not in text:
             errors.append("contract omits path: %s" % path)
     for path in sorted(".factory/" + child + "/" for child in FACTORY_DIRS):
@@ -102,7 +104,7 @@ def check(root):
 
 
 def _write_fixture(root):
-    for path in ROOT_FILES | GENERATED_FILES:
+    for path in ROOT_FILES | GENERATED_FILES | OPTIONAL_GENERATED_FILES:
         path = root / path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("fixture\n", encoding="utf-8")

@@ -75,7 +75,8 @@ def validate_event(event, repository, token):
 
 
 def self_check():
-    root = Path(__file__).resolve().parents[1]
+    script_path = Path(__file__).resolve()
+    root = script_path.parents[2] if script_path.parent.parent.name == ".factory" else script_path.parents[1]
     workflow = (root / ".github" / "workflows" / "governance.yml").read_text(
         encoding="utf-8"
     )
@@ -83,9 +84,11 @@ def self_check():
     assert re.search(
         r"^    name: %s$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE
     )
+    factory = root / ".factory"
+    templates = factory / "templates" if factory.is_dir() else root / "templates"
     for template in (
         root / ".github" / "pull_request_template.md",
-        root / "templates" / "pull-request.md",
+        templates / "pull-request.md",
     ):
         text = template.read_text(encoding="utf-8")
         assert "Closes #<TICKET_ID>" in text

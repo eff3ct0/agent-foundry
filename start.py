@@ -53,6 +53,27 @@ MESSAGES = {
 }
 
 
+def _layout_path(root, relative):
+    """Use the initialized factory boundary while keeping source setup readable."""
+    factory = os.path.join(root, ".factory")
+    if os.path.isdir(factory):
+        return ".factory/" + relative
+    return relative
+
+
+def _message(mode, root):
+    message = MESSAGES[mode]
+    if mode == SELF and not os.path.isdir(os.path.join(root, ".factory")):
+        return message
+    replacements = {
+        "templates/agent-runbook.md": _layout_path(root, "templates/agent-runbook.md"),
+        "docs/agent-init.md": _layout_path(root, "docs/agent-init.md"),
+    }
+    for source, target in replacements.items():
+        message = message.replace(source, target)
+    return message
+
+
 def _origin_url(root):
     """Return local `origin` URL or None when git/remote is unavailable."""
     try:
@@ -139,7 +160,7 @@ def main():
     if args.self_check:
         self_check()
         return
-    print(MESSAGES[detect_mode(ROOT, _origin_url(ROOT))])
+    print(_message(detect_mode(ROOT, _origin_url(ROOT)), ROOT))
 
 
 if __name__ == "__main__":

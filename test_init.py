@@ -67,6 +67,51 @@ class InitializerChecks(unittest.TestCase):
         finally:
             shutil.rmtree(directory)
 
+    def test_factory_assets_relocate_without_moving_root_entrypoints(self):
+        directory = tempfile.mkdtemp()
+        try:
+            shutil.copy(
+                os.path.join(ROOT, "archetype-ownership.json"),
+                os.path.join(directory, "archetype-ownership.json"),
+            )
+            for relative, content in {
+                "start.py": "print('start')\n",
+                "AGENT.md": "See [workflow](docs/workflow.md) and [runbook](templates/agent-runbook.md).\n",
+                "README.md": "Run `python3 scripts/check-determinism.py`.\n",
+                ".github/workflows/governance.yml": "run: python3 scripts/check-pr-governance.py\n",
+                "docs/workflow.md": "Use [ticket](../templates/ticket.md).\nRun `python3 scripts/check-determinism.py`.\n",
+                "docs/bindings.md": "# Generated bindings\n",
+                "templates/agent-runbook.md": "runbook\n",
+                "templates/ticket.md": "ticket\n",
+                "checks/phase_state_check.py": "check\n",
+                "hooks/README.md": "hooks\n",
+                "scripts/check-determinism.py": "check\n",
+            }.items():
+                path = os.path.join(directory, relative)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as target:
+                    target.write(content)
+
+            moved = init.relocate_factory_assets(directory)
+
+            self.assertIn(".factory/docs/workflow.md", moved)
+            self.assertTrue(os.path.isfile(os.path.join(directory, "start.py")))
+            self.assertTrue(os.path.isfile(os.path.join(directory, ".factory", "docs", "workflow.md")))
+            self.assertTrue(os.path.isfile(os.path.join(directory, "docs", "bindings.md")))
+            self.assertTrue(os.path.isdir(os.path.join(directory, ".factory", "checks")))
+            self.assertFalse(os.path.exists(os.path.join(directory, "templates")))
+            with open(os.path.join(directory, ".factory", "docs", "workflow.md"), encoding="utf-8") as source:
+                self.assertIn("../templates/ticket.md", source.read())
+            with open(os.path.join(directory, "AGENT.md"), encoding="utf-8") as source:
+                self.assertIn(".factory/docs/workflow.md", source.read())
+            with open(os.path.join(directory, "README.md"), encoding="utf-8") as source:
+                self.assertIn(".factory/scripts/check-determinism.py", source.read())
+            with open(os.path.join(directory, ".github", "workflows", "governance.yml"), encoding="utf-8") as source:
+                self.assertIn(".factory/scripts/check-pr-governance.py", source.read())
+            self.assertEqual(init.relocate_factory_assets(directory), [])
+        finally:
+            shutil.rmtree(directory)
+
 
 if __name__ == "__main__":
     unittest.main()

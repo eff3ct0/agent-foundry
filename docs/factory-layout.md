@@ -52,6 +52,16 @@ Source-only initializer inputs and maintainer tooling (`init.py`,
 `providers/`, and release-only tooling) are consumed or removed by initialization
 and are not part of the initialized layout.
 
+## Existing initialized repositories
+
+This relocation applies while `init.py` composes a repository from the template.
+Repositories initialized before this change are not rewritten automatically: their
+existing root support paths continue to work, and their root entrypoints and
+application-owned paths are not altered. There is intentionally no migration
+command in this change. An owner that wants the new boundary can move the support
+assets as a normal reviewed repository change, preserving the root entrypoints,
+generated outputs, host-discovery paths, and relative links described below.
+
 ## `.factory/` support-directory contract
 
 The first level under `.factory/` is fixed and intentionally small:
@@ -87,8 +97,14 @@ checks the allowlist and `.factory/` children, verifies generated outputs, and
 proves that legacy root support directories and pointer manifests fail. It is
 offline and performs no GitHub or provider operation.
 
-Run it from the repository root with:
+Run it from the source template root with:
 
 ```sh
 python3 scripts/check-factory-layout.py
+```
+
+After initialization, the retained checker is available at:
+
+```sh
+python3 .factory/scripts/check-factory-layout.py
 ```

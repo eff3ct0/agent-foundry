@@ -11,7 +11,10 @@ import sys
 import tempfile
 
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT = (os.path.dirname(os.path.dirname(SCRIPT_DIR))
+        if os.path.basename(os.path.dirname(SCRIPT_DIR)) == ".factory"
+        else os.path.dirname(SCRIPT_DIR))
 SKIP_LIFECYCLE = "CHECK_DETERMINISM_SKIP_LIFECYCLE"
 
 
@@ -126,7 +129,8 @@ def check_initializer_lifecycle(init):
                 assert os.path.isfile(plugin), "explicit OpenCode opt-in did not install plugin"
                 plugin_content = open(plugin, encoding="utf-8").read()
                 assert plugin_content == open(
-                    os.path.join(root, "hooks", "opencode", "factory-start.ts"), encoding="utf-8"
+                    init.factory_asset_path(root, "hooks/opencode/factory-start.ts"),
+                    encoding="utf-8",
                 ).read()
                 plugin_mtime = os.stat(plugin).st_mtime_ns
                 repeat_opt_in = subprocess.run(
@@ -137,8 +141,13 @@ def check_initializer_lifecycle(init):
                 )
                 assert repeat_opt_in.returncode == 0, (repeat_opt_in.stdout, repeat_opt_in.stderr)
                 assert os.stat(plugin).st_mtime_ns == plugin_mtime
+                contract_script = (
+                    ".factory/scripts/check-delivery-contract.py"
+                    if os.path.isfile(os.path.join(root, ".factory", "scripts", "check-delivery-contract.py"))
+                    else "scripts/check-delivery-contract.py"
+                )
                 contract = subprocess.run(
-                    [sys.executable, "scripts/check-delivery-contract.py"],
+                    [sys.executable, contract_script],
                     cwd=root,
                     capture_output=True,
                     text=True,
@@ -401,27 +410,35 @@ def check_scripts(start, labels, governance, delivery, factory_layout, release_s
         assert_repeatable_command([sys.executable, focused])
 
 
-def check_cli_commands():
+def check_cli_commands(source_mode):
+    if source_mode:
+        assert_repeatable_command([
+            sys.executable, "init.py", "--dry-run", "--no-clean", "--defaults",
+            "--set", "PROJECT_NAME=Example", "--set", "TASK_TRACKER=github-issues",
+        ])
+        assert_repeatable_command([
+            sys.executable, "factory_bootstrap.py", "--plan", "--org", "acme",
+        ])
+    labels_script = (
+        ".factory/scripts/sync-github-labels.py"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.py"))
+        else "scripts/sync-github-labels.py"
+    )
     assert_repeatable_command([
-        sys.executable, "init.py", "--dry-run", "--no-clean", "--defaults",
-        "--set", "PROJECT_NAME=Example", "--set", "TASK_TRACKER=github-issues",
-    ])
-    assert_repeatable_command([
-        sys.executable, "factory_bootstrap.py", "--plan", "--org", "acme",
-    ])
-    assert_repeatable_command([
-        sys.executable, "scripts/sync-github-labels.py", "--dry-run", "--repo", "acme/example",
+        sys.executable, labels_script, "--dry-run", "--repo", "acme/example",
     ])
 
 
 def self_check():
-    init = load_module("archetype_init", "init.py")
-    factory = load_module("factory_bootstrap", "factory_bootstrap.py")
+    source_mode = os.path.isfile(os.path.join(ROOT, "init.py"))
+    init = load_module("archetype_init", "init.py") if source_mode else None
+    factory = load_module("factory_bootstrap", "factory_bootstrap.py") if source_mode else None
     start = load_module("start", "start.py")
-    labels = load_module("sync_github_labels", "scripts/sync-github-labels.py")
-    governance = load_module("check_pr_governance", "scripts/check-pr-governance.py")
-    delivery = load_module("check_delivery_contract", "scripts/check-delivery-contract.py")
-    factory_layout = load_module("check_factory_layout", "scripts/check-factory-layout.py")
+    script_dir = ".factory/scripts" if not source_mode else "scripts"
+    labels = load_module("sync_github_labels", script_dir + "/sync-github-labels.py")
+    governance = load_module("check_pr_governance", script_dir + "/check-pr-governance.py")
+    delivery = load_module("check_delivery_contract", script_dir + "/check-delivery-contract.py")
+    factory_layout = load_module("check_factory_layout", script_dir + "/check-factory-layout.py")
     release_paths = (
         "scripts/bootstrap-e2e.py",
         "scripts/report-bootstrap-failure.py",
@@ -443,15 +460,17 @@ def self_check():
             load_module("check_real_agent_workflow", real_agent_paths[0]),
             real_agent_paths[1],
         )
-    check_initializer(init)
-    check_initializer_metadata(init)
-    if not os.environ.get(SKIP_LIFECYCLE):
+    if init:
+        check_initializer(init)
+        check_initializer_metadata(init)
+    if init and not os.environ.get(SKIP_LIFECYCLE):
         check_ownership_boundary(init)
-    if not os.environ.get(SKIP_LIFECYCLE):
+    if init and not os.environ.get(SKIP_LIFECYCLE):
         check_initializer_lifecycle(init)
-    check_factory_bootstrap(factory)
+    if factory:
+        check_factory_bootstrap(factory)
     check_scripts(start, labels, governance, delivery, factory_layout, release_scripts, real_agent)
-    check_cli_commands()
+    check_cli_commands(source_mode)
     print("determinism self-check OK")
 
 
