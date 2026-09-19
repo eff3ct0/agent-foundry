@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createInterface } from "node:readline/promises";
+import { createInterface, type Interface } from "node:readline";
 import { readFile } from "node:fs/promises";
 import { stdin as input, stderr as output } from "node:process";
 import {
@@ -56,13 +56,46 @@ const parseArgs = (): ParsedArgs => {
   return { command: command as Command, target, configPath, nonInteractive, failAfter, interruptAfter, version: false, help: false, json: args.includes("--json") };
 };
 
-const promptFor = async (placeholder: { prompt: string; key: string }): Promise<string> => {
-  const terminal = createInterface({ input, output });
-  try {
-    return await terminal.question(`${placeholder.prompt} (${placeholder.key}): `);
-  } finally {
-    terminal.close();
-  }
+interface PromptWaiter {
+  resolve: (value: string) => void;
+  reject: (error: Error) => void;
+}
+
+interface PromptSession {
+  terminal: Interface;
+  lines: string[];
+  waiters: PromptWaiter[];
+  closed: boolean;
+}
+
+const createPromptSession = (): PromptSession => {
+  const session: PromptSession = {
+    terminal: createInterface({ input, output }),
+    lines: [],
+    waiters: [],
+    closed: false,
+  };
+  session.terminal.on("line", (line) => {
+    const waiter = session.waiters.shift();
+    if (waiter) waiter.resolve(line);
+    else session.lines.push(line);
+  });
+  session.terminal.on("close", () => {
+    session.closed = true;
+    for (const waiter of session.waiters.splice(0)) waiter.reject(new Error("readline was closed"));
+  });
+  return session;
+};
+
+const promptFor = async (
+  session: PromptSession,
+  placeholder: { prompt: string; key: string },
+): Promise<string> => {
+  output.write(`${placeholder.prompt} (${placeholder.key}): `);
+  const line = session.lines.shift();
+  if (line !== undefined) return line;
+  if (session.closed) throw new Error("readline was closed");
+  return new Promise((resolve, reject) => session.waiters.push({ resolve, reject }));
 };
 
 const main = async (): Promise<void> => {
@@ -77,13 +110,21 @@ const main = async (): Promise<void> => {
     else process.stdout.write(`${manifest.package_name} ${manifest.package_version}\n` + `payload ${manifest.payload_version}\n` + `payload digest ${manifest.payload_digest}\n`);
     return;
   }
-  const prepared = await preparePlan({ ...parsed, prompt: parsed.nonInteractive ? undefined : promptFor });
-  let envelope = prepared.envelope;
-  if (parsed.command === "apply") envelope = await applyPlan(prepared);
-  else if (parsed.command === "verify") envelope = await verify(prepared);
-  else if (parsed.command === "doctor") envelope = await doctor(prepared);
-  process.stdout.write(envelopeJson(envelope));
-  if (["error", "conflict", "failed", "not-created", "unhealthy"].includes(envelope.status)) process.exitCode = 1;
+  const promptSession = parsed.nonInteractive ? undefined : createPromptSession();
+  try {
+    const prepared = await preparePlan({
+      ...parsed,
+      prompt: promptSession ? (placeholder) => promptFor(promptSession, placeholder) : undefined,
+    });
+    let envelope = prepared.envelope;
+    if (parsed.command === "apply") envelope = await applyPlan(prepared);
+    else if (parsed.command === "verify") envelope = await verify(prepared);
+    else if (parsed.command === "doctor") envelope = await doctor(prepared);
+    process.stdout.write(envelopeJson(envelope));
+    if (["error", "conflict", "failed", "not-created", "unhealthy"].includes(envelope.status)) process.exitCode = 1;
+  } finally {
+    promptSession?.terminal.close();
+  }
 };
 
 main().catch((error: unknown) => {

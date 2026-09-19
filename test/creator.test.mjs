@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -20,6 +20,17 @@ const run = async (args, options = {}) => {
     return { stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code };
   }
 };
+
+const runInteractive = (args, inputText) => new Promise((resolve, reject) => {
+  const child = spawn(process.execPath, [cli, ...args], { cwd: root, stdio: ["pipe", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
+  child.stderr.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
+  child.on("error", reject);
+  child.on("close", (code) => resolve({ code, stdout, stderr }));
+  child.stdin.end(inputText);
+});
 
 const configFile = async (directory, values = {}) => {
   const file = path.join(directory, "answers.json");
@@ -69,6 +80,19 @@ test("interactive configuration prompts for missing required values through the 
   const rejected = await run(["plan", "--target", path.join(parent, "invalid"), "--config", invalid, "--non-interactive"]);
   assert.notEqual(rejected.code, 0);
   assert.ok(json(rejected).diagnostics.some((item) => item.code === "configuration_invalid"));
+});
+
+test("real stdin prompts share one readline session and emit the JSON envelope", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-terminal-"));
+  const result = await runInteractive(
+    ["plan", "--json", "--target", path.join(parent, "project")],
+    "Terminal project\ngithub-issues\n",
+  );
+  assert.equal(result.code, 0, result.stderr);
+  const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.status, "planned");
+  assert.match(result.stderr, /PROJECT_NAME/);
+  assert.match(result.stderr, /TASK_TRACKER/);
 });
 
 test("apply, verify, and rerun are idempotent", async () => {
