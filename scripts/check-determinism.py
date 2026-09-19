@@ -381,13 +381,14 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(start, labels, governance, delivery, release_scripts=(), real_agent=()):
+def check_scripts(start, labels, governance, delivery, factory_layout, release_scripts=(), real_agent=()):
     catalog = labels.load_labels()
     assert_same_output(start.self_check)
     assert_same_output(lambda: labels.sync(
         catalog, repo="acme/example", dry_run=True))
     assert_same_output(governance.self_check)
     assert_same_output(delivery.self_check)
+    assert_same_output(factory_layout.self_check)
     if release_scripts:
         bootstrap, reporter, triage, workflow = release_scripts
         assert_same_output(bootstrap.self_check)
@@ -420,6 +421,7 @@ def self_check():
     labels = load_module("sync_github_labels", "scripts/sync-github-labels.py")
     governance = load_module("check_pr_governance", "scripts/check-pr-governance.py")
     delivery = load_module("check_delivery_contract", "scripts/check-delivery-contract.py")
+    factory_layout = load_module("check_factory_layout", "scripts/check-factory-layout.py")
     release_paths = (
         "scripts/bootstrap-e2e.py",
         "scripts/report-bootstrap-failure.py",
@@ -448,7 +450,7 @@ def self_check():
     if not os.environ.get(SKIP_LIFECYCLE):
         check_initializer_lifecycle(init)
     check_factory_bootstrap(factory)
-    check_scripts(start, labels, governance, delivery, release_scripts, real_agent)
+    check_scripts(start, labels, governance, delivery, factory_layout, release_scripts, real_agent)
     check_cli_commands()
     print("determinism self-check OK")
 
