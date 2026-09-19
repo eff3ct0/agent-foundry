@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(root, "dist", "index.js");
+const { preparePlan } = await import("../dist/creator.js");
 
 const run = async (args, options = {}) => {
   try {
@@ -46,6 +47,28 @@ test("plan and dry-run are deterministic and do not mutate an empty target", asy
   await assert.rejects(readdir(target));
   assert.equal(json(first).schema_version, 1);
   assert.ok(json(first).operations.every((operation) => operation.path));
+});
+
+test("interactive configuration prompts for missing required values through the shared validator", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-prompt-"));
+  const target = path.join(parent, "project");
+  const prompted = [];
+  const prepared = await preparePlan({
+    command: "plan",
+    target,
+    prompt: async (placeholder) => {
+      prompted.push(placeholder.key);
+      return placeholder.key === "PROJECT_NAME" ? "Prompted project" : "github-issues";
+    },
+  });
+  assert.deepEqual(prompted, ["PROJECT_NAME", "TASK_TRACKER"]);
+  assert.equal(prepared.envelope.status, "planned");
+  assert.ok(prepared.envelope.config_digest);
+
+  const invalid = await configFile(parent, { TASK_TRACKER: "not-a-task-provider" });
+  const rejected = await run(["plan", "--target", path.join(parent, "invalid"), "--config", invalid, "--non-interactive"]);
+  assert.notEqual(rejected.code, 0);
+  assert.ok(json(rejected).diagnostics.some((item) => item.code === "configuration_invalid"));
 });
 
 test("apply, verify, and rerun are idempotent", async () => {

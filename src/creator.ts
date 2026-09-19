@@ -274,8 +274,13 @@ const resolveConfig = async (
   if (configPath) input = valueFromInput(await parseJson(path.resolve(process.cwd(), configPath), "configuration"));
   const values: Record<string, string> = {};
   for (const placeholder of manifest.placeholders) {
-    const raw = Object.prototype.hasOwnProperty.call(input, placeholder.key) ? input[placeholder.key] : placeholder.default;
-    values[placeholder.key] = validateValue(placeholder, raw);
+    const supplied = Object.prototype.hasOwnProperty.call(input, placeholder.key);
+    const raw = supplied ? input[placeholder.key] : placeholder.default;
+    if (!supplied && (raw === undefined || raw === null || raw === "") && placeholder.required) {
+      values[placeholder.key] = "";
+    } else {
+      values[placeholder.key] = validateValue(placeholder, raw);
+    }
   }
 
   const missing = (): Placeholder[] => manifest.placeholders.filter((placeholder) => placeholder.required && !values[placeholder.key]);
