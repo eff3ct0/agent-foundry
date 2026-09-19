@@ -79,14 +79,26 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 5247,
-      "sha256": "2916c1175ea17c65ecb37200cb5144eb2bbffd7a5a971dce8cc12a42dcc78a2e"
+      "size": 7158,
+      "sha256": "528a09edfd18ed913a0256ae24e9e1e8c6b9e3858891233f399bc5fe59e752e8"
     },
     {
       "path": "checks/phase_state_check.py",
       "mode": "100644",
       "size": 10734,
       "sha256": "549111f8db138715f4d004f462366912dc4e121439c8afd428919cb072ed44e7"
+    },
+    {
+      "path": "ci/_contract.md",
+      "mode": "100644",
+      "size": 1150,
+      "sha256": "45cbbdea065f04a795745a67f42c82c0f6776bbaf14c73672ea23a595dad5a14"
+    },
+    {
+      "path": "ci/recipes.json",
+      "mode": "100644",
+      "size": 1985,
+      "sha256": "efde2c315256d9bc5ac18b798e4a1d534e24bb838d84ed7a8267856ba24543d5"
     },
     {
       "path": "docs/agent-init.md",
@@ -165,6 +177,102 @@
       "mode": "100644",
       "size": 5998,
       "sha256": "41cc72b3e94c5b59e641b859758b44bb3f4ad764909ba35cea34a49a49ce378b"
+    },
+    {
+      "path": "providers/code-intel/_contract.md",
+      "mode": "100644",
+      "size": 1083,
+      "sha256": "ebf4599821e567d889bf3b07ae1547939befb62e19eb59e125ead1f3c3dfe803"
+    },
+    {
+      "path": "providers/code-intel/codegraph.md",
+      "mode": "100644",
+      "size": 1191,
+      "sha256": "5ab9f6ac58cea8aabcc7a4ff048de7e917e50ad8846ab3d4b53bc2477d6c28bc"
+    },
+    {
+      "path": "providers/code-intel/custom.md",
+      "mode": "100644",
+      "size": 982,
+      "sha256": "02d476baf7ef948c43e6f19bd437c2eb06f79648054c58c239b155d01312a3f7"
+    },
+    {
+      "path": "providers/code-intel/none.md",
+      "mode": "100644",
+      "size": 1077,
+      "sha256": "8adeb42164a2491c9a77664a4d4349da43d0f77cc77c94a5c74137d2ba407d02"
+    },
+    {
+      "path": "providers/secrets/_contract.md",
+      "mode": "100644",
+      "size": 1001,
+      "sha256": "30fd996d359e5abc6381c6dca6eb06f2038a0ae41cca33fe11e31bfaa2b90b20"
+    },
+    {
+      "path": "providers/secrets/custom.md",
+      "mode": "100644",
+      "size": 731,
+      "sha256": "b94e9b44e60de4eb1c8edfb57629b92cce894a4eab2ee1eeeca237cffd2f0b1c"
+    },
+    {
+      "path": "providers/secrets/doppler.md",
+      "mode": "100644",
+      "size": 862,
+      "sha256": "78489cba2e67574d1090a6816b84161faa425b4c8536b95b7322703c0036a2f7"
+    },
+    {
+      "path": "providers/secrets/infisical.md",
+      "mode": "100644",
+      "size": 851,
+      "sha256": "7e06b4235cf6ae9440590db4fafaa108362e19873c97882e4f1dfa8e9aaf5ccf"
+    },
+    {
+      "path": "providers/secrets/none.md",
+      "mode": "100644",
+      "size": 665,
+      "sha256": "13f587c64006642bd4e493dcb4ffd23b6c816af466c85df143266aff1f25cb30"
+    },
+    {
+      "path": "providers/secrets/vault.md",
+      "mode": "100644",
+      "size": 788,
+      "sha256": "a3e8b0365ac3352b8ff68b790a23cfa8b8199ecb3cbf7feb06ba6a6962a9dbed"
+    },
+    {
+      "path": "providers/task/_contract.md",
+      "mode": "100644",
+      "size": 1854,
+      "sha256": "7f784d9359016958bcae85a27ca964874823d8e20a1fd251d365be2e39d6e250"
+    },
+    {
+      "path": "providers/task/custom.md",
+      "mode": "100644",
+      "size": 1965,
+      "sha256": "e28dd67bb5bd3a3f6391e4588846891a4546b09805c2a8e46134f8423c933778"
+    },
+    {
+      "path": "providers/task/github-issues.md",
+      "mode": "100644",
+      "size": 3546,
+      "sha256": "0ef460f8f4a5693d944bbc5159c5c11f531f6f460fe8ea80c18e887c17bd88ca"
+    },
+    {
+      "path": "providers/task/github-projects.md",
+      "mode": "100644",
+      "size": 3455,
+      "sha256": "c46d90a0eb3d17359b7fc55b61a0ff37dd1fd8ac265071191404630ed05bf560"
+    },
+    {
+      "path": "providers/task/jira.md",
+      "mode": "100644",
+      "size": 2492,
+      "sha256": "54f8c1a76f3a187f6bd053599e367a4ad97be98c1e56963a7ed0f04d73295396"
+    },
+    {
+      "path": "providers/task/linear.md",
+      "mode": "100644",
+      "size": 2392,
+      "sha256": "0f6353b39eb3b3b34a6de65f4895786053dae2112d7e4bee985c19fc5faee1da"
     },
     {
       "path": "scripts/check-delivery-contract.py",
@@ -257,5 +365,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:0450cfa985628d69ad97c2c8abad60efd398ab553400e96e3f723c72dd7a6abb"
+  "payload_digest": "sha256:1c88bbd5c9e2a1be5173d45b1c0d50162667c74a1fe59ec94f2986d9f57e37dc"
 }
