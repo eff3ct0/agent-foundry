@@ -140,9 +140,10 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
     stderr.write(`\n${renderSelection(placeholder, selected, ui)}\n`);
     return new Promise((resolve, reject) => {
       const wasRaw = stdin.isRaw;
-      const finish = (callback: () => void): void => {
+      const finish = (callback: () => void, continueReading = false): void => {
         stdin.off("data", onData);
         if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
+        if (!continueReading) stdin.pause();
         callback();
       };
       const onData = (chunk: Buffer | string): void => {
@@ -162,7 +163,7 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
           else if (key === "\u001b[B" || key.toLowerCase() === "j") selected = (selected + 1) % choices.length;
           else if (/^[1-9]$/u.test(key) && Number(key) <= choices.length) selected = Number(key) - 1;
           else if (key === "\r" || key === "\n") {
-            finish(() => resolve(choices[selected] ?? ""));
+            finish(() => resolve(choices[selected] ?? ""), true);
             return;
           } else continue;
           stderr.write(`\n${renderSelection(placeholder, selected, ui)}\n`);
@@ -178,6 +179,7 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
     session.closed = true;
     if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(false);
     session.terminal?.close();
+    stdin.pause();
   };
   return session;
 };

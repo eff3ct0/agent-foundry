@@ -20,6 +20,11 @@ the payload identity, configuration digest, and bounded output ownership
 digests. It does not copy the payload manifest or become a second payload
 source of truth.
 
+When installed from an npm package, npm may rename the packaged payload's
+`.gitignore` to `.npmignore`. The creator accepts that one exact transport alias
+only when the bytes still match the manifest; ownership and the manifest's
+target mode remain authoritative.
+
 The creator never overwrites an unknown file. An unchanged rerun is `noop`.
 Changed configuration produces an explicit update plan, while an externally
 drifted owned file is a conflict requiring recovery rather than an implicit

@@ -618,9 +618,13 @@ const readPayloadFiles = async (
   for (const entry of manifest.files) {
     assertSafeRelative(entry.path);
     const source = path.join(payloadRoot, entry.path);
-    const sourceStat = await lstat(source).catch(() => undefined);
+    // npm renames packaged .gitignore files to .npmignore. Accept only this
+    // exact transport alias; the manifest path, bytes, and restored mode stay authoritative.
+    const npmTransport = entry.path === ".gitignore" ? path.join(payloadRoot, ".npmignore") : undefined;
+    const sourcePath = (await lstat(source).catch(() => undefined)) ? source : npmTransport ?? source;
+    const sourceStat = await lstat(sourcePath).catch(() => undefined);
     if (!sourceStat?.isFile() || sourceStat.isSymbolicLink()) throw new CreatorError("payload_invalid", `payload file is not a regular file: ${entry.path}`, { path: entry.path });
-    const sourceBytes = await readFile(source);
+    const sourceBytes = await readFile(sourcePath);
     const sourceMode = sourceStat.mode & 0o7777;
     const expectedMode = safeMode(entry.mode);
     // npm-compatible package stores normalize non-bin executable files to 0644.

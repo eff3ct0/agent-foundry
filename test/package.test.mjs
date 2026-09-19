@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -80,4 +81,19 @@ test("packaging rejects missing, undeclared, and changed integrity inputs", () =
     () => assertManifestMatchesLock(manifest, { ...manifest, payload_digest: "sha256:changed" }),
     /integrity contract/,
   );
+});
+
+test("npm-installed packages restore the manifest .gitignore from npm transport", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-npm-package-"));
+  const config = path.join(parent, "answers.json");
+  await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Npm package smoke", TASK_TRACKER: "github-issues" } }));
+  await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", parent], { cwd: root });
+  const tarball = path.join(parent, "factory-template-creator-0.1.0.tgz");
+  const installRoot = path.join(parent, "consumer");
+  await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installRoot, tarball], { cwd: root });
+  const installedCli = path.join(installRoot, "node_modules", "factory-template-creator", "dist", "index.js");
+  const target = path.join(parent, "generated");
+  const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--non-interactive", "--json"], { cwd: root });
+  assert.equal(JSON.parse(result.stdout).status, "applied");
+  assert.equal((await stat(path.join(target, ".gitignore"))).isFile(), true);
 });

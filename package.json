@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test test/*.test.mjs",
     "test:creator": "pnpm build && node --test test/creator.test.mjs",
-    "test:installer-ux": "pnpm build && node --test test/installer-ui.test.mjs test/creator.test.mjs",
+    "test:installer-ux": "pnpm build && node --test test/installer-ui.test.mjs test/installer-pty.test.mjs test/creator.test.mjs",
     "prepack": "pnpm build"
   },
   "devDependencies": {
