@@ -103,6 +103,35 @@ test("real stdin prompts share one readline session and emit the JSON envelope",
   assert.match(result.stderr, /TASK_TRACKER/);
 });
 
+test("interactive apply reviews the plan and requires confirmation before mutation", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-review-"));
+  const target = path.join(parent, "project");
+  const result = await runInteractive(
+    ["apply", "--target", target],
+    "Reviewed project\ngithub-issues\ny\n",
+  );
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, "applied");
+  assert.match(result.stderr, /Review/);
+  assert.match(result.stderr, /Applying and verifying staged changes/);
+  assert.match(result.stderr, /Installation complete/);
+  assert.equal(result.stdout.includes("\u001b"), false);
+  assert.equal(await stat(path.join(target, "README.md")).then(Boolean), true);
+});
+
+test("interactive cancellation is explicit and does not create a target", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-cancel-"));
+  const target = path.join(parent, "project");
+  const result = await runInteractive(
+    ["apply", "--target", target],
+    "Cancelled project\ngithub-issues\nn\n",
+  );
+  assert.notEqual(result.code, 0);
+  assert.equal(JSON.parse(result.stdout).status, "cancelled");
+  assert.match(result.stderr, /Installation cancelled/);
+  await assert.rejects(stat(target));
+});
+
 test("apply, verify, and rerun are idempotent", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-apply-"));
   const target = path.join(parent, "project");

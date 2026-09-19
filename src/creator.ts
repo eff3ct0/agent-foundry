@@ -622,10 +622,14 @@ const readPayloadFiles = async (
     if (!sourceStat?.isFile() || sourceStat.isSymbolicLink()) throw new CreatorError("payload_invalid", `payload file is not a regular file: ${entry.path}`, { path: entry.path });
     const sourceBytes = await readFile(source);
     const sourceMode = sourceStat.mode & 0o7777;
-    if (sourceBytes.byteLength !== entry.size || sha256(sourceBytes) !== entry.sha256 || sourceMode !== safeMode(entry.mode)) {
+    const expectedMode = safeMode(entry.mode);
+    // npm-compatible package stores normalize non-bin executable files to 0644.
+    // The packaged manifest remains authoritative for the mode restored in the target.
+    const packageModeNormalized = sourceMode === 0o644 && expectedMode === 0o755;
+    if (sourceBytes.byteLength !== entry.size || sha256(sourceBytes) !== entry.sha256 || (sourceMode !== expectedMode && !packageModeNormalized)) {
       throw new CreatorError("payload_mismatch", `packaged payload bytes or mode differ from the manifest: ${entry.path}`, { path: entry.path });
     }
-    sourceFiles.set(entry.path, { path: entry.path, bytes: sourceBytes, mode: safeMode(entry.mode) });
+    sourceFiles.set(entry.path, { path: entry.path, bytes: sourceBytes, mode: expectedMode });
   }
   const textFiles = new Set(ownership.text_files);
   const removedSourcePaths = new Set<string>();

@@ -26,6 +26,12 @@ drifted owned file is a conflict requiring recovery rather than an implicit
 overwrite. `doctor` reports interrupted staging, payload mismatch, ownership
 drift, unknown files, and incomplete configuration.
 
+The interactive presentation layer is documented in
+[`docs/installer-ux.md`](installer-ux.md). It keeps prompts, review, progress,
+confirmation, and completion summaries on stderr while retaining this JSON
+envelope on stdout. It delegates every write to the same plan/apply/verify
+engine and never launches an agent.
+
 Initialization composition is part of the same plan/apply/verify transaction.
 The payload carries the placeholder schema, provider fragments, CI recipe
 catalog, and ownership inventory as immutable inputs. Configuration keys are
