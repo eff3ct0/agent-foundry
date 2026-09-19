@@ -61,8 +61,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 10260,
-      "sha256": "b1abd9737b04a3008ebde150aa389703f788cdd9551ace207177da97abf6a2ed"
+      "size": 10273,
+      "sha256": "cc5785d982c51294cd32973c9e246e0a3244064f70de666626fb1cf61e8595c8"
     },
     {
       "path": "CLAUDE.md",
@@ -73,14 +73,14 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 9230,
-      "sha256": "5262322d768144c6c3c524f662dca19211e23166d9a2c287b58c02bec3800984"
+      "size": 9559,
+      "sha256": "c1c941d6f03660b7aaf09938aea6c4ac03dc4689d14aad8573de6371f389948b"
     },
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7373,
-      "sha256": "a40ece441a4a34e29040602c1c90c7aa0f8cd806a1e7f2e04db11ac607b01c44"
+      "size": 7437,
+      "sha256": "36777376b1d1ccb17452ae979ee38b2bace57b5f4d4b24c52175be1d5d133782"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -103,8 +103,8 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 10581,
-      "sha256": "cc380c37ed1fef72618bd4d86d87eb09b6c09635f603d3b39ab53d26c02aa8e5"
+      "size": 10650,
+      "sha256": "7ebd69edf55354a6b85ec5cd98c539d757b9c0e002e0bba84082b63591683fd1"
     },
     {
       "path": "docs/bootstrap.md",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 9815,
-      "sha256": "6c647f009f3223cb09d9a8323f30222d85e65891075f105c8cc4e00fd23bf033"
+      "size": 9929,
+      "sha256": "4e3675cc09580d3d952cafca68e95032ea835fe78d7154e2611d2fad9871c5d1"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -127,8 +127,8 @@
     {
       "path": "docs/factory-layout.md",
       "mode": "100644",
-      "size": 9188,
-      "sha256": "6dadbb7e30cea6453b342e414560a27788be00e2ca469939ef7e7211544b550f"
+      "size": 9455,
+      "sha256": "168623507407cd5b88fb1fef0a7ea13ee70d55f3c47eebb5eb2998f70f63ddf7"
     },
     {
       "path": "docs/github-governance.md",
@@ -151,26 +151,26 @@
     {
       "path": "hooks/README.md",
       "mode": "100644",
-      "size": 2629,
-      "sha256": "33ece14e01c4e75fe4eccc3f229aed50c8934c1f066e4c7b7dd786355df6e031"
+      "size": 2783,
+      "sha256": "e1b1aeea82419c4d1e213c654520d6c77f5a2a1fc12dc8f2d7c9482a0fd68fd4"
     },
     {
       "path": "hooks/claude-code/session-start.sh",
-      "mode": "100755",
-      "size": 267,
-      "sha256": "f66d49ea9514c38084b1970ff0679d6eca8a9c38206b563b0ea3880d7d65ebdf"
+      "mode": "100644",
+      "size": 287,
+      "sha256": "ef942b533f59080a5da239857dc31613ccbdb6e54c1e92a2d2b3c8f6002ffcdf"
     },
     {
       "path": "hooks/opencode/factory-start.ts",
       "mode": "100644",
-      "size": 573,
-      "sha256": "ff3d7455e0eb771d4509ab280c6638644cc4e35ecff36ee63ad35a923e8d53b0"
+      "size": 813,
+      "sha256": "448482fc9cbdb9dafbf87c1a7295fb6f8cd8696f68f02273a6c9a083c12597db"
     },
     {
       "path": "hooks/pi/factory-start.ts",
       "mode": "100644",
-      "size": 621,
-      "sha256": "153d8c87ffebf81dfdfe3c615de73001b270152099cc9eb81fa8046b6ebf5c89"
+      "size": 701,
+      "sha256": "89005ec5f447f38e8fda4d0585b4362d1b631b1cfe9d1d406d5c1d617429c59f"
     },
     {
       "path": "placeholders.json",
@@ -313,14 +313,14 @@
     {
       "path": "scripts/check-determinism.py",
       "mode": "100644",
-      "size": 21025,
-      "sha256": "9fe260869b97dd0de1a21e620b4d1e3610bbddbcd74b9789f680cc781adfc49e"
+      "size": 20994,
+      "sha256": "858773be4397bd1d8fc94404add30d98d4e17ff3a01d11488ef090e20227515e"
     },
     {
       "path": "scripts/check-factory-layout.py",
       "mode": "100644",
-      "size": 5463,
-      "sha256": "7abce0da41d2667891fe7ceec1068b713dd549855e7d25867e6efb759b4b49b0"
+      "size": 5480,
+      "sha256": "e47a20ba8c4bb74d5143d97d175b3ffaa6cb323f935030e49c04581e94b4b959"
     },
     {
       "path": "scripts/check-pr-governance.py",
@@ -335,10 +335,16 @@
       "sha256": "ff40fd8568def858f100fff682559a3e75e6011860eb467143875a8625168ac6"
     },
     {
+      "path": "start.mjs",
+      "mode": "100644",
+      "size": 11236,
+      "sha256": "56a04660e1785ea9297db15a73b5fe0a74c2623a0fa9b8ce9ac0622f7022c9b9"
+    },
+    {
       "path": "start.py",
       "mode": "100644",
-      "size": 6068,
-      "sha256": "11fd608b51c873899f8be1d425eaaa9565548cc223ab4587d12fdec18b670945"
+      "size": 729,
+      "sha256": "a2fcc0b1f0cb2cb37001acc16edfd0fdd0a456d8fd56169823fd0f69d1b4f3d9"
     },
     {
       "path": "templates/adr.md",
@@ -395,5 +401,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:a03fb14a50ef0066eeee2a2eb902c64bac84682bcbf6500b8c060eeb199ccab9"
+  "payload_digest": "sha256:b26fd58efcd5c214897f20a97d3972a688dae5028e7bb91985cf69aeac9fc711"
 }

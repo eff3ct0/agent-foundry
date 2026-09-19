@@ -24,8 +24,8 @@ a value is NOT touched (it remains <KEY> and required keys are reported by
 --check), not deleted. Optional keys may remain intentionally empty.
 
 The optional OpenCode startup plugin is generated only when the confirmed
-OPENCODE_PLUGIN value is true. The manual `python3 start.py` fallback remains
-available when it is false.
+OPENCODE_PLUGIN value is true. The manual `node start.mjs` startup remains
+available when it is false; `python3 start.py` remains a compatibility fallback.
 
 FACTORY_REQUIRED policy: when FACTORY_REQUIRED=true, init.py fails closed (deterministic,
 offline) if FACTORY_SPEC is empty. init.py does NOT verify or create org repositories:

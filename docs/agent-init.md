@@ -6,7 +6,8 @@ the complete configuration for explicit confirmation before applying it. Complem
 [`bootstrap.md`](bootstrap.md), which gives the overview; this is the operating
 step-by-step.
 
-> Entry point: `python3 start.py` routes to this document in **SETUP** mode (an
+> Entry point: `node start.mjs` routes to this document in **SETUP** mode (the
+> retained `python3 start.py` command is a compatibility fallback; an
 > uninitialized instance). It is the first command an agent runs in a repository.
 
 **Prerequisite:** read [`AGENT.md`](../AGENT.md) and

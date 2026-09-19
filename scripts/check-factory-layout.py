@@ -16,6 +16,7 @@ ROOT_FILES = {
     "AGENT.md",
     "CLAUDE.md",
     "README.md",
+    "start.mjs",
     "start.py",
     "docs/bindings.md",
 }
