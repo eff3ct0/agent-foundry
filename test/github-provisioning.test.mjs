@@ -115,6 +115,18 @@ test("successful create requires matching target-host readback", async () => {
   assert.equal(envelope.targets[0].code, "readback_mismatch");
 });
 
+test("successful create rejects readback that omits visibility evidence", async () => {
+  const client = clientFor({
+    lookups: { [targets.health]: result("missing"), [targets.factory]: result("existing") },
+    creates: { [targets.health]: result("created") },
+    readbacks: { [targets.health]: { outcome: "existing", repository: { nameWithOwner: targets.health } } },
+  });
+  const envelope = await provisionRepositories({ org: "acme", yes: true, visibility: "private", client });
+  assert.equal(envelope.status, "indeterminate");
+  assert.equal(envelope.targets[0].outcome, "indeterminate");
+  assert.equal(envelope.targets[0].code, "readback_mismatch");
+});
+
 test("existing and created targets become a no-op on the second ensure", async () => {
   const state = new Set();
   const client = {

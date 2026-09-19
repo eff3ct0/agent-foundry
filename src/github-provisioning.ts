@@ -29,7 +29,7 @@ export interface CommandRunner {
 
 export interface RepositoryReadback {
   nameWithOwner: string;
-  visibility?: Visibility;
+  visibility: Visibility;
 }
 
 export interface GitHubClient {
@@ -153,7 +153,6 @@ const repositoryFromReadback = (stdout: string, target: string): RepositoryReadb
   const record = parsed as Record<string, unknown>;
   if (typeof record.nameWithOwner !== "string" || record.nameWithOwner.toLowerCase() !== target.toLowerCase()) return undefined;
   const rawVisibility = record.visibility;
-  if (rawVisibility === undefined) return { nameWithOwner: record.nameWithOwner };
   if (typeof rawVisibility !== "string" || !VALID_VISIBILITIES.includes(rawVisibility.toLowerCase() as Visibility)) return undefined;
   return { nameWithOwner: record.nameWithOwner, visibility: rawVisibility.toLowerCase() as Visibility };
 };
@@ -267,7 +266,7 @@ export const provisionRepositories = async (options: ProvisioningOptions): Promi
       continue;
     }
     const readback = await client.readback(result.target);
-    if (readback.outcome !== "existing" || !readback.repository || (readback.repository.visibility && readback.repository.visibility !== values.visibility)) {
+    if (readback.outcome !== "existing" || !readback.repository || readback.repository.visibility !== values.visibility) {
       result.outcome = "indeterminate";
       result.code = readback.code ?? "readback_mismatch";
       diagnostics.push({ code: result.code, target: result.target });
