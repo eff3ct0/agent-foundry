@@ -47,7 +47,7 @@ const providerExecutables = async (directory, names, exitCode = 0) => {
   await mkdir(bin);
   for (const name of names) {
     const executable = path.join(bin, name);
-    await writeFile(executable, `#!/bin/sh\nprintf '%s\\n' "$@" > "${process.env.FACTORY_HANDOFF_ARGS ?? "/dev/null"}"\nexit ${exitCode}\n`);
+    await writeFile(executable, `#!/bin/sh\nprintf '%s\\n' "$@" > "${process.env.FACTORY_HANDOFF_ARGS ?? "/dev/null"}"\nif [ -n "$FACTORY_HANDOFF_STDOUT" ]; then printf '%s' "$FACTORY_HANDOFF_STDOUT"; fi\nexit ${exitCode}\n`);
     await chmod(executable, 0o755);
   }
   return bin;
@@ -221,6 +221,20 @@ test("explicit agent handoff uses argv execution and reports a failed agent sepa
   } finally {
     delete process.env.FACTORY_HANDOFF_ARGS;
   }
+});
+
+test("agent stdout is redirected to bounded stderr diagnostics instead of corrupting JSON", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-provider-stdout-"));
+  const bin = await providerExecutables(parent, ["codex"]);
+  const config = await configFile(parent);
+  const result = await run(["apply", "--target", path.join(parent, "project"), "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], {
+    env: { ...process.env, PATH: bin, FACTORY_HANDOFF_STDOUT: "AGENT_STDOUT_NOISE\n" },
+  });
+  assert.equal(result.code, 0, result.stderr);
+  const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.status, "applied");
+  assert.equal(envelope.handoff.status, "launched");
+  assert.match(result.stderr, /AGENT_STDOUT_NOISE/);
 });
 
 test("apply, verify, and rerun are idempotent", async () => {

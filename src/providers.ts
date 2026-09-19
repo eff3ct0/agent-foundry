@@ -1,8 +1,10 @@
 import { access, constants } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { stderr } from "node:process";
 
 export const PROVIDER_CATALOG_VERSION = "1.0.0";
+const MAX_HANDOFF_STDOUT_BYTES = 4096;
 
 export interface ProviderWorkspaceFile {
   path: string;
@@ -169,8 +171,23 @@ export const launchProvider = (runtime: ProviderRuntime, workspace: string): Pro
   const args = runtime.provider.launch.args.map((arg) => arg.replaceAll("{workspace}", workspace));
   const argv = [runtime.executable_path, ...args];
   return new Promise((resolve, reject) => {
-    const child = spawn(runtime.executable_path, args, { cwd: workspace, shell: false, stdio: "inherit" });
+    const child = spawn(runtime.executable_path, args, { cwd: workspace, shell: false, stdio: ["inherit", "pipe", "inherit"] });
+    let captured = Buffer.alloc(0);
+    let truncated = false;
+    child.stdout?.on("data", (chunk: Buffer | string) => {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      if (captured.byteLength < MAX_HANDOFF_STDOUT_BYTES) {
+        captured = Buffer.concat([captured, bytes.subarray(0, MAX_HANDOFF_STDOUT_BYTES - captured.byteLength)]);
+      }
+      if (captured.byteLength + bytes.byteLength > MAX_HANDOFF_STDOUT_BYTES) truncated = true;
+    });
     child.once("error", reject);
-    child.once("close", (code, signal) => resolve({ code: code ?? 1, signal, argv }));
+    child.once("close", (code, signal) => {
+      if (captured.byteLength > 0 || truncated) {
+        const suffix = truncated ? "\n[agent stdout truncated at 4096 bytes]" : "";
+        stderr.write(`agent[${runtime.provider.id}] stdout:\n${captured.toString("utf8")}${suffix}\n`);
+      }
+      resolve({ code: code ?? 1, signal, argv });
+    });
   });
 };
