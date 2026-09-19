@@ -712,6 +712,18 @@ const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buf
   return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => catalog[stack]).join("\n")}\n`, "utf8");
 };
 
+const payloadTransportPath = async (payloadRoot: string, logicalPath: string) => {
+  // npm install transports a packaged .gitignore as .npmignore; retain the
+  // logical manifest path while accepting that package-mode filename alias.
+  const candidates = logicalPath === ".gitignore" ? [logicalPath, ".npmignore"] : [logicalPath];
+  for (const candidate of candidates) {
+    const absolute = path.join(payloadRoot, candidate);
+    const entry = await lstat(absolute).catch(() => undefined);
+    if (entry) return { absolute, entry };
+  }
+  return undefined;
+};
+
 const readPayloadFiles = async (
   manifest: PayloadManifest,
   payloadRoot: string,
@@ -724,11 +736,10 @@ const readPayloadFiles = async (
   const sourceFiles = new Map<string, SourceFile>();
   for (const entry of manifest.files) {
     assertSafeRelative(entry.path);
-    const source = path.join(payloadRoot, entry.path);
-    const sourceStat = await lstat(source).catch(() => undefined);
-    if (!sourceStat?.isFile() || sourceStat.isSymbolicLink()) throw new CreatorError("payload_invalid", `payload file is not a regular file: ${entry.path}`, { path: entry.path });
-    const sourceBytes = await readFile(source);
-    const sourceMode = sourceStat.mode & 0o7777;
+    const transported = await payloadTransportPath(payloadRoot, entry.path);
+    if (!transported?.entry.isFile() || transported.entry.isSymbolicLink()) throw new CreatorError("payload_invalid", `payload file is not a regular file: ${entry.path}`, { path: entry.path });
+    const sourceBytes = await readFile(transported.absolute);
+    const sourceMode = transported.entry.mode & 0o7777;
     if (sourceBytes.byteLength !== entry.size || sha256(sourceBytes) !== entry.sha256 || sourceMode !== safeMode(entry.mode)) {
       throw new CreatorError("payload_mismatch", `packaged payload bytes or mode differ from the manifest: ${entry.path}`, { path: entry.path });
     }
