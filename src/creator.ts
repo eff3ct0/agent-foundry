@@ -350,6 +350,19 @@ const readState = async (target: string): Promise<CreatorState | undefined> => {
   }
 };
 
+const creatorDirectoryStatus = async (target: string): Promise<{ safe: boolean; diagnostic?: Diagnostic }> => {
+  const creatorPath = path.join(target, CREATOR_DIRECTORY);
+  const entry = await lstat(creatorPath).catch(() => undefined);
+  if (!entry) return { safe: true };
+  if (entry.isSymbolicLink()) {
+    return { safe: false, diagnostic: diagnostic("symlink_escape", "creator state directory must not be a symlink", CREATOR_DIRECTORY) };
+  }
+  if (!entry.isDirectory()) {
+    return { safe: false, diagnostic: diagnostic("path_conflict", "creator state path must be a directory", CREATOR_DIRECTORY) };
+  }
+  return { safe: true };
+};
+
 const collectEntries = async (directory: string, relative = ""): Promise<Array<{ path: string; directory: boolean; symlink: boolean }>> => {
   const result: Array<{ path: string; directory: boolean; symlink: boolean }> = [];
   for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) => compareStrings(left.name, right.name))) {
@@ -429,12 +442,14 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   const target = await resolveTarget(options.target);
   const envelope = baseEnvelope(options.command, target.absolute, manifest);
   const diagnostics: Diagnostic[] = [];
+  const creatorDirectory = await creatorDirectoryStatus(target.absolute);
+  if (creatorDirectory.diagnostic) diagnostics.push(creatorDirectory.diagnostic);
 
   if (target.existed) {
     const entries = await collectEntries(target.absolute);
     const staging = entries.find((entry) => entry.path === STAGING_DIRECTORY || entry.path.startsWith(`${STAGING_DIRECTORY}/`));
     if (staging) diagnostics.push(diagnostic("staging_interrupted", "an interrupted staging directory requires recovery", STAGING_DIRECTORY));
-    const state = await readState(target.absolute);
+    const state = creatorDirectory.safe ? await readState(target.absolute) : undefined;
     const knownStatePaths = new Set([CREATOR_DIRECTORY, STATE_FILE, STAGING_DIRECTORY]);
     const manifestPaths = new Set(manifest.files.map((file) => file.path));
     const allowedDirectories = new Set<string>([CREATOR_DIRECTORY, ...manifest.files.flatMap((file) => [...parentPaths(file.path)])]);
@@ -468,7 +483,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   }
 
   const files = await readPayloadFiles(manifest, payloadRoot, config);
-  const state = target.existed ? await readState(target.absolute) : undefined;
+  const state = target.existed && creatorDirectory.safe ? await readState(target.absolute) : undefined;
   const oldOwned = new Map((state?.owned_files ?? []).map((file) => [file.path, file]));
   const operations: Operation[] = [];
   for (const file of files) {
@@ -542,6 +557,10 @@ export const applyPlan = async (prepared: PreparedPlan): Promise<CreatorEnvelope
   let committed = 0;
   try {
     await mkdir(prepared.target, { recursive: true });
+    const creatorDirectory = await creatorDirectoryStatus(prepared.target);
+    if (!creatorDirectory.safe) {
+      throw new CreatorError(creatorDirectory.diagnostic?.code ?? "path_conflict", creatorDirectory.diagnostic?.message ?? "creator state path is unsafe", { plan: prepared, path: CREATOR_DIRECTORY });
+    }
     await mkdir(path.dirname(stagingPath), { recursive: true });
     await mkdir(stagingPath);
     await mkdir(backupPath);

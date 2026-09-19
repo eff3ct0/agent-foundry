@@ -91,6 +91,20 @@ test("unknown files and symlink escapes fail without overwriting", async () => {
   await chmod(unwritable, 0o755);
 });
 
+test("rejects a symlinked creator state directory without writing outside the target", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-state-link-"));
+  const target = path.join(parent, "project");
+  const outside = path.join(parent, "outside");
+  const config = await configFile(parent);
+  await mkdir(target);
+  await mkdir(outside);
+  await symlink(outside, path.join(target, ".factory-template-creator"));
+  const result = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.notEqual(result.code, 0);
+  assert.ok(json(result).diagnostics.some((item) => item.code === "symlink_escape"));
+  await assert.rejects(readFile(path.join(outside, "state.json")));
+});
+
 test("rollback restores creator-owned files after an injected commit failure", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-rollback-"));
   const target = path.join(parent, "project");
