@@ -122,6 +122,13 @@ def self_check():
     assert re.search(
         r"^    name: %s$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE
     )
+    assert "pull_request_target:" in workflow
+    assert "ref: ${{ github.event.pull_request.merge_commit_sha }}" in workflow
+    assert "ref: ${{ github.event.repository.default_branch }}" not in workflow
+    assert "persist-credentials: false" in workflow
+    assert "contents: write" not in workflow
+    assert "issues: write" not in workflow
+    assert "pull-requests: write" not in workflow
     for template in (
         root / ".github" / "pull_request_template.md",
         root / "templates" / "pull-request.md",
