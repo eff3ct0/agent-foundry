@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -50,6 +50,17 @@ test("version output exposes the package and payload identity", async () => {
     payloadVersion: manifest.payload_version,
     payloadDigest: manifest.payload_digest,
   });
+});
+
+test("compiled CLI is executable without an explicit Node interpreter", async (context) => {
+  if (process.platform === "win32") {
+    context.skip("POSIX executable mode is not applicable on Windows");
+    return;
+  }
+  const cliPath = path.join(root, "dist/index.js");
+  assert.equal((await stat(cliPath)).mode & 0o777, 0o755);
+  const result = await execFileAsync(cliPath, ["--version", "--json"]);
+  assert.deepEqual(JSON.parse(result.stdout).payloadDigest, manifest.payload_digest);
 });
 
 test("packaging rejects missing, undeclared, and changed integrity inputs", () => {
