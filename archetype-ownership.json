@@ -76,6 +76,7 @@
         {"path": "factory_bootstrap.py", "kind": "file"},
         {"path": "MAINTAINERS.md", "kind": "file"},
         {"path": "scripts/check-determinism.py", "kind": "file"},
+        {"path": "odd/tasks/issue-103-determinism-checker.md", "kind": "file"},
         {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"}
       ]
     },

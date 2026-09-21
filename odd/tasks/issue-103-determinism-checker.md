@@ -63,7 +63,9 @@ commit and one PR are appropriate.
 - Fix: classify the checker as source-only governance, so relocation leaves it
   beside `init.py` for `--no-clean` and normal cleanup removes it.
 - Focused verification: `python3 scripts/check-determinism.py` passed after the
-  change; `git diff --check` passed.
+  checker-lifecycle change; `git diff --check` passed. This record did not
+  account for the tracker file itself being unclassified, so it was not a valid
+  final determinism result.
 - Verification: `python3 init.py --self-check`, `python3 test_init.py`,
   `python3 test_factory_bootstrap.py`, `python3 scripts/check-factory-layout.py`,
   `python3 scripts/check-delivery-contract.py`,
@@ -78,6 +80,12 @@ commit and one PR are appropriate.
 - Work-unit commit: `813f340 fix(initializer): remove unusable determinism checker`.
 - Delivery PR: https://github.com/eff3ct0/factory-template/pull/129
   with the single `type:bug` label.
+- Correction: classify this source-only ODD tracker as `removed` under
+  `archetype_governance`. The full `python3 scripts/check-determinism.py`
+  check then passed, including ownership coverage and lifecycle checks.
+- Affected regressions: `python3 test_init.py` passed (5 tests),
+  `python3 test_factory_bootstrap.py` passed (6 tests), and `git diff --check`
+  passed.
 
 ## Next action
 
