@@ -83,6 +83,13 @@ template default branch.
 Work-unit commit: `dbded7c25d1b4295f5f7c598584caf4b61941ffe`
 `feat(journey): trigger real-agent journey on releases (#97)`.
 
+Corrective work unit: the release resolver now receives `EXPECTED_SHA` and
+`GITHUB_EVENT_NAME`, matching the bootstrap workflow, so it verifies the
+resolved release tag against the triggering `github.sha`. The focused journey
+workflow test requires both exports. `python3 scripts/test-real-agent-journey.py`,
+`python3 scripts/check-bootstrap-workflow.py`, and
+`python3 scripts/check-determinism.py` passed for this correction.
+
 Pull request: `https://github.com/eff3ct0/factory-template/pull/131`, targeting
 `main` with exactly one `type:feature` label. Both PR-governance validation
 checks passed. Its chain context names predecessor PR #130 and requires a

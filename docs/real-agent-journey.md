@@ -162,12 +162,13 @@ runtime Actions variable or accepts arbitrary free text.
 
 Every launch records an immutable source SHA in its plan before provisioning.
 For a published release, the workflow resolves `github.event.release.tag_name`
-through the GitHub API and records both the tag and its full commit SHA. For
-manual and scheduled runs, it records the triggering `github.sha`. Provisioning
-fails before repository creation unless the source template's default-branch
-revision matches that SHA; this intentionally fails closed for a release tag
-that no longer matches the template's current revision rather than silently
-testing mutable `main`.
+through the GitHub API and verifies that its full commit SHA matches the
+triggering `github.sha` before recording both identities. For manual and
+scheduled runs, it records the triggering `github.sha`. Provisioning fails
+before repository creation unless the source template's default-branch revision
+matches that SHA; this intentionally fails closed for a release tag that no
+longer matches the template's current revision rather than silently testing
+mutable `main`.
 
 ## Hosted Run Setup
 

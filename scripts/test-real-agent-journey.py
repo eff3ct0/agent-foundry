@@ -247,6 +247,8 @@ def test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning
     assert "schedule:" in workflow and "workflow_dispatch:" in workflow
     assert "resolve-release --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"" in workflow
     assert "SOURCE_SHA: ${{ github.sha }}" in workflow
+    assert "EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}" in workflow
+    assert "GITHUB_EVENT_NAME: ${{ github.event_name }}" in workflow
     assert "--source-sha \"$SOURCE_SHA\"" in workflow
     assert "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"" in workflow
     assert "install --runtime \"$JOURNEY_RUNTIME\"" in workflow

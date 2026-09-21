@@ -59,6 +59,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           SOURCE_TAG: ${{ github.event.release.tag_name || '' }}
           SOURCE_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "$EVENT_NAME" = "release" ]; then
