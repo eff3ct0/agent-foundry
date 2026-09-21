@@ -8,6 +8,7 @@ import {
   doctor,
   envelopeJson,
   errorEnvelope,
+  launchSelectedAgent,
   preparePlan,
   verify,
   type Command,
@@ -29,7 +30,7 @@ interface ParsedArgs extends Omit<CreatorOptions, "command" | "target"> {
   json: boolean;
 }
 
-const usage = "Usage: factory-template <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--non-interactive]\n       factory-template github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
+const usage = "Usage: factory-template <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive]\n       factory-template github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
 
 const isProvisioningCommand = (value: string | undefined): boolean => value === "github-provision" || value === "provision-github";
 
@@ -77,6 +78,9 @@ const parseArgs = (): ParsedArgs => {
   let nonInteractive = false;
   let failAfter: number | undefined;
   let interruptAfter: number | undefined;
+  let agent: string | undefined;
+  const agents: string[] = [];
+  let launchAgent = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--target" || arg === "-t") target = args[++index] ?? "";
@@ -84,13 +88,16 @@ const parseArgs = (): ParsedArgs => {
     else if (arg === "--non-interactive" || arg === "--no-prompt") nonInteractive = true;
     else if (arg === "--failure-after") failAfter = Number(args[++index]);
     else if (arg === "--interrupt-after") interruptAfter = Number(args[++index]);
+    else if (arg === "--agent") agent = args[++index];
+    else if (arg === "--agents") agents.push(args[++index] ?? "");
+    else if (arg === "--launch-agent") launchAgent = true;
     else if (arg === "--json") continue;
     else throw new CreatorError("invalid_arguments", `unknown argument: ${arg}`);
   }
   if (!target) throw new CreatorError("invalid_arguments", "--target is required");
   if (failAfter !== undefined && (!Number.isInteger(failAfter) || failAfter < 1)) throw new CreatorError("invalid_arguments", "--failure-after must be a positive integer");
   if (interruptAfter !== undefined && (!Number.isInteger(interruptAfter) || interruptAfter < 1)) throw new CreatorError("invalid_arguments", "--interrupt-after must be a positive integer");
-  return { command: command as Command, target, configPath, nonInteractive, failAfter, interruptAfter, version: false, help: false, json: args.includes("--json") };
+  return { command: command as Command, target, configPath, nonInteractive, failAfter, interruptAfter, agent, agents: agents.length > 0 ? agents : undefined, launchAgent, version: false, help: false, json: args.includes("--json") };
 };
 
 interface PromptWaiter {
@@ -202,11 +209,35 @@ const main = async (): Promise<void> => {
       prompt: promptSession ? (placeholder) => promptFor(promptSession, placeholder) : undefined,
     });
     let envelope = prepared.envelope;
-    if (parsed.command === "apply") envelope = await applyPlan(prepared);
+    if (parsed.command === "apply") {
+      envelope = await applyPlan(prepared);
+      if (envelope.status === "applied" || envelope.status === "noop") {
+        const selected = prepared.providerRuntimes.map(({ provider }) => provider.id);
+        const verificationPlan = await preparePlan({
+          ...parsed,
+          command: "verify",
+          agent: selected.length === 1 ? selected[0] : selected.length === 0 ? "none" : undefined,
+          agents: selected.length > 1 ? selected : undefined,
+          launchAgent: false,
+          resolvedConfig: prepared.config,
+        });
+        const verification = await verify(verificationPlan);
+        envelope = {
+          ...envelope,
+          providers: verification.providers,
+          verification: verification.status === "verified" ? "verified" : "failed",
+          status: verification.status === "verified" ? envelope.status : "verification-failed",
+        };
+        if (parsed.launchAgent && verification.status === "verified") {
+          const handoff = await launchSelectedAgent(verificationPlan);
+          envelope = { ...envelope, handoff, status: handoff.status === "failed" ? "handoff-failed" : envelope.status };
+        }
+      }
+    }
     else if (parsed.command === "verify") envelope = await verify(prepared);
     else if (parsed.command === "doctor") envelope = await doctor(prepared);
     process.stdout.write(envelopeJson(envelope));
-    if (["error", "conflict", "failed", "not-created", "unhealthy"].includes(envelope.status)) process.exitCode = 1;
+    if (["error", "conflict", "failed", "not-created", "unhealthy", "verification-failed", "handoff-failed"].includes(envelope.status)) process.exitCode = 1;
   } finally {
     promptSession?.terminal.close();
   }

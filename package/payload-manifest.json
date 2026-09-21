@@ -79,8 +79,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7223,
-      "sha256": "4f632a47657e0f3097301e1a0f1c544d6869683ff8b1dcfa3a7c83d80ccd67d1"
+      "size": 7438,
+      "sha256": "98536f7c514a2ef07fd4f4ee6c7571bb4e27a5bf924ec91883534e47e54ba6cf"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -103,8 +103,8 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 9345,
-      "sha256": "e8ec775274a61fa70482f6c73645a2ae4966e69c23c51816735f2246103e156e"
+      "size": 10796,
+      "sha256": "63eacacbc134c21847109f2c86358e5bcff8b4300572738496b491f88876d3d4"
     },
     {
       "path": "docs/bootstrap.md",
@@ -177,6 +177,36 @@
       "mode": "100644",
       "size": 5998,
       "sha256": "41cc72b3e94c5b59e641b859758b44bb3f4ad764909ba35cea34a49a49ce378b"
+    },
+    {
+      "path": "providers/agents/catalog.json",
+      "mode": "100644",
+      "size": 2833,
+      "sha256": "c89f155da6000464085706f8b1267188c262dff0bbe639a6dd7d8be16212b054"
+    },
+    {
+      "path": "providers/agents/templates/claude-code.md",
+      "mode": "100644",
+      "size": 570,
+      "sha256": "e0246d13562da0942c3459aefe8beffe4f716baf9113d92e38378bdb60d9a252"
+    },
+    {
+      "path": "providers/agents/templates/codex.md",
+      "mode": "100644",
+      "size": 558,
+      "sha256": "76c7324f431db358b64d12e053c6fbfcd28a9ecd39ffa2d69963d5725ab6f882"
+    },
+    {
+      "path": "providers/agents/templates/opencode.md",
+      "mode": "100644",
+      "size": 564,
+      "sha256": "0215578917a9b402e03fc44f5a4206ff82bbd6a16c0c438f1a6c870c4cdb4a2e"
+    },
+    {
+      "path": "providers/agents/templates/pi.md",
+      "mode": "100644",
+      "size": 552,
+      "sha256": "3d4fdc815d4a6fdb48557d81d83bc74386e65fb622924b54deebe16dbd9a0646"
     },
     {
       "path": "providers/code-intel/_contract.md",
@@ -365,5 +395,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:c8a169e3202ebaf2550e0d16992f20e2a5fe11e1ae0d8d0cbda3f8c9f90147ee"
+  "payload_digest": "sha256:4a5f0de3b3fbcab7030d0b25a5de21225e635cebb537b373a254a2dcf24f1d26"
 }
