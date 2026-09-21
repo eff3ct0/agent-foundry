@@ -21,8 +21,8 @@ const run = async (args, options = {}) => {
   }
 };
 
-const runInteractive = (args, inputText) => new Promise((resolve, reject) => {
-  const child = spawn(process.execPath, [cli, ...args], { cwd: root, stdio: ["pipe", "pipe", "pipe"] });
+const runInteractive = (args, inputText, options = {}) => new Promise((resolve, reject) => {
+  const child = spawn(process.execPath, [cli, ...args], { cwd: root, stdio: ["pipe", "pipe", "pipe"], ...options });
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
@@ -40,6 +40,17 @@ const configFile = async (directory, values = {}) => {
     ...values,
   }}));
   return file;
+};
+
+const providerExecutables = async (directory, names, exitCode = 0) => {
+  const bin = path.join(directory, "bin");
+  await mkdir(bin);
+  for (const name of names) {
+    const executable = path.join(bin, name);
+    await writeFile(executable, `#!/bin/sh\nprintf '%s\\n' "$@" > "${process.env.FACTORY_HANDOFF_ARGS ?? "/dev/null"}"\nif [ -n "$FACTORY_HANDOFF_STDOUT" ]; then printf '%s' "$FACTORY_HANDOFF_STDOUT"; fi\nexit ${exitCode}\n`);
+    await chmod(executable, 0o755);
+  }
+  return bin;
 };
 
 const json = (result) => JSON.parse(result.stdout);
@@ -77,10 +88,12 @@ test("interactive configuration prompts for missing required values through the 
     target,
     prompt: async (placeholder) => {
       prompted.push(placeholder.key);
-      return placeholder.key === "PROJECT_NAME" ? "Prompted project" : "github-issues";
+      if (placeholder.key === "PROJECT_NAME") return "Prompted project";
+      if (placeholder.key === "TASK_TRACKER") return "github-issues";
+      return "none";
     },
   });
-  assert.deepEqual(prompted, ["PROJECT_NAME", "TASK_TRACKER"]);
+  assert.deepEqual(prompted, ["PROJECT_NAME", "TASK_TRACKER", "AGENTS"]);
   assert.equal(prepared.envelope.status, "planned");
   assert.ok(prepared.envelope.config_digest);
 
@@ -108,7 +121,7 @@ test("interactive apply reviews the plan and requires confirmation before mutati
   const target = path.join(parent, "project");
   const result = await runInteractive(
     ["apply", "--target", target],
-    "Reviewed project\ngithub-issues\ny\n",
+    "Reviewed project\ngithub-issues\nnone\ny\n",
   );
   assert.equal(result.code, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).status, "applied");
@@ -124,12 +137,133 @@ test("interactive cancellation is explicit and does not create a target", async 
   const target = path.join(parent, "project");
   const result = await runInteractive(
     ["apply", "--target", target],
-    "Cancelled project\ngithub-issues\nn\n",
+    "Cancelled project\ngithub-issues\nnone\nn\n",
   );
   assert.notEqual(result.code, 0);
   assert.equal(JSON.parse(result.stdout).status, "cancelled");
   assert.match(result.stderr, /Installation cancelled/);
   await assert.rejects(stat(target));
+});
+
+test("provider selection supports none, one, and multiple providers with stable manifests", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-providers-"));
+  const bin = await providerExecutables(parent, ["claude", "opencode", "codex", "pi"]);
+  const baseEnvironment = { ...process.env, PATH: bin };
+  const noneTarget = path.join(parent, "none");
+  const noneConfig = await configFile(parent);
+  const none = await run(["apply", "--target", noneTarget, "--config", noneConfig, "--non-interactive"], { env: baseEnvironment });
+  assert.equal(none.code, 0, none.stderr);
+  assert.deepEqual(json(none).providers.selected, []);
+  await assert.rejects(stat(path.join(noneTarget, ".factory", "provider-manifest.json")));
+
+  const oneTarget = path.join(parent, "one");
+  const one = await run(["apply", "--target", oneTarget, "--config", noneConfig, "--agent", "codex", "--non-interactive"], { env: baseEnvironment });
+  assert.equal(one.code, 0, one.stderr);
+  assert.equal(json(one).verification, "verified");
+  assert.deepEqual(json(one).providers.selected.map(({ id }) => id), ["codex"]);
+  const manifest = await readFile(path.join(oneTarget, ".factory", "provider-manifest.json"), "utf8");
+  assert.match(manifest, /"catalog_version": "1\.0\.0"/);
+  assert.match(await readFile(path.join(oneTarget, ".codex", "AGENTS.md"), "utf8"), /Codex workspace instructions/);
+  const rerun = await run(["apply", "--target", oneTarget, "--config", noneConfig, "--agent", "codex", "--non-interactive"], { env: baseEnvironment });
+  assert.equal(rerun.code, 0, rerun.stderr);
+  assert.equal(json(rerun).status, "noop");
+  assert.equal(await readFile(path.join(oneTarget, ".factory", "provider-manifest.json"), "utf8"), manifest);
+
+  const multipleTarget = path.join(parent, "multiple");
+  const multiple = await run(["apply", "--target", multipleTarget, "--config", noneConfig, "--agents", "opencode,claude-code", "--non-interactive"], { env: baseEnvironment });
+  assert.equal(multiple.code, 0, multiple.stderr);
+  assert.deepEqual(json(multiple).providers.selected.map(({ id }) => id), ["claude-code", "opencode"]);
+  assert.ok(await readFile(path.join(multipleTarget, ".opencode", "agents", "factory-template.md"), "utf8"));
+  assert.ok(await readFile(path.join(multipleTarget, ".claude", "factory-template.md"), "utf8"));
+});
+
+test("interactive provider selection accepts a single provider", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-provider-interactive-"));
+  const bin = await providerExecutables(parent, ["pi"]);
+  const result = await runInteractive(
+    ["apply", "--target", path.join(parent, "project")],
+    "Interactive project\ngithub-issues\npi\ny\n",
+    { env: { ...process.env, PATH: bin } },
+  );
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout).providers.selected.map(({ id }) => id), ["pi"]);
+});
+
+test("provider availability and selection fail closed before target mutation", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-provider-validation-"));
+  const config = await configFile(parent);
+  const missingTarget = path.join(parent, "missing");
+  const missing = await run(["apply", "--target", missingTarget, "--config", config, "--agent", "codex", "--non-interactive"], { env: { ...process.env, PATH: path.join(parent, "missing-bin") } });
+  assert.notEqual(missing.code, 0);
+  assert.match(json(missing).diagnostics.map((item) => item.code).join(" "), /provider_unavailable/);
+  await assert.rejects(stat(missingTarget));
+
+  const invalidTarget = path.join(parent, "invalid");
+  const invalid = await run(["apply", "--target", invalidTarget, "--config", config, "--agent", "unknown", "--non-interactive"]);
+  assert.notEqual(invalid.code, 0);
+  assert.match(json(invalid).diagnostics.map((item) => item.code).join(" "), /provider_invalid/);
+  await assert.rejects(stat(invalidTarget));
+
+  const launchWithoutSelection = await run(["apply", "--target", path.join(parent, "launch-without-selection"), "--config", config, "--launch-agent", "--non-interactive"]);
+  assert.notEqual(launchWithoutSelection.code, 0);
+  assert.match(json(launchWithoutSelection).diagnostics.map((item) => item.code).join(" "), /provider_invalid/);
+});
+
+test("provider setup protects unknown and drifted workspace files", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-provider-conflict-"));
+  const bin = await providerExecutables(parent, ["codex"]);
+  const environment = { ...process.env, PATH: bin };
+  const config = await configFile(parent);
+  const unknownTarget = path.join(parent, "unknown");
+  await mkdir(path.join(unknownTarget, ".codex"), { recursive: true });
+  await writeFile(path.join(unknownTarget, "custom.md"), "keep me\n");
+  const unknown = await run(["apply", "--target", unknownTarget, "--config", config, "--agent", "codex", "--non-interactive"], { env: environment });
+  assert.notEqual(unknown.code, 0);
+  assert.equal(await readFile(path.join(unknownTarget, "custom.md"), "utf8"), "keep me\n");
+
+  const driftTarget = path.join(parent, "drift");
+  const initial = await run(["apply", "--target", driftTarget, "--config", config, "--agent", "codex", "--non-interactive"], { env: environment });
+  assert.equal(initial.code, 0, initial.stderr);
+  await writeFile(path.join(driftTarget, ".codex", "AGENTS.md"), "user-managed\n");
+  const drift = await run(["apply", "--target", driftTarget, "--config", config, "--agent", "codex", "--non-interactive"], { env: environment });
+  assert.notEqual(drift.code, 0);
+  assert.match(json(drift).diagnostics.map((item) => item.code).join(" "), /owned_file_drift/);
+  assert.equal(await readFile(path.join(driftTarget, ".codex", "AGENTS.md"), "utf8"), "user-managed\n");
+});
+
+test("explicit agent handoff uses argv execution and reports a failed agent separately", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-provider-handoff-"));
+  const argsFile = path.join(parent, "handoff-args.txt");
+  process.env.FACTORY_HANDOFF_ARGS = argsFile;
+  try {
+    const bin = await providerExecutables(parent, ["codex"], 7);
+    const target = path.join(parent, "project");
+    const config = await configFile(parent);
+    const result = await run(["apply", "--target", target, "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], { env: { ...process.env, PATH: bin, FACTORY_HANDOFF_ARGS: argsFile } });
+    assert.notEqual(result.code, 0);
+    const envelope = json(result);
+    assert.equal(envelope.verification, "verified");
+    assert.equal(envelope.status, "handoff-failed");
+    assert.equal(envelope.handoff.provider, "codex");
+    assert.equal(envelope.handoff.exit_code, 7);
+    assert.deepEqual((await readFile(argsFile, "utf8")).trim().split("\n"), ["--cd", target]);
+  } finally {
+    delete process.env.FACTORY_HANDOFF_ARGS;
+  }
+});
+
+test("agent stdout is redirected to bounded stderr diagnostics instead of corrupting JSON", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-provider-stdout-"));
+  const bin = await providerExecutables(parent, ["codex"]);
+  const config = await configFile(parent);
+  const result = await run(["apply", "--target", path.join(parent, "project"), "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], {
+    env: { ...process.env, PATH: bin, FACTORY_HANDOFF_STDOUT: "AGENT_STDOUT_NOISE\n" },
+  });
+  assert.equal(result.code, 0, result.stderr);
+  const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.status, "applied");
+  assert.equal(envelope.handoff.status, "launched");
+  assert.match(result.stderr, /AGENT_STDOUT_NOISE/);
 });
 
 test("apply, verify, and rerun are idempotent", async () => {

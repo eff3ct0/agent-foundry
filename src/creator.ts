@@ -14,6 +14,14 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import {
+  inspectProviderAvailability,
+  launchProvider,
+  parseProviderSelection,
+  validateProviderCatalog,
+  type ProviderCatalog,
+  type ProviderRuntime,
+} from "./providers";
 
 export const CREATOR_SCHEMA_VERSION = 1;
 export const CREATOR_DIRECTORY = ".factory-template-creator";
@@ -94,6 +102,29 @@ export interface CreatorConfig {
   digest: string;
 }
 
+export interface ProviderSummary {
+  catalog_version: string;
+  selected: Array<{
+    id: string;
+    display_name: string;
+    executable: string;
+    available: boolean;
+    capabilities: string[];
+    workspace_files: string[];
+    manual_prerequisites: string[];
+    next_steps: string[];
+  }>;
+  manifest_path?: string;
+}
+
+export interface HandoffResult {
+  status: "launched" | "failed";
+  provider: string;
+  argv: string[];
+  exit_code: number;
+  signal: NodeJS.Signals | null;
+  message: string;
+}
 export type Command = "plan" | "dry-run" | "apply" | "verify" | "doctor";
 export type OperationAction = "create" | "update" | "remove" | "noop" | "conflict";
 
@@ -124,6 +155,9 @@ export interface CreatorEnvelope {
   config_digest?: string;
   operations: Operation[];
   diagnostics: Diagnostic[];
+  providers?: ProviderSummary;
+  verification?: "verified" | "failed";
+  handoff?: HandoffResult;
   rollback?: {
     attempted: boolean;
     restored: boolean;
@@ -139,6 +173,10 @@ export interface CreatorOptions {
   prompt?: (placeholder: Placeholder) => Promise<string>;
   failAfter?: number;
   interruptAfter?: number;
+  agent?: string;
+  agents?: string[];
+  launchAgent?: boolean;
+  resolvedConfig?: CreatorConfig;
 }
 
 interface PlannedFile {
@@ -159,6 +197,8 @@ export interface PreparedPlan {
   state?: CreatorState;
   failAfter?: number;
   interruptAfter?: number;
+  providerRuntimes: ProviderRuntime[];
+  providerSummary?: ProviderSummary;
 }
 
 export class CreatorError extends Error {
@@ -369,7 +409,7 @@ export const validateOwnershipManifest = (value: unknown): OwnershipManifest => 
   return { schema_version: 1, description: typeof value.description === "string" ? value.description : undefined, text_files: textFiles, categories };
 };
 
-const loadManifest = async (): Promise<{ manifest: PayloadManifest; payloadRoot: string; placeholders: PlaceholderManifest; ownership: OwnershipManifest }> => {
+const loadManifest = async (): Promise<{ manifest: PayloadManifest; payloadRoot: string; placeholders: PlaceholderManifest; ownership: OwnershipManifest; providerCatalog: ProviderCatalog }> => {
   const payloadRoot = path.join(__dirname, "payload");
   const manifest = await parseJson(path.join(__dirname, "payload-manifest.json"), "payload manifest") as PayloadManifest;
   if (!isObject(manifest) || !Array.isArray(manifest.files) || typeof manifest.payload_digest !== "string") {
@@ -385,7 +425,8 @@ const loadManifest = async (): Promise<{ manifest: PayloadManifest; payloadRoot:
   }
   const placeholders = validatePlaceholderManifest(await parseJson(path.join(payloadRoot, "placeholders.json"), "placeholder manifest"));
   const ownership = validateOwnershipManifest(await parseJson(path.join(payloadRoot, "archetype-ownership.json"), "ownership manifest"));
-  return { manifest, payloadRoot, placeholders, ownership };
+  const providerCatalog = validateProviderCatalog(await parseJson(path.join(payloadRoot, "providers/agents/catalog.json"), "provider catalog"));
+  return { manifest, payloadRoot, placeholders, ownership, providerCatalog };
 };
 
 const valueFromInput = (input: unknown): Record<string, unknown> => {
@@ -541,6 +582,68 @@ const renderTextFile = (
   return Buffer.from(rendered, "utf8");
 };
 
+const providerManifestPath = ".factory/provider-manifest.json";
+
+const providerCommand = (executable: string, args: string[]): string => [executable, ...args].map((part) => part.replaceAll("{workspace}", "<project-directory>")).join(" ");
+
+const providerSummary = (catalog: ProviderCatalog, runtimes: ProviderRuntime[], manifestPath = providerManifestPath): ProviderSummary => ({
+  catalog_version: catalog.catalog_version,
+  selected: runtimes.map(({ provider }) => ({
+    id: provider.id,
+    display_name: provider.display_name,
+    executable: provider.executable,
+    available: true,
+    capabilities: [...provider.capabilities],
+    workspace_files: provider.workspace.files.map((file) => file.path),
+    manual_prerequisites: [...provider.manual_prerequisites],
+    next_steps: [providerCommand(provider.executable, provider.launch.args)],
+  })),
+  ...(runtimes.length > 0 ? { manifest_path: manifestPath } : {}),
+});
+
+const providerConfigDigest = (config: CreatorConfig, selected: string[]): CreatorConfig => ({
+  values: config.values,
+  digest: `sha256:${sha256(canonicalJson({ agents: selected, values: Object.fromEntries(Object.keys(config.values).sort().map((key) => [key, config.values[key]])) }))}`,
+});
+
+const composeProviderFiles = (
+  catalog: ProviderCatalog,
+  runtimes: ProviderRuntime[],
+  sources: Map<string, SourceFile>,
+  config: CreatorConfig,
+  textFiles: Set<string>,
+  destinations: Map<string, string>,
+  removed: Set<string>,
+): { files: PlannedFile[]; summary: ProviderSummary } => {
+  const summary = providerSummary(catalog, runtimes);
+  if (runtimes.length === 0) return { files: [], summary };
+  const files: PlannedFile[] = [];
+  for (const { provider } of runtimes) {
+    for (const workspaceFile of provider.workspace.files) {
+      const source = sources.get(workspaceFile.template);
+      if (!source) throw new CreatorError("provider_invalid", `provider template is missing: ${workspaceFile.template}`, { path: workspaceFile.template });
+      const bytes = renderTextFile(source, workspaceFile.path, config, textFiles, destinations, removed);
+      files.push({ relativePath: workspaceFile.path, bytes, mode: 0o644, sha256: sha256(bytes), size: bytes.byteLength });
+    }
+  }
+  const manifest = {
+    schema_version: 1,
+    catalog_version: catalog.catalog_version,
+    providers: summary.selected.map(({ id, display_name, executable, capabilities, workspace_files, manual_prerequisites, next_steps }) => ({
+      id,
+      display_name,
+      executable,
+      capabilities,
+      workspace_files,
+      manual_prerequisites,
+      next_steps,
+    })),
+    handoff: { enabled_by_default: false, opt_in_flag: "--launch-agent" },
+  };
+  const bytes = canonicalJson(manifest);
+  files.push({ relativePath: providerManifestPath, bytes, mode: 0o644, sha256: sha256(bytes), size: bytes.byteLength });
+  return { files, summary };
+};
 const bindingHeader = `# Bindings - mandatory project providers
 
 These bindings are mandatory for every agent, regardless of harness.
@@ -611,7 +714,9 @@ const readPayloadFiles = async (
   payloadRoot: string,
   config: CreatorConfig,
   ownership: OwnershipManifest,
-): Promise<{ files: PlannedFile[]; sourceFiles: Map<string, SourceFile>; removedSourcePaths: Set<string> }> => {
+  providerCatalog: ProviderCatalog,
+  providerRuntimes: ProviderRuntime[],
+): Promise<{ files: PlannedFile[]; sourceFiles: Map<string, SourceFile>; removedSourcePaths: Set<string>; providerSummary: ProviderSummary }> => {
   if (manifest.files.length > MAX_STATE_FILES) throw new CreatorError("payload_invalid", "payload contains too many files");
   const sourceFiles = new Map<string, SourceFile>();
   for (const entry of manifest.files) {
@@ -669,13 +774,23 @@ const readPayloadFiles = async (
     const bytes = renderTextFile(source, ".opencode/plugins/factory-start.ts", config, textFiles, destinations, removedSourcePaths);
     files.push({ relativePath: ".opencode/plugins/factory-start.ts", bytes, mode: source.mode, sha256: sha256(bytes), size: bytes.byteLength });
   }
+  const composedProviders = composeProviderFiles(
+    providerCatalog,
+    providerRuntimes,
+    sourceFiles,
+    config,
+    textFiles,
+    destinations,
+    removedSourcePaths,
+  );
+  files.push(...composedProviders.files);
   for (const sourcePath of sourceFiles.keys()) {
     if (!removedSourcePaths.has(sourcePath) && !destinations.has(sourcePath)) throw new CreatorError("ownership_invalid", `payload file is not classified by ownership: ${sourcePath}`, { path: sourcePath });
   }
   if (files.length > MAX_STATE_FILES) throw new CreatorError("payload_invalid", "composed payload contains too many files");
   const totalBytes = files.reduce((total, file) => total + file.size, 0);
   if (totalBytes > MAX_STATE_BYTES) throw new CreatorError("payload_invalid", "payload exceeds the bounded creator state limit");
-  return { files, sourceFiles, removedSourcePaths };
+  return { files, sourceFiles, removedSourcePaths, providerSummary: composedProviders.summary };
 };
 
 const readState = async (target: string): Promise<CreatorState | undefined> => {
@@ -788,7 +903,7 @@ const addPathDiagnostics = async (target: string, relativePath: string, diagnost
 };
 
 export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan> => {
-  const { manifest, payloadRoot, placeholders, ownership } = await loadManifest();
+  const { manifest, payloadRoot, placeholders, ownership, providerCatalog } = await loadManifest();
   const target = await resolveTarget(options.target);
   const envelope = baseEnvelope(options.command, target.absolute, manifest);
   const diagnostics: Diagnostic[] = [];
@@ -803,31 +918,59 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
     diagnostics.push(diagnostic("payload_mismatch", "creator state does not match the packaged payload"));
   }
 
-  let config: CreatorConfig | undefined;
-  try {
-    config = await resolveConfig(placeholders, options.configPath, options.nonInteractive ?? false, options.prompt);
-  } catch (error) {
-    if (error instanceof CreatorError) diagnostics.push(diagnostic(error.code, error.message, error.path));
-    else throw error;
+  let config: CreatorConfig | undefined = options.resolvedConfig;
+  if (!config) {
+    try {
+      config = await resolveConfig(placeholders, options.configPath, options.nonInteractive ?? false, options.prompt);
+    } catch (error) {
+      if (error instanceof CreatorError) diagnostics.push(diagnostic(error.code, error.message, error.path));
+      else throw error;
+    }
   }
   envelope.config_digest = config?.digest;
 
   if (!config) {
     envelope.status = "error";
     envelope.diagnostics = sortDiagnostics(diagnostics);
-    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], failAfter: options.failAfter, interruptAfter: options.interruptAfter };
+    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes: [] };
   }
 
-  let composed: { files: PlannedFile[]; sourceFiles: Map<string, SourceFile>; removedSourcePaths: Set<string> };
+  let providerRuntimes: ProviderRuntime[] = [];
+  let selectedProviders: string[] = [];
   try {
-    composed = await readPayloadFiles(manifest, payloadRoot, config, ownership);
+    let rawSelection: string | undefined = options.agent;
+    if (options.agent === undefined && options.agents === undefined && !options.nonInteractive && options.prompt) {
+      try {
+        rawSelection = await options.prompt({ key: "AGENTS", prompt: "Agent providers (comma-separated, or none)", default: "none", required: false });
+      } catch {
+        rawSelection = "none";
+      }
+    }
+    selectedProviders = parseProviderSelection(rawSelection, options.agents, providerCatalog);
+    if (options.launchAgent && selectedProviders.length !== 1) throw new Error("--launch-agent requires exactly one selected agent provider");
+    providerRuntimes = await inspectProviderAvailability(providerCatalog, selectedProviders);
+    config = providerConfigDigest(config, selectedProviders);
+    envelope.providers = providerSummary(providerCatalog, providerRuntimes);
+    envelope.config_digest = config.digest;
+  } catch (error) {
+    const providerError = error instanceof Error ? error : new Error(String(error));
+    diagnostics.push(diagnostic((error as { code?: string }).code ?? "provider_invalid", providerError.message));
+    envelope.status = "error";
+    envelope.diagnostics = sortDiagnostics(diagnostics);
+    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes: [] };
+  }
+
+  let composed: { files: PlannedFile[]; sourceFiles: Map<string, SourceFile>; removedSourcePaths: Set<string>; providerSummary: ProviderSummary };
+  try {
+    composed = await readPayloadFiles(manifest, payloadRoot, config, ownership, providerCatalog, providerRuntimes);
   } catch (error) {
     if (!(error instanceof CreatorError)) throw error;
     envelope.status = "error";
     envelope.diagnostics = sortDiagnostics([...diagnostics, diagnostic(error.code, error.message, error.path)]);
-    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter };
+    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes };
   }
   const files = composed.files;
+  envelope.providers = composed.providerSummary;
   const oldOwned = new Map((state?.owned_files ?? []).map((file) => [file.path, file]));
   const desiredPaths = new Set(files.map((file) => file.relativePath));
   const removablePaths = new Set(composed.removedSourcePaths);
@@ -913,7 +1056,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   envelope.operations = sortedOperations;
   envelope.diagnostics = sortDiagnostics(diagnostics);
   envelope.status = hasConflict ? "conflict" : sortedOperations.every((operation) => operation.action === "noop") ? "noop" : options.command === "dry-run" ? "dry-run" : "planned";
-  return { envelope, target: target.absolute, targetExisted: target.existed, files: [...files, stateFile], stateBytes, config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter };
+  return { envelope, target: target.absolute, targetExisted: target.existed, files: [...files, stateFile], stateBytes, config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes };
 };
 
 const pathFor = (target: string, relativePath: string): string => path.join(target, relativePath);
@@ -1039,6 +1182,31 @@ export const verify = async (prepared: PreparedPlan): Promise<CreatorEnvelope> =
   };
 };
 
+export const launchSelectedAgent = async (prepared: PreparedPlan): Promise<HandoffResult> => {
+  if (prepared.providerRuntimes.length !== 1) throw new CreatorError("handoff_invalid", "agent handoff requires exactly one selected provider", { plan: prepared });
+  const runtime = prepared.providerRuntimes[0];
+  try {
+    const result = await launchProvider(runtime, prepared.target);
+    return {
+      status: result.code === 0 ? "launched" : "failed",
+      provider: runtime.provider.id,
+      argv: result.argv,
+      exit_code: result.code,
+      signal: result.signal,
+      message: result.code === 0 ? "agent exited successfully" : "agent exited unsuccessfully; repository readiness is reported separately",
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      provider: runtime.provider.id,
+      argv: [runtime.executable_path, ...runtime.provider.launch.args.map((arg) => arg.replaceAll("{workspace}", prepared.target))],
+      exit_code: 1,
+      signal: null,
+      message: `agent could not be launched: ${(error as Error).message}`,
+    };
+  }
+};
+
 export const envelopeJson = (envelope: CreatorEnvelope): string => `${JSON.stringify({
   schema_version: envelope.schema_version,
   command: envelope.command,
@@ -1046,8 +1214,11 @@ export const envelopeJson = (envelope: CreatorEnvelope): string => `${JSON.strin
   target: envelope.target,
   payload: envelope.payload,
   ...(envelope.config_digest ? { config_digest: envelope.config_digest } : {}),
+  ...(envelope.providers ? { providers: envelope.providers } : {}),
   operations: sortOperations(envelope.operations),
   diagnostics: sortDiagnostics(envelope.diagnostics),
+  ...(envelope.verification ? { verification: envelope.verification } : {}),
+  ...(envelope.handoff ? { handoff: envelope.handoff } : {}),
   ...(envelope.rollback ? { rollback: envelope.rollback } : {}),
 }, null, 2)}\n`;
 

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "catalog_version": "1.0.0",
+  "providers": [
+    {
+      "id": "claude-code",
+      "display_name": "Claude Code",
+      "executable": "claude",
+      "capabilities": ["workspace-instructions", "explicit-handoff"],
+      "workspace": {
+        "files": [
+          {"path": ".claude/factory-template.md", "template": "providers/agents/templates/claude-code.md"}
+        ]
+      },
+      "launch": {"args": ["--cwd", "{workspace}"]},
+      "manual_prerequisites": [
+        "Install Claude Code separately using the provider's official instructions.",
+        "Authenticate Claude Code and configure any preferred model outside project creation."
+      ],
+      "missing_executable_hint": "Install Claude Code and authenticate it before using --launch-agent."
+    },
+    {
+      "id": "opencode",
+      "display_name": "OpenCode",
+      "executable": "opencode",
+      "capabilities": ["workspace-instructions", "explicit-handoff"],
+      "workspace": {
+        "files": [
+          {"path": ".opencode/agents/factory-template.md", "template": "providers/agents/templates/opencode.md"}
+        ]
+      },
+      "launch": {"args": ["--dir", "{workspace}"]},
+      "manual_prerequisites": [
+        "Install OpenCode separately using the provider's official instructions.",
+        "Authenticate OpenCode and configure any preferred model outside project creation."
+      ],
+      "missing_executable_hint": "Install OpenCode and authenticate it before using --launch-agent."
+    },
+    {
+      "id": "codex",
+      "display_name": "Codex",
+      "executable": "codex",
+      "capabilities": ["workspace-instructions", "explicit-handoff"],
+      "workspace": {
+        "files": [
+          {"path": ".codex/AGENTS.md", "template": "providers/agents/templates/codex.md"}
+        ]
+      },
+      "launch": {"args": ["--cd", "{workspace}"]},
+      "manual_prerequisites": [
+        "Install Codex separately using the provider's official instructions.",
+        "Authenticate Codex and configure any preferred model outside project creation."
+      ],
+      "missing_executable_hint": "Install Codex and authenticate it before using --launch-agent."
+    },
+    {
+      "id": "pi",
+      "display_name": "Pi",
+      "executable": "pi",
+      "capabilities": ["workspace-instructions", "explicit-handoff"],
+      "workspace": {
+        "files": [
+          {"path": ".pi/AGENTS.md", "template": "providers/agents/templates/pi.md"}
+        ]
+      },
+      "launch": {"args": ["--cwd", "{workspace}"]},
+      "manual_prerequisites": [
+        "Install Pi separately using the provider's official instructions.",
+        "Authenticate Pi and configure any preferred model outside project creation."
+      ],
+      "missing_executable_hint": "Install Pi and authenticate it before using --launch-agent."
+    }
+  ]
+}

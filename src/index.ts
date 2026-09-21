@@ -8,6 +8,7 @@ import {
   doctor,
   envelopeJson,
   errorEnvelope,
+  launchSelectedAgent,
   preparePlan,
   verify,
   type Command,
@@ -44,8 +45,8 @@ interface ParsedArgs extends Omit<CreatorOptions, "command" | "target"> {
   reducedMotion: boolean;
 }
 
-const usage = "Usage: factory-template <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--non-interactive] [--yes] [--json]";
-const errorStatuses = new Set(["error", "conflict", "failed", "not-created", "unhealthy", "cancelled"]);
+const usage = "Usage: factory-template <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive] [--yes] [--no-color] [--reduced-motion] [--json]\n       factory-template github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
+const errorStatuses = new Set(["error", "conflict", "failed", "not-created", "unhealthy", "cancelled", "verification-failed", "handoff-failed"]);
 
 const isProvisioningCommand = (value: string | undefined): boolean => value === "github-provision" || value === "provision-github";
 
@@ -96,6 +97,9 @@ const parseArgs = (): ParsedArgs => {
   let yes = false;
   let noColor = false;
   let reducedMotion = false;
+  let agent: string | undefined;
+  const agents: string[] = [];
+  let launchAgent = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--target" || arg === "-t") target = args[++index] ?? "";
@@ -106,13 +110,16 @@ const parseArgs = (): ParsedArgs => {
     else if (arg === "--reduced-motion") reducedMotion = true;
     else if (arg === "--failure-after") failAfter = Number(args[++index]);
     else if (arg === "--interrupt-after") interruptAfter = Number(args[++index]);
+    else if (arg === "--agent") agent = args[++index];
+    else if (arg === "--agents") agents.push(args[++index] ?? "");
+    else if (arg === "--launch-agent") launchAgent = true;
     else if (arg === "--json") continue;
     else throw new CreatorError("invalid_arguments", `unknown argument: ${arg}`);
   }
   if (!target) throw new CreatorError("invalid_arguments", "--target is required");
   if (failAfter !== undefined && (!Number.isInteger(failAfter) || failAfter < 1)) throw new CreatorError("invalid_arguments", "--failure-after must be a positive integer");
   if (interruptAfter !== undefined && (!Number.isInteger(interruptAfter) || interruptAfter < 1)) throw new CreatorError("invalid_arguments", "--interrupt-after must be a positive integer");
-  return { command: command as Command, target, configPath, nonInteractive, failAfter, interruptAfter, version: false, help: false, json: args.includes("--json"), yes, noColor, reducedMotion };
+  return { command: command as Command, target, configPath, nonInteractive, failAfter, interruptAfter, agent, agents: agents.length > 0 ? agents : undefined, launchAgent, version: false, help: false, json: args.includes("--json"), yes, noColor, reducedMotion };
 };
 
 interface PromptWaiter {
@@ -349,7 +356,32 @@ const main = async (): Promise<void> => {
     if (envelope.status !== "cancelled") {
       if (parsed.command === "apply") {
         if (interactive) writeProgress("Applying and verifying staged changes", ui, 3, 3);
-        envelope = await withProgress("Applying and verifying staged changes", ui, () => applyPlan(prepared));
+        envelope = await withProgress("Applying and verifying staged changes", ui, async () => {
+          let applied = await applyPlan(prepared);
+          if (applied.status === "applied" || applied.status === "noop") {
+            const selected = prepared.providerRuntimes.map(({ provider }) => provider.id);
+            const verificationPlan = await preparePlan({
+              ...parsed,
+              command: "verify",
+              agent: selected.length === 1 ? selected[0] : selected.length === 0 ? "none" : undefined,
+              agents: selected.length > 1 ? selected : undefined,
+              launchAgent: false,
+              resolvedConfig: prepared.config,
+            });
+            const verification = await verify(verificationPlan);
+            applied = {
+              ...applied,
+              providers: verification.providers,
+              verification: verification.status === "verified" ? "verified" : "failed",
+              status: verification.status === "verified" ? applied.status : "verification-failed",
+            };
+            if (parsed.launchAgent && verification.status === "verified") {
+              const handoff = await launchSelectedAgent(verificationPlan);
+              applied = { ...applied, handoff, status: handoff.status === "failed" ? "handoff-failed" : applied.status };
+            }
+          }
+          return applied;
+        });
       } else if (parsed.command === "verify") {
         if (interactive) writeProgress("Verifying repository state", ui, 3, 3);
         envelope = await withProgress("Verifying repository state", ui, () => verify(prepared));
