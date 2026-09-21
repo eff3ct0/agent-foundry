@@ -88,6 +88,15 @@ This ODD tracker is archetype-governance state and is registered as a `removed` 
 - Boundary: use the preserved pure contract for bounded open/closed duplicate lookup, exactly one create-or-comment mutation with target-host readback, always-run workflow wiring, documentation, and offline request-fixture tests.
 - Explicit exclusion: no hosted workflow dispatch and no live issue/comment mutation in tests.
 
+### Corrective validation for child PR #136
+
+- The `report` subcommand now dispatches before assertion-mode argument validation, so the workflow invocation needs no `--checkout` or `--workflow-url`.
+- Public bug-form bodies exclude `generated_repository`; focused coverage asserts the identifier is absent.
+- Comment readback now requires the returned comment `id` to equal the created `comment_id`; a mismatched identity fails closed.
+- Passed: `python3 scripts/test-real-agent-journey.py`; `python3 scripts/real-agent-journey.py --self-check`; `python3 scripts/check-real-agent-workflow.py`; `python3 scripts/check-bootstrap-workflow.py`; and `python3 scripts/check-determinism.py`.
+- Runtime harness: N/A — this correction validates CLI dispatch and injected offline GitHub request fixtures only; no hosted workflow or live mutation is authorized.
+- Rollback boundary: remove the report-route dispatch guard, public-body redaction, strict comment identity check, their focused regressions, and matching documentation without altering aggregation or workflow execution.
+
 ## Next action
 
 Complete and deliver only child slice 2 to the immediate slice-1 parent branch. Record its commit, focused offline checks, 400-line budget, and child PR here; defer advisory triage and hosted validation to later approved work.

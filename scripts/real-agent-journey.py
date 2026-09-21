@@ -290,7 +290,6 @@ def build_bug_report(evidence, artifact_url):
         "",
         "### Actual behavior",
         "The earliest failed stage was `%s` with failure code `%s`." % (report["stage"], report["failure_code"]),
-        "Generated repository: `%s`." % report["generated_repository"],
         "Cleanup status: `%s`." % report["cleanup_status"],
         marker,
         "",
@@ -353,7 +352,7 @@ def report_failure(report, target, token, request_fn=api_request):
                              expected=(201,), payload={"body": report["body"]})
         comment_id = created.get("id") if isinstance(created, dict) else None
         readback = request_fn("GET", "repos/%s/issues/comments/%s" % (target, comment_id), token) if type(comment_id) is int else None
-        if (not isinstance(readback, dict) or readback.get("issue_url", "").lower() !=
+        if (not isinstance(readback, dict) or readback.get("id") != comment_id or readback.get("issue_url", "").lower() !=
                 ("https://api.github.com/repos/%s/issues/%s" % (target, issue["number"])).lower() or
                 _normalized_body(readback.get("body")) != _normalized_body(report["body"])):
             raise JourneyError("reporting", "comment_readback_failed", "GitHub comment readback did not match")
@@ -1022,7 +1021,10 @@ def main():
         if args.self_check:
             self_check()
             return
-        if args.input or args.checkout or args.cleanup_evidence or args.artifact_url:
+        if args.command == "report":
+            print(report_failure(build_bug_report(read_json(args.input), args.artifact_url), args.repository,
+                                 os.environ.get(args.token_env, "")))
+        elif args.input or args.checkout or args.cleanup_evidence or args.artifact_url:
             if not args.input or not args.checkout or not args.workflow_url:
                 parser.error("--input, --checkout, and --workflow-url are required")
             try:
@@ -1061,9 +1063,6 @@ def main():
             write_json(args.output, aggregate(args.stage_dir, args.run_id, args.repository, args.runtime, args.workflow_url))
             if read_json(args.output)["result"] != "passed":
                 raise JourneyError("real-agent journey failed", "journey_failed")
-        elif args.command == "report":
-            print(report_failure(build_bug_report(read_json(args.input), args.artifact_url), args.repository,
-                                 os.environ.get(args.token_env, "")))
         else:
             parser.error("a command or --self-check is required")
     except (JourneyError, OSError, ValueError) as error:

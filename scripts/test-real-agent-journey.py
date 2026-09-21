@@ -2,6 +2,8 @@
 """Focused offline checks for the real-agent journey contract and assertions."""
 import importlib.util
 import json
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -284,6 +286,7 @@ def test_reporting_contract_builds_deterministic_bug_form_payload():
     assert report["stage"] == "agent" and report["check_identifier"] == "real-agent-journey/agent"
     assert report["fingerprint"] == journey.failure_fingerprint(SHA, "codex-cli", "agent", "agent_failed", "real-agent-journey/agent")
     assert "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"] in report["body"]
+    assert report["generated_repository"] not in report["body"]
     journey.validate_bug_body(report["body"])
 
 
@@ -352,7 +355,7 @@ def test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguit
             assert payload == {"body": report["body"]}
             return {"id": 8}
         if path.endswith("/comments/8"):
-            return {"issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
+            return {"id": 8, "issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
         raise AssertionError(path)
 
     assert journey.report_failure(report, "eff3ct0/factory-template", "token", duplicate) == "commented canonical issue #7"
@@ -387,6 +390,31 @@ def test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguit
         raise AssertionError("mismatched report target accepted")
 
 
+def test_reporting_github_integration_rejects_comment_readback_identity_mismatch():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    marker = "Real-Agent-Journey-Fingerprint: " + report["fingerprint"]
+
+    def invalid_comment_readback(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return []
+        if method == "POST":
+            return {"id": 8}
+        if path.endswith("/comments/8"):
+            return {"id": 9, "issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
+        raise AssertionError(path)
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", invalid_comment_readback)
+    except journey.JourneyError as error:
+        assert error.failure_code == "comment_readback_failed"
+    else:
+        raise AssertionError("mismatched comment readback identity accepted")
+
+
 def test_reporting_github_integration_rejects_mutation_readback_mismatch():
     report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
 
@@ -406,6 +434,20 @@ def test_reporting_github_integration_rejects_mutation_readback_mismatch():
         raise AssertionError("mismatched issue readback accepted")
 
 
+def test_report_cli_dispatch_does_not_require_assertion_arguments():
+    with tempfile.TemporaryDirectory() as tmp:
+        evidence = Path(tmp) / "journey.json"
+        evidence.write_text(json.dumps({"schema_version": journey.ENVELOPE_VERSION, "result": "passed"}), encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "real-agent-journey.py"), "report",
+             "--input", str(evidence), "--repository", "eff3ct0/factory-template",
+             "--artifact-url", "https://github.com/eff3ct0/factory-template/actions/runs/123"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == "no journey failures\n"
+
+
 if __name__ == "__main__":
     test_contract_plan_is_provider_neutral()
     test_identity_and_decisions_fail_closed()
@@ -416,5 +458,7 @@ if __name__ == "__main__":
     test_reporting_contract_ignores_success_and_rejects_unsafe_evidence()
     test_reporting_github_integration_is_bounded_and_reads_back_mutations()
     test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity()
+    test_reporting_github_integration_rejects_comment_readback_identity_mismatch()
     test_reporting_github_integration_rejects_mutation_readback_mismatch()
+    test_report_cli_dispatch_does_not_require_assertion_arguments()
     print("real-agent journey offline tests OK")

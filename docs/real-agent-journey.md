@@ -196,17 +196,20 @@ public artifact URL and returns `None` for a passing journey. For a failure, it
 validates the immutable source revision, supported runtime, first non-passing
 stage, normalized failure code, cleanup status, and run-scoped GitHub URLs.
 
-The returned payload contains the generated repository, deterministic
-fingerprint, canonical marker, title, and a body that matches
-`.github/ISSUE_TEMPLATE/bug.yml`. The fingerprint is derived only from source
-revision, runtime, stage, failure code, and check identifier. Raw diagnostics,
-credentials, prompts, and model output are not accepted as report fields.
+The returned payload contains a deterministic fingerprint, canonical marker,
+title, and a body that matches `.github/ISSUE_TEMPLATE/bug.yml`. The public
+bug-report body excludes the generated repository identity. The fingerprint is
+derived only from source revision, runtime, stage, failure code, and check
+identifier. Raw diagnostics, credentials, prompts, and model output are not
+accepted as report fields.
 
 The always-run report job performs one bounded duplicate lookup across open and
 closed issues. It creates a `type:bug` issue or posts one occurrence comment to
 the single canonical issue, then reads the mutation back. Passing evidence
 creates no issue. Ambiguous, incomplete, malformed, or mismatched readback
 fails closed; tests use injected offline request fixtures and never mutate GitHub.
+The `report` CLI route is independent of assertion mode and requires only its
+reporting arguments; it does not require a generated checkout or workflow URL.
 
 ## Scope boundary
 
