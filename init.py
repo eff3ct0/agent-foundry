@@ -42,6 +42,8 @@ when selected, its provider fragment is composed too. The abstract shapes are in
 the relevant providers/*/_contract.md files; _contract.md is never selected.
 Composition happens BEFORE apply_values so tokens (<TRACKER_KEY>,
 <SECRETS_PATH>, ...) are filled inside the newly written bindings.md.
+The selected task provider also composes native pull-request linkage and
+approval instructions into the retained PR templates.
 """
 import argparse
 import json
@@ -78,6 +80,12 @@ def _factory_asset_destination(relative):
     if relative in {"test_init.py", "test_factory_bootstrap.py"}:
         return os.path.join(FACTORY_ROOT, "scripts", relative)
     return None
+PR_GOVERNANCE_START = "<!-- provider-governance:start -->"
+PR_GOVERNANCE_END = "<!-- provider-governance:end -->"
+PR_GOVERNANCE_FILES = (
+    os.path.join(".github", "pull_request_template.md"),
+    os.path.join("templates", "pull-request.md"),
+)
 
 ARCHETYPE_ONLY_PATHS = (
     SELF,
@@ -125,6 +133,28 @@ BINDINGS_HEADER = (
     "the operation. Without that evidence, the human applies the label directly. "
     "This contract change does not approve existing work.\n"
 )
+PR_GOVERNANCE = {
+    "github-issues": (
+        "Closes #<TICKET_ID>",
+        "<!-- The linked GitHub issue must have status:approved. -->",
+    ),
+    "github-projects": (
+        "Closes #<TICKET_ID>",
+        "<!-- The linked GitHub issue must have status:approved. -->",
+    ),
+    "jira": (
+        "Jira: <TICKET_ID>",
+        "<!-- The Jira issue key creates the development link; approval remains a Jira-side gate. -->",
+    ),
+    "linear": (
+        "Linear: <TICKET_ID>",
+        "<!-- The Linear issue key creates the task link; approval remains a Linear-side gate. -->",
+    ),
+    "custom": (
+        "Task: <TICKET_ID>",
+        "<!-- Use the bound provider's native task reference; approval remains an explicit provider-side gate. -->",
+    ),
+}
 
 
 def load_manifest():
@@ -819,6 +849,45 @@ def compose_bindings(root, task_tracker, secrets_provider, dry_run=False, code_i
     return used
 
 
+def compose_pr_governance(root, task_tracker, dry_run=False):
+    """Compose native task-provider instructions into retained PR templates."""
+    try:
+        reference, approval = PR_GOVERNANCE[task_tracker]
+    except KeyError:
+        raise ValueError("Invalid TASK_TRACKER for PR governance: %s" % task_tracker)
+    block = "\n".join((PR_GOVERNANCE_START, reference, approval, PR_GOVERNANCE_END))
+    changed = []
+    for relative in PR_GOVERNANCE_FILES:
+        path = (factory_asset_path(root, relative)
+                if relative == "templates/pull-request.md"
+                else os.path.join(root, relative))
+        try:
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+        except OSError as exc:
+            raise ValueError("PR governance template is missing: %s" % relative) from exc
+        pattern = re.compile(
+            re.escape(PR_GOVERNANCE_START) + r".*?" + re.escape(PR_GOVERNANCE_END),
+            re.DOTALL,
+        )
+        updated, count = pattern.subn(block, text, count=1)
+        if not count:
+            raise ValueError("PR governance markers are missing: %s" % relative)
+        if updated == text:
+            continue
+        changed.append(path)
+        if not dry_run:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(updated)
+    if dry_run:
+        print("Would compose PR governance for task provider: %s" % task_tracker)
+    elif changed:
+        print("PR governance composed for task provider: %s" % task_tracker)
+    else:
+        print("PR governance already current for task provider: %s" % task_tracker)
+    return changed
+
+
 def cleanup(root):
     removed = []
     manifest = os.path.join(root, OWNERSHIP_MANIFEST_NAME)
@@ -1139,6 +1208,31 @@ def self_check():
         finally:
             shutil.rmtree(d5)
 
+        d6 = tempfile.mkdtemp()
+        try:
+            for relative in PR_GOVERNANCE_FILES:
+                path = os.path.join(d6, relative)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("## Ticket\n%s\n" % "\n".join((
+                        PR_GOVERNANCE_START,
+                        "Closes #<TICKET_ID>",
+                        PR_GOVERNANCE_END,
+                    )))
+            compose_pr_governance(d6, "jira")
+            for relative in PR_GOVERNANCE_FILES:
+                text = open(os.path.join(d6, relative), encoding="utf-8").read()
+                assert "Jira: <TICKET_ID>" in text and "Closes #<TICKET_ID>" not in text, text
+            first = open(os.path.join(d6, PR_GOVERNANCE_FILES[0]), encoding="utf-8").read()
+            compose_pr_governance(d6, "jira")
+            assert open(os.path.join(d6, PR_GOVERNANCE_FILES[0]), encoding="utf-8").read() == first
+            compose_pr_governance(d6, "github-issues")
+            assert "Closes #<TICKET_ID>" in open(
+                os.path.join(d6, PR_GOVERNANCE_FILES[0]), encoding="utf-8"
+            ).read()
+        finally:
+            shutil.rmtree(d6)
+
         print("self-check OK")
     finally:
         shutil.rmtree(d)
@@ -1210,6 +1304,10 @@ def main():
             dry_run=args.dry_run,
             code_intelligence=values.get("CODE_INTELLIGENCE", "none"),
         )
+        try:
+            compose_pr_governance(ROOT, task_tracker, dry_run=args.dry_run)
+        except ValueError as exc:
+            sys.exit(str(exc))
     configure_opencode_plugin(ROOT, values.get("OPENCODE_PLUGIN", "false"), dry_run=args.dry_run)
     nonempty = {k: v for k, v in values.items() if v}
     changes = apply_values(ROOT, nonempty, dry_run=args.dry_run)
