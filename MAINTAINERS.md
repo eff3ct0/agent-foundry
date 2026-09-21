@@ -158,6 +158,7 @@ The workflow pins every third-party action to a verified full commit SHA:
 - `actions/upload-artifact` v4.6.2: `ea165f8d65b6e75b540449e92b4886f43607fa02`
 - `actions/download-artifact` v4.3.0: `d3f86a106a0bac45b974a628896c90dbdf5c8093`
 - `actions/create-github-app-token` v2.2.2: `fee1f7d63c2ff003460e3d139729b119787bc349`
+- `actions/setup-node` v4.4.0: `49933ea5288caeca8642d1e84afbd3f7d6820020`
 
 Run `python3 scripts/check-bootstrap-workflow.py` to reject floating, branch,
 tag, or non-40-hex action references.

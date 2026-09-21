@@ -15,6 +15,10 @@ PINNED_ACTIONS = {
     "actions/download-artifact": "d3f86a106a0bac45b974a628896c90dbdf5c8093",  # v4.3.0
     "actions/create-github-app-token": "fee1f7d63c2ff003460e3d139729b119787bc349",  # v2.2.2
 }
+BOOTSTRAP_PINNED_ACTIONS = {
+    **PINNED_ACTIONS,
+    "actions/setup-node": "49933ea5288caeca8642d1e84afbd3f7d6820020",  # v4.4.0
+}
 USE = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
 
 
@@ -27,9 +31,9 @@ def check():
         action, separator, sha = reference.partition("@")
         if not separator or not re.fullmatch(r"[0-9a-f]{40}", sha):
             raise AssertionError("action is not pinned to a full commit SHA: %s" % reference)
-        if action in PINNED_ACTIONS and PINNED_ACTIONS[action] != sha:
+        if action in BOOTSTRAP_PINNED_ACTIONS and BOOTSTRAP_PINNED_ACTIONS[action] != sha:
             raise AssertionError("action SHA is not the verified documented pin: %s" % reference)
-    for action, sha in PINNED_ACTIONS.items():
+    for action, sha in BOOTSTRAP_PINNED_ACTIONS.items():
         if "%s@%s" % (action, sha) not in uses:
             raise AssertionError("required action pin is missing: %s" % action)
     if "permissions: {}" not in text:
