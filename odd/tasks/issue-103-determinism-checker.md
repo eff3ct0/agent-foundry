@@ -2,7 +2,7 @@
 
 ## Status
 
-EVIDENCE/DELIVERY active; implementation work unit committed.
+EVIDENCE/DELIVERY complete; review pending.
 
 ## Scope
 
@@ -76,8 +76,9 @@ commit and one PR are appropriate.
   unresolved required placeholder keys and exited nonzero. ShellCheck is not
   applicable because `scripts/` has no shell scripts.
 - Work-unit commit: `813f340 fix(initializer): remove unusable determinism checker`.
+- Delivery PR: https://github.com/eff3ct0/factory-template/pull/129
+  with the single `type:bug` label.
 
 ## Next action
 
-Push the delivery branch and open the linked PR with the required `type:bug`
-label.
+Await required review and CI; do not merge automatically.
