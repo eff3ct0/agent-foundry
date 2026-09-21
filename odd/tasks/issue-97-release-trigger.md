@@ -83,8 +83,12 @@ template default branch.
 Work-unit commit: `dbded7c25d1b4295f5f7c598584caf4b61941ffe`
 `feat(journey): trigger real-agent journey on releases (#97)`.
 
+Pull request: `https://github.com/eff3ct0/factory-template/pull/131`, targeting
+`main` with exactly one `type:feature` label. Both PR-governance validation
+checks passed. Its chain context names predecessor PR #130 and requires a
+rebase after #130 merges.
+
 ## Next action
 
-Push the stacked branch and open the `main`-targeted PR with its predecessor
-context, exactly one `type:feature` label, and the recorded hosted-validation
-limitation.
+Await PR #130, then rebase this branch onto `main` and request the repository
+owner's hosted manual and release-published validation before closing #97.
