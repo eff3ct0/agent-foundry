@@ -93,9 +93,21 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - [x] Created an isolated tracker worktree from `origin/feat/issue-110-governance-node-06e-reporter-cleanup` without changing the dirty source checkout.
 - [x] Verified issue approval, parent PR state, package payload baseline, and the ownership classification of `odd/`.
 - [x] Selected and recorded the complete 1,200-case Cartesian matrix and the hosted-resource authorization boundary.
-- [ ] Commit, push, and open the draft tracker PR targeting the #147 branch.
-- [ ] Create Slice A from this tracker and implement only packed-artifact identity tests and contract.
+- [x] Committed, pushed, and opened draft tracker PR #148 targeting the #147 branch.
+- [x] Created Slice A from the tracker and implemented only the packed-artifact identity contract and tests.
+
+## Slice A: packed-artifact identity
+
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-artifact-identity`
+- Branch: `feat/issue-111-artifact-identity`
+- Base: `feat/issue-111-node-verification` at `28a18ce`
+- Boundary: `scripts/artifact-identity.mjs` returns a versioned local identity envelope for an installed packed artifact and its generated project tree.
+- Identity fields: package name/version, `tarball_digest`, `payload_digest`, and `tree_digest`; each digest is SHA-256 and the tree digest includes sorted relative paths, file modes, sizes, and content digests.
+- Fixture: two independent `pnpm pack --ignore-scripts` tarballs are installed offline, create equivalent projects through the installed CLI, and must produce equal complete identity envelopes.
+- Ownership: `scripts/artifact-identity.mjs` is release/template verification-only and is classified as `removed`; it is excluded from the creator payload. The payload lock changes only because `archetype-ownership.json` is a payload input.
+- Verification: `node --test test/package.test.mjs` passed (6/6); `pnpm typecheck`, `pnpm test` (85/85), `python3 scripts/check-determinism.py`, and `git diff --check` passed.
+- Explicitly deferred: local matrix runner, failure injection, workflows, hosted resources, and legacy Python cleanup.
 
 ## Resume condition
 
-Open the draft tracker PR, then branch Slice A from this tracker. Do not execute any matrix case or provision any hosted resource without a new explicit resource authorization.
+Commit, push, and open the Slice A child PR targeting tracker PR #148. Do not execute any matrix case or provision any hosted resource without a new explicit resource authorization.

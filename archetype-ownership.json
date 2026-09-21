@@ -88,6 +88,7 @@
         {"path": "docs/smoke-test.md", "kind": "file"},
         {"path": "docs/real-agent-journey.md", "kind": "file"},
         {"path": "scripts/bootstrap-e2e.py", "kind": "file"},
+        {"path": "scripts/artifact-identity.mjs", "kind": "file"},
         {"path": "scripts/check-bootstrap-workflow.py", "kind": "file"},
         {"path": "scripts/release-ref.mjs", "kind": "file"},
         {"path": "scripts/release_ref.py", "kind": "file"},
