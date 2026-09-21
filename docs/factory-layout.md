@@ -16,7 +16,8 @@ under `.factory/`.
 | `AGENT.md` | Root-required | `AGENT.md` is the primary agent entrypoint and its cold-agent reading order starts here. A host must find it without knowing the factory layout. |
 | `CLAUDE.md` | Root-required | `CLAUDE.md` is Claude Code's repository entrypoint and directs the agent to `AGENT.md` and the bindings. |
 | `README.md` | Root-required | GitHub and humans discover the repository overview at the root; it is also the stable project-facing documentation entrypoint. |
-| `start.py` | Root-required | `start.py` is the universal manual startup command and resolves its repository root from its own location. Keep `python3 start.py` unchanged. |
+| `start.mjs` | Root-required | `start.mjs` is the canonical Node startup router and resolves its repository root from the selected working directory. |
+| `start.py` | Root-required | `start.py` is the universal compatibility startup command and delegates to `start.mjs`. Keep `python3 start.py` available. |
 | `.gitignore` | Root-required | Git discovers ignore rules from the repository root before any project or factory path is interpreted. |
 | `.github/` | Root-required | GitHub discovers issue forms, pull-request metadata, and workflows only from `.github/` at the repository root. |
 | `.opencode/` | Root-required, optional | OpenCode discovers project plugins from `.opencode/plugins/`; the generated startup adapter remains there. |
@@ -43,7 +44,7 @@ The source-template inventory maps to the target as follows:
 | Generic `docs/*.md` | `.factory`-relocatable | `.factory/docs/` |
 | `hooks/` | `.factory`-relocatable | `.factory/hooks/` |
 | `docs/bindings.md`, `.github/workflows/ci.yml`, `.opencode/plugins/factory-start.ts` | Generated project output | Keep the root-discovered output paths shown above |
-| `AGENT.md`, `CLAUDE.md`, `README.md`, `start.py`, `.gitignore`, `.github/`, `.opencode/`, `.claude/`, `.pi/`, and toolchain manifests | Root-required or application-owned | Keep at the repository root |
+| `AGENT.md`, `CLAUDE.md`, `README.md`, `start.mjs`, `start.py`, `.gitignore`, `.github/`, `.opencode/`, `.claude/`, `.pi/`, and toolchain manifests | Root-required or application-owned | Keep at the repository root |
 | Application source, tests, assets, and product documentation | Application-owned | Keep under project-owned paths; never classify them as factory support |
 | `init.py`, `placeholders.json`, `archetype-ownership.json`, `MAINTAINERS.md`, `providers/`, `ci/`, and release-only tooling | Consumed/removed source-only content | Not present after initialization |
 
@@ -70,7 +71,7 @@ The first level under `.factory/` is fixed and intentionally small:
 | --- | --- | --- |
 | `.factory/checks/` | Retained offline structural and phase checks. | Checks resolve the repository root explicitly; they do not infer it from the current working directory. |
 | `.factory/docs/` | Retained generic factory workflow, handbook, bootstrap, and governance documentation. | Relative links are rebased during relocation and must resolve from their new location. |
-| `.factory/hooks/` | Source adapters for Claude Code, Pi, and OpenCode. | Adapters continue to invoke the root `start.py`; host-discovered copies/configuration stay in `.claude/`, `.pi/`, and `.opencode/`. |
+| `.factory/hooks/` | Source adapters for Claude Code, Pi, and OpenCode. | Adapters invoke the root `start.mjs` with shell-free Node argv; host-discovered copies/configuration stay in `.claude/`, `.pi/`, and `.opencode`. |
 | `.factory/scripts/` | Retained generic checkers and local synchronization helpers. | Documented commands use an explicit `.factory/scripts/...` path or a root wrapper; no command silently changes provider semantics. |
 | `.factory/templates/` | Generic ticket, handoff, runbook, DoD, ADR, and specification templates. | Links from root-facing documents use the new `.factory/templates/...` path. |
 
@@ -82,9 +83,9 @@ inventory remains authoritative for initialization lifecycle classification.
 
 | Consumer | Current source path | Contract path | Required compatibility evidence |
 | --- | --- | --- | --- |
-| Manual startup | `start.py` | `start.py` | `python3 start.py` remains the first command and keeps the same mode output. |
-| Claude startup adapter | `hooks/claude-code/session-start.sh` | `.factory/hooks/claude-code/session-start.sh` plus `.claude/` host configuration | The adapter resolves the repository root and executes `start.py`; Claude's discovery path is not moved into `.factory/`. |
-| Pi startup adapter | `hooks/pi/factory-start.ts` | `.factory/hooks/pi/factory-start.ts` plus `.pi/extensions/` host copy | The extension continues to run `python3 start.py` with the harness working directory. |
+| Manual startup | `start.mjs` and `start.py` | `start.mjs` and `start.py` | `node start.mjs` is canonical; `python3 start.py` remains the first-command compatibility fallback and produces the same mode output. |
+| Claude startup adapter | `hooks/claude-code/session-start.sh` | `.factory/hooks/claude-code/session-start.sh` plus `.claude/` host configuration | The adapter resolves the repository root and executes `node start.mjs`; Claude's discovery path is not moved into `.factory/`. |
+| Pi startup adapter | `hooks/pi/factory-start.ts` | `.factory/hooks/pi/factory-start.ts` plus `.pi/extensions/` host copy | The extension executes Node with an argv array for `start.mjs` in the harness working directory. |
 | OpenCode startup adapter | `hooks/opencode/factory-start.ts` | `.factory/hooks/opencode/factory-start.ts` plus `.opencode/plugins/factory-start.ts` | The generated plugin remains in `.opencode/plugins/` and remains opt-in. |
 | GitHub workflows/forms | `.github/` | `.github/` | GitHub's root discovery is preserved; workflows and forms are never hidden under `.factory/`. |
 | Generated bindings | `docs/bindings.md` | `docs/bindings.md` | Existing links and generated-provider content remain valid; relocation must update links atomically if this path ever changes. |

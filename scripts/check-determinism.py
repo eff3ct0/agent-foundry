@@ -390,9 +390,9 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(start, labels, governance, delivery, factory_layout, release_scripts=(), real_agent=()):
+def check_scripts(labels, governance, delivery, factory_layout, release_scripts=(), real_agent=()):
     catalog = labels.load_labels()
-    assert_same_output(start.self_check)
+    assert_repeatable_command(["node", "start.mjs", "--self-check"])
     assert_same_output(lambda: labels.sync(
         catalog, repo="acme/example", dry_run=True))
     assert_same_output(governance.self_check)
@@ -433,7 +433,6 @@ def self_check():
     source_mode = os.path.isfile(os.path.join(ROOT, "init.py"))
     init = load_module("archetype_init", "init.py") if source_mode else None
     factory = load_module("factory_bootstrap", "factory_bootstrap.py") if source_mode else None
-    start = load_module("start", "start.py")
     script_dir = ".factory/scripts" if not source_mode else "scripts"
     labels = load_module("sync_github_labels", script_dir + "/sync-github-labels.py")
     governance = load_module("check_pr_governance", script_dir + "/check-pr-governance.py")
@@ -469,7 +468,7 @@ def self_check():
         check_initializer_lifecycle(init)
     if factory:
         check_factory_bootstrap(factory)
-    check_scripts(start, labels, governance, delivery, factory_layout, release_scripts, real_agent)
+    check_scripts(labels, governance, delivery, factory_layout, release_scripts, real_agent)
     check_cli_commands(source_mode)
     print("determinism self-check OK")
 

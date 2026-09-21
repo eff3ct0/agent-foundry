@@ -87,3 +87,11 @@ unknown files are never removed or overwritten.
 `--failure-after N` and `--interrupt-after N` are deterministic failure-injection
 options used by the focused tests. The former must roll back creator-owned
 changes; the latter intentionally leaves staging for `doctor` to report.
+
+## Startup routing
+
+The packaged payload includes `start.mjs`, the canonical offline router for
+`SELF`, `SETUP`, and `WORK` modes. It reads only the workspace and its local Git
+remote; it never calls the network or launches an agent. Use `node start.mjs`
+manually when hooks are unavailable. The retained `python3 start.py` command is
+a compatibility wrapper for the same Node router.

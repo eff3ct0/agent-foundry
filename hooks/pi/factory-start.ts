@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -8,7 +9,7 @@ export default function (pi: ExtensionAPI) {
   let startup = "";
 
   pi.on("session_start", async (_event, ctx) => {
-    const result = await run("python3", ["start.py"], { cwd: ctx.cwd });
+    const result = await run(process.execPath, [path.join(ctx.cwd, "start.mjs")], { cwd: ctx.cwd, maxBuffer: 16 * 1024 });
     startup = result.stdout;
   });
 

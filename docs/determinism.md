@@ -13,8 +13,9 @@ python3 scripts/check-determinism.py
 
 | Operation | Classification | Repeat-run contract | External state / rollback |
 | --- | --- | --- | --- |
-| `start.py` | Deterministic, read-only, offline | Same mode and message for the same local files and git remote | No state |
-| `hooks/claude-code/session-start.sh`, `hooks/pi/factory-start.ts`, `hooks/opencode/factory-start.ts` | Deterministic local adapters | Each configured session event runs `start.py` once and forwards its output once | No external state or network |
+| `start.mjs` | Deterministic, read-only, offline | Same mode and message for the same local files and git remote | No state |
+| `start.py` | Compatibility wrapper | Delegates to `start.mjs` without adding routing logic | No state |
+| `hooks/claude-code/session-start.sh`, `hooks/pi/factory-start.ts`, `hooks/opencode/factory-start.ts` | Deterministic local adapters | Each configured session event runs `start.mjs` once and forwards its output once | No external state or network |
 | `init.py --check` and `--self-check` | Deterministic, read-only, offline | Same result while inputs are unchanged | No state; fix the reported local input |
 | `init.py --dry-run` | Deterministic, read-only, offline | Same proposal/output; it does not compose, replace, or clean files, and does not require confirmation | No state; rerun with explicit confirmation to apply changes |
 | `init.py` replacement with `--no-clean` | Deterministic, local write, idempotent | Presents proposals and requires explicit confirmation; replaces supplied manifest tokens; unchanged files are not rewritten on later runs | Local files only; restore from VCS or a backup |
@@ -24,7 +25,7 @@ python3 scripts/check-determinism.py
 | CI composition | Deterministic, local write, idempotent | Selected recipe order produces the same `.github/workflows/ci.yml`; unchanged bytes keep their timestamp | Local generated file; restore from VCS |
 | Provider and CI recipe selection | Deterministic catalog lookup | Same selected fragments and job order for the same manifest values | No external state; invalid selections fail closed during a normal run |
 | `scripts/check-determinism.py` | Template-only, deterministic, read-only, offline | Run before cleanup; `--no-clean` retains it for further template checks | No state |
-| `scripts/check-delivery-contract.py`, `scripts/check-factory-layout.py`, `scripts/check-pr-governance.py --self-check`, `start.py --self-check`, `scripts/sync-github-labels.py --self-check` | Deterministic, read-only, offline | Same validation result for unchanged files and catalog; the layout check builds its fixture in a temporary directory | No state |
+| `scripts/check-delivery-contract.py`, `scripts/check-factory-layout.py`, `scripts/check-pr-governance.py --self-check`, `node start.mjs --self-check`, `scripts/sync-github-labels.py --self-check` | Deterministic, read-only, offline | Same validation result for unchanged files and catalog; the layout check builds its fixture in a temporary directory | No state |
 | Ownership-boundary fixture in `scripts/check-determinism.py` | Deterministic, read-only, offline | Every inventory entry is checked after cleanup; removed paths are absent and inherited/generated paths remain | Temporary fixture only |
 
 Normal initialization also performs cleanup unless `--no-clean` is supplied. The

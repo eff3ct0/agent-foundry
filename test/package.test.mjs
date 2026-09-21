@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -82,17 +82,48 @@ test("packaging rejects missing, undeclared, and changed integrity inputs", () =
     /integrity contract/,
   );
 });
-test("npm-installed packages restore the manifest .gitignore from npm transport", async () => {
+test("packed package preserves npm transport and startup handoff", async (context) => {
+  if (process.platform === "win32") {
+    context.skip("the isolated agent launch fixture uses a POSIX executable");
+    return;
+  }
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-npm-package-"));
-  const config = path.join(parent, "answers.json");
-  await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Npm package smoke", TASK_TRACKER: "github-issues" } }));
-  await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", parent], { cwd: root });
-  const tarball = path.join(parent, "factory-template-creator-0.1.0.tgz");
-  const installRoot = path.join(parent, "consumer");
-  await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installRoot, tarball], { cwd: root });
-  const installedCli = path.join(installRoot, "node_modules", "factory-template-creator", "dist", "index.js");
-  const target = path.join(parent, "generated");
-  const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--non-interactive", "--json"], { cwd: root });
-  assert.equal(JSON.parse(result.stdout).status, "applied");
-  assert.equal((await stat(path.join(target, ".gitignore"))).isFile(), true);
+  try {
+    const packageDirectory = path.join(parent, "package");
+    const installDirectory = path.join(parent, "install");
+    const target = path.join(parent, "project");
+    const bin = path.join(parent, "bin");
+    await mkdir(packageDirectory);
+    await mkdir(installDirectory);
+    await mkdir(bin);
+    await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packageDirectory], { cwd: root });
+    const tarballName = (await readdir(packageDirectory)).find((entry) => entry.endsWith(".tgz"));
+    assert.ok(tarballName, "pnpm pack did not produce a tarball");
+    const tarball = path.join(packageDirectory, tarballName);
+    await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, tarball], { cwd: root });
+
+    const executable = path.join(bin, "codex");
+    await writeFile(executable, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FACTORY_NPM_INSTALL_ARGS\"\nexit 0\n");
+    await chmod(executable, 0o755);
+    const config = path.join(parent, "answers.json");
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "npm transport", TASK_TRACKER: "github-issues" } }));
+    const installedCli = path.join(installDirectory, "node_modules", "factory-template-creator", "dist", "index.js");
+    const environment = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, FACTORY_NPM_INSTALL_ARGS: path.join(parent, "handoff-args.txt") };
+    const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], { cwd: root, env: environment }).then((value) => ({ ...value, code: 0 })).catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code }));
+    assert.equal(result.code, 0, result.stderr);
+    const envelope = JSON.parse(result.stdout);
+    assert.equal(envelope.status, "applied");
+    assert.equal(envelope.verification, "verified");
+    assert.equal(envelope.handoff.status, "launched");
+    assert.equal(await readFile(path.join(parent, "handoff-args.txt"), "utf8"), `--cd\n${target}\n`);
+    assert.ok(await stat(path.join(target, ".gitignore")));
+    assert.ok(await stat(path.join(target, "start.mjs")));
+
+    const startup = await execFileAsync(process.execPath, [path.join(target, "start.mjs"), "--cwd", target, "--json"]);
+    const startupEnvelope = JSON.parse(startup.stdout);
+    assert.equal(startupEnvelope.mode, "WORK");
+    assert.equal(startupEnvelope.status, "ready");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });

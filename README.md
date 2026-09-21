@@ -5,7 +5,8 @@ executed, written **for AI agents** and readable by humans. It is intended for u
 repository**: create a new repo from this structure and fill the `<PLACEHOLDER>` values.
 
 ## What it includes
-- [`start.py`](start.py) - startup: `python3 start.py` detects repository state (initialize vs. work) and prints the next step. It runs first and remains permanent (it is not auto-cleaned).
+- [`start.mjs`](start.mjs) - canonical Node startup: `node start.mjs` detects `SELF`, `SETUP`, and `WORK` state and prints the next step. It remains permanent.
+- [`start.py`](start.py) - compatibility startup wrapper: `python3 start.py` delegates to `start.mjs` and remains available as the first-command fallback.
 - [`AGENT.md`](AGENT.md) - primary entrypoint; operating rules and references.
 - [`docs/workflow.md`](docs/workflow.md) - end-to-end workflow.
 - [`docs/engineering-handbook.md`](docs/engineering-handbook.md) - engineering standards.
@@ -70,16 +71,19 @@ cd PROJECT
 ```
 
 This is the only repository-creation step. It is an outward action and is not
-run by `start.py`, `init.py`, or any harness adapter. Use `--public` or
+run by `start.mjs`, `start.py`, `init.py`, or any harness adapter. Use `--public` or
 `--internal` only when that visibility is an intentional project decision.
 
 ### Start the first agent session
 
-Inside the new repository, start with the manual fallback:
+Inside the new repository, start with the canonical Node router:
 
 ```sh
-python3 start.py
+node start.mjs
 ```
+
+If a manual Node invocation is inconvenient, `python3 start.py` delegates to
+the same router and remains the compatibility fallback.
 
 In **SETUP** mode, follow [`docs/agent-init.md`](docs/agent-init.md). Review
 the proposed changes first with `python3 init.py --dry-run --no-clean`, then
@@ -96,7 +100,7 @@ or confirmed by the owner.
 ### Optional harness startup
 
 Hooks and plugins are opt-in. Copy only the adapter for the harness you intend
-to use; none is installed silently, and every adapter only runs `start.py`.
+to use; none is installed silently, and every adapter only runs `start.mjs`.
 
 For **OpenCode**, explicitly enable the local plugin during initialization:
 
@@ -107,7 +111,7 @@ python3 init.py --set OPENCODE_PLUGIN=true --confirm
 Then start OpenCode in the repository. For the equivalent paths, follow the
 [Claude Code instructions](hooks/README.md#claude-code) or the [Pi
 instructions](hooks/README.md#pi). If no adapter is enabled, run
-`python3 start.py` manually for every new session.
+`node start.mjs` manually for every new session.
 
 ### One-command decision
 
@@ -117,11 +121,11 @@ so it cannot provide a safe all-or-nothing rollback.
 
 | Concern | Existing path | Decision |
 | --- | --- | --- |
-| Idempotency | `start.py` and `init.py --dry-run` are repeatable; `gh repo create` is an explicit create and should not be repeated for an existing target. | Keep separate steps so each state is visible. |
+| Idempotency | `start.mjs`, its `start.py` compatibility wrapper, and `init.py --dry-run` are repeatable; `gh repo create` is an explicit create and should not be repeated for an existing target. | Keep separate steps so each state is visible. |
 | Dry run | `init.py --dry-run --no-clean` previews local changes; `gh repo create` has no equivalent safe preview. | Never hide repository creation behind a wrapper. |
 | Permissions | Creation needs GitHub repository-create permission; local initialization needs filesystem write access; adapters need local files and harness trust. | Request only the permission for the selected step. |
 | Rollback | Restore local changes with VCS; deleting a GitHub repository is separate and requires human approval. | Do not claim atomic rollback. |
-| Outward action | Only the user-run `gh repo create` creates a repository; hooks and `start.py` do not call the network. | No new wrapper or automatic creation. |
+| Outward action | Only the user-run `gh repo create` creates a repository; hooks and both startup entrypoints do not call the network. | No new wrapper or automatic creation. |
 
 The existing [`factory_bootstrap.py`](factory_bootstrap.py) is a separate,
 archetype-only maintainer tool for organization repositories; it is not the
