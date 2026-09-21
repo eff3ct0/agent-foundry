@@ -240,6 +240,10 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.19.0
       - name: Download redacted evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -260,7 +264,7 @@ jobs:
           CLEANUP_STATUS: ${{ needs.cleanup.result }}
         run: |
           mkdir -p triage
-          env -i "PATH=$PATH" "OPENAI_API_KEY=$OPENAI_API_KEY" "OPENAI_MODEL=$OPENAI_MODEL" python3 scripts/triage-bootstrap-failure.py \
+          env -i "PATH=$PATH" "OPENAI_API_KEY=$OPENAI_API_KEY" "OPENAI_MODEL=$OPENAI_MODEL" node scripts/triage-bootstrap-failure.mjs \
             --evidence-dir evidence \
             --output triage/triage.json \
             --repository "$REPOSITORY" \

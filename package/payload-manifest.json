@@ -79,8 +79,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8160,
-      "sha256": "8d8e6d2d4694d1e94b0f68c3673b9be5f6465fd091b0151be01bfd09d4ed2692"
+      "size": 8253,
+      "sha256": "83eadf3888b203ccc22e5a2a9adece5fc7b5abfa0548f03d2667d58f0031e353"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 10299,
-      "sha256": "7282b7b2ad9766d9332498c43d44f5afd3924d1a389076c427277c990b8427dc"
+      "size": 10329,
+      "sha256": "3d145e406e207afc5b2badf47f9720192a5baa206d5ab48bdedda2b37ca1e103"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -319,8 +319,8 @@
     {
       "path": "scripts/check-determinism.py",
       "mode": "100644",
-      "size": 22297,
-      "sha256": "6986509c895fa3eb290f3b63b8d512cc48120a114aae08e126ee281de836230b"
+      "size": 22204,
+      "sha256": "2721dce0a4338a242ddeea8f30896112698fe105149a8bea51fc35653ec0e7ee"
     },
     {
       "path": "scripts/check-factory-layout.py",
@@ -407,5 +407,5 @@
       "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
     }
   ],
-  "payload_digest": "sha256:6b19b405429efdcc256bbe356f6d7f8cb5403303320b8e78e0db0430e2df6e58"
+  "payload_digest": "sha256:3e9bfa808f3267118c0ae4010998134c94b232d4e340737db58678954d640a7c"
 }

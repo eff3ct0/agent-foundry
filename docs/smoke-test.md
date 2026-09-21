@@ -101,8 +101,8 @@ Run the local trusted checks with:
 ```
 python3 scripts/bootstrap-e2e.py --self-check
 python3 scripts/report-bootstrap-failure.py --self-check
-python3 scripts/triage-bootstrap-failure.py --self-check
-python3 scripts/test-bootstrap-triage.py
+node scripts/triage-bootstrap-failure.mjs --self-check
+node --test test/triage-bootstrap-failure.test.mjs test/triage-bootstrap-failure-cli.test.mjs
 ```
 
 These checks are offline; they do not create repositories or prove hosted

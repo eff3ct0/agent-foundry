@@ -71,7 +71,7 @@ The short-lived lifecycle credential is available only to create/push/clone/clea
 is removed from the released subprocess environment before released code
 executes, and is never available to the issue reporter. The released subprocess
 gets an allowlisted environment, not a copy of the runner environment. The
-advisory triage job receives only a bounded sanitized JSON payload, the model
+advisory triage job invokes `node scripts/triage-bootstrap-failure.mjs` with only a bounded sanitized JSON payload, the model
 variable, and `OPENAI_API_KEY`; its clean process environment contains no GitHub
 token and it has no tools or mutation authority. The reporter uses the workflow
 token with `contents: read`, `actions: read`, and `issues: write`; it searches

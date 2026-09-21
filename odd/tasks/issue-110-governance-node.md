@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `IMPLEMENTATION`; Child 05b adds only the advisory Node model request, parsing, fallback artifact, and CLI after Child 05a evidence contract at commit `59f5d59`.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-05b-triage-cli`
-- Branch: `feat/issue-110-governance-node-05b-triage-cli`
-- Base: `origin/feat/issue-110-governance-node-05-triage` at `59f5d59`
+- State: `ACTIVE` in `IMPLEMENTATION`; Child 05c cuts the release triage job over to the reviewed Node CLI while retaining the `bootstrap-e2e-triage/v1` reporter handoff.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-05c-triage-cutover`
+- Branch: `feat/issue-110-governance-node-05c-triage-cutover`
+- Base: `origin/feat/issue-110-governance-node-05b-triage-cli` at `96fc81f`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -163,3 +163,10 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - The CLI always writes a bounded success or deterministic fallback artifact; it exits non-zero on fallback. It has no workflow consumer in this child.
 - The Python triage command and active workflows remain authoritative until the separately scoped Child 05c cutover.
 - Verification passed: focused Node triage tests, full `pnpm test` (75 tests), retained Python triage checks, workflow static checks, `pnpm typecheck`, ownership/determinism self-checks, a local fallback CLI replay, and payload-mirror regeneration (no mirror delta because the release-only path was already registered).
+
+## Child 05c active consumer cutover
+
+- The release triage job pins Node.js 20.19.0 and invokes `scripts/triage-bootstrap-failure.mjs` through the existing `env -i` boundary, passing only `PATH`, `OPENAI_API_KEY`, and `OPENAI_MODEL` into the process.
+- The artifact contract remains `bootstrap-e2e-triage/v1`, so the Python reporter continues to consume the same handoff without a reporting migration.
+- Determinism and local smoke documentation now exercise the Node self-check and Node contract suites; the legacy Python triage test consumers are no longer part of the active verification path. The legacy Python implementation remains lifecycle-classified until Child 06 removes the final Python reporting/triage paths.
+- Verification passed: `pnpm test` (76 tests), `pnpm typecheck`, workflow static validation, ownership/determinism and initializer self-checks, and a clean-environment fallback replay. The payload integrity mirror was regenerated after the ownership and determinism inputs changed.

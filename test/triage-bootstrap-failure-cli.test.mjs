@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { TriageError, buildRequest, fallback, parseArgs, requestTriage, validateResult, writeArtifact } from "../scripts/triage-bootstrap-failure.mjs";
+import { TriageError, buildRequest, fallback, parseArgs, requestTriage, selfCheck, validateResult, writeArtifact } from "../scripts/triage-bootstrap-failure.mjs";
 
 const response = (output) => new Response(JSON.stringify({
   status: "completed",
@@ -39,4 +39,8 @@ test("writes bounded fallback artifacts and requires the complete CLI contract",
     assert.equal(parseArgs(["--evidence-dir", "e", "--repository", "r", "--tag", "t", "--sha", "s", "--run-id", "1", "--prepare-status", "success", "--bootstrap-status", "failure", "--cleanup-status", "success", "--output", "o"]).output, "o");
     assert.throws(() => parseArgs(["--output", "o"]), /invalid triage arguments/u);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("keeps the offline triage self-check deterministic", () => {
+  assert.doesNotThrow(selfCheck);
 });
