@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,6 +43,14 @@ const configFile = async (directory, values = {}) => {
 };
 
 const json = (result) => JSON.parse(result.stdout);
+const walkFiles = async (directory, result = []) => {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) await walkFiles(absolute, result);
+    else result.push(absolute);
+  }
+  return result.sort();
+};
 
 test("plan and dry-run are deterministic and do not mutate an empty target", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-plan-"));
@@ -197,4 +205,125 @@ test("doctor reports interrupted staging and incomplete configuration", async ()
   const codes = json(doctor).diagnostics.map((item) => item.code);
   assert.ok(codes.includes("staging_interrupted"));
   assert.ok(codes.includes("incomplete_configuration"));
+});
+
+test("composes bindings and CI recipes, then removes creator-only inputs", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-composition-"));
+  const target = path.join(parent, "project");
+  const config = await configFile(parent, {
+    PROJECT_NAME: "Composed project",
+    TASK_TRACKER: "jira",
+    SECRETS_PROVIDER: "vault",
+    CODE_INTELLIGENCE: "codegraph",
+    CI_SYSTEM: "GitHub Actions",
+    CI_STACKS: "rust,typescript,python,go",
+  });
+  const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(applied.code, 0, applied.stderr);
+  const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+  const workflow = await readFile(path.join(target, ".github", "workflows", "ci.yml"), "utf8");
+  assert.match(bindings, /## Jira/);
+  assert.match(bindings, /## Vault/);
+  assert.match(bindings, /## CodeGraph/);
+  assert.doesNotMatch(bindings, /\]\(\.\.\/providers\//);
+  assert.match(workflow, /  python:/);
+  assert.match(workflow, /  typescript:/);
+  assert.match(workflow, /  rust:/);
+  assert.match(workflow, /  go:/);
+  assert.equal(await readFile(path.join(target, ".factory", "docs", "workflow.md"), "utf8").then(Boolean), true);
+  for (const creatorOnly of ["placeholders.json", "archetype-ownership.json", "providers", "ci"]) {
+    await assert.rejects(stat(path.join(target, creatorOnly)));
+  }
+  const manifest = JSON.parse(await readFile(path.join(root, "dist", "payload", "placeholders.json"), "utf8"));
+  const manifestTokens = manifest.placeholders.map(({ key }) => `<${key}>`);
+  for (const file of await walkFiles(target)) {
+    const bytes = await readFile(file);
+    const text = bytes.toString("utf8");
+    if (!Buffer.from(text, "utf8").equals(bytes)) continue;
+    for (const token of manifestTokens) assert.doesNotMatch(text, new RegExp(token.replace(/[<>]/g, "\\$&")), file);
+    if (!file.endsWith(".md")) continue;
+    for (const match of text.matchAll(/\[[^\]]+\]\(([^\s)]+)\)/g)) {
+      const targetPath = match[1].split("#", 1)[0];
+      if (!targetPath || targetPath.startsWith("#") || targetPath.startsWith("/") || targetPath.includes("://")) continue;
+      await stat(path.resolve(path.dirname(file), targetPath));
+    }
+  }
+  const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(verified.code, 0, verified.stderr);
+  assert.equal(json(verified).status, "verified");
+  const rerun = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(rerun.code, 0, rerun.stderr);
+  assert.equal(json(rerun).status, "noop");
+});
+
+test("compatibility fixtures produce stable plans for task, secrets, and code-intelligence bindings", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-fixtures-"));
+  const fixtures = [
+    ["github-issues", "none", "none"],
+    ["github-issues", "infisical", "codegraph"],
+    ["jira", "vault", "none"],
+    ["jira", "doppler", "codegraph"],
+  ];
+  for (const [task, secrets, codeIntelligence] of fixtures) {
+    const target = path.join(parent, `${task}-${secrets}-${codeIntelligence}`);
+    const config = await configFile(parent, {
+      TASK_TRACKER: task,
+      SECRETS_PROVIDER: secrets,
+      CODE_INTELLIGENCE: codeIntelligence,
+      CI_SYSTEM: "GitHub Actions",
+      CI_STACKS: "rust,typescript,python,go",
+    });
+    const first = await run(["plan", "--target", target, "--config", config, "--non-interactive"]);
+    const second = await run(["plan", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(first.code, 0, first.stderr);
+    assert.equal(first.stdout, second.stdout);
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, applied.stderr);
+    const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(verified.code, 0, verified.stderr);
+    assert.equal(json(verified).status, "verified");
+    const rerun = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(rerun.code, 0, rerun.stderr);
+    assert.equal(json(rerun).status, "noop");
+  }
+});
+
+test("unknown keys, duplicate keys, and CI selections fail before target mutation", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-validation-"));
+  const target = path.join(parent, "project");
+  const unknown = await configFile(parent, { UNKNOWN_INPUT: "blocked" });
+  const unknownResult = await run(["apply", "--target", target, "--config", unknown, "--non-interactive"]);
+  assert.notEqual(unknownResult.code, 0);
+  assert.match(json(unknownResult).diagnostics.map((item) => item.code).join(" "), /configuration_invalid/);
+  await assert.rejects(stat(target));
+
+  const duplicate = path.join(parent, "duplicate.json");
+  await writeFile(duplicate, '{"PROJECT_NAME":"one","PROJECT_NAME":"two"}');
+  const duplicateResult = await run(["apply", "--target", path.join(parent, "duplicate-target"), "--config", duplicate, "--non-interactive"]);
+  assert.notEqual(duplicateResult.code, 0);
+  assert.match(json(duplicateResult).diagnostics.map((item) => item.code).join(" "), /invalid_json/);
+
+  const invalidCi = await configFile(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "typescript,unknown" });
+  const invalidCiResult = await run(["apply", "--target", path.join(parent, "ci-target"), "--config", invalidCi, "--non-interactive"]);
+  assert.notEqual(invalidCiResult.code, 0);
+  assert.match(json(invalidCiResult).diagnostics.map((item) => item.code).join(" "), /ci_invalid/);
+  await assert.rejects(stat(path.join(parent, "ci-target")));
+});
+
+test("ownership cleanup removes unchanged source inputs and preserves changed application files", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-cleanup-"));
+  const target = path.join(parent, "project");
+  const config = await configFile(parent);
+  await mkdir(target);
+  await writeFile(path.join(target, "placeholders.json"), await readFile(path.join(root, "dist", "payload", "placeholders.json")));
+  const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(applied.code, 0, applied.stderr);
+  await assert.rejects(stat(path.join(target, "placeholders.json")));
+
+  const protectedTarget = path.join(parent, "protected");
+  await mkdir(protectedTarget);
+  await writeFile(path.join(protectedTarget, "placeholders.json"), "application-owned\n");
+  const protectedResult = await run(["apply", "--target", protectedTarget, "--config", config, "--non-interactive"]);
+  assert.notEqual(protectedResult.code, 0);
+  assert.equal(await readFile(path.join(protectedTarget, "placeholders.json"), "utf8"), "application-owned\n");
 });

@@ -17,6 +17,10 @@ corresponding issue form in `.github/ISSUE_TEMPLATE/`. With `gh`, fill that
 structure via `gh issue create --body-file <filled-template>`, then link the
 issue to the project. Do not create blank or free-form issues.
 
+**Pull-request governance:** PRs use the GitHub closing reference
+`Closes #<TICKET_ID>` for the linked repository issue. That issue must carry
+`status:approved`.
+
 **Pull requests:** every PR MUST use `.github/pull_request_template.md`; with
 `gh`, fill it in a file and use `gh pr create --body-file <filled-template>`.
 

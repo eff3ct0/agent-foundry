@@ -57,7 +57,7 @@ const walkFiles = async (root, directory, result) => {
 export const payloadCandidates = async (root, ownership) => {
   const candidates = new Set();
   for (const category of Object.values(ownership.categories)) {
-    if (category.disposition !== "inherited") continue;
+    if (category.disposition !== "inherited" && category.payload !== true) continue;
     for (const entry of category.paths) {
       const relative = normalizeRelative(entry.path);
       if (entry.kind === "directory") await walkFiles(root, relative, candidates);

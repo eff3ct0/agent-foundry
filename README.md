@@ -47,6 +47,16 @@ offline; GitHub provisioning, npm publication, and disabling GitHub Template
 mode remain outside this package unit. See [`docs/creator.md`](docs/creator.md)
 for the state and recovery contract.
 
+Identity inspection is also available:
+
+```sh
+factory-template --version
+factory-template --version --json
+```
+
+GitHub provisioning, npm publication, and disabling GitHub Template mode remain
+outside this package unit.
+
 ## Quickstart
 
 ### Create a repository
@@ -133,9 +143,10 @@ JSON and recovery contract.
 The agent may converse in any language. All persisted project work uses `<REPO_LANGUAGE>`, which defaults to English and is configured in [`placeholders.json`](placeholders.json).
 
 ## GitHub governance
-Issues use the forms in `.github/ISSUE_TEMPLATE/` and blank issues are disabled. A pull request must
-contain a closing reference such as `Closes #123`, have exactly one `type:*` label, and link an issue
-with `status:approved`. The governance workflow validates these rules without assigning approval. The
+Issues use the forms in `.github/ISSUE_TEMPLATE/` and blank issues are disabled. For GitHub task providers,
+a pull request must contain a closing reference such as `Closes #123`, have exactly one `type:*` label, and
+link an issue with `status:approved`. Jira, Linear, and custom task providers instead compose their native
+task reference and keep approval in the bound provider. The governance workflow validates these rules without assigning approval. The
 label may be added by an agent only through the fail-closed delegated-approval protocol: current direct
 instruction naming the exact issue and action, target-host maintainer/authorized-approver evidence,
 `MAINTAIN` or `ADMIN` actor capability, one exact add attempt, and target-host readback. Otherwise the

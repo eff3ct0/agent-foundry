@@ -26,6 +26,21 @@ drifted owned file is a conflict requiring recovery rather than an implicit
 overwrite. `doctor` reports interrupted staging, payload mismatch, ownership
 drift, unknown files, and incomplete configuration.
 
+Initialization composition is part of the same plan/apply/verify transaction.
+The payload carries the placeholder schema, provider fragments, CI recipe
+catalog, and ownership inventory as immutable inputs. Configuration keys are
+validated for required, enum, conditional, duplicate, and unknown-key errors
+before any target write. Only the ownership inventory's explicit text-file list
+is rendered; binary or unclassified files are copied without broad replacement.
+
+The selected task, secrets, optional code-intelligence, and CI recipes are
+composed in stable order. Provider and CI inputs, placeholders, and the
+ownership manifest are removed only when their packaged bytes are unchanged;
+changed paths become conflicts. Retained assets are relocated under `.factory`
+according to the ownership contract, while generated bindings, CI, and optional
+OpenCode output remain at their declared destinations. Application-owned and
+unknown files are never removed or overwritten.
+
 `--failure-after N` and `--interrupt-after N` are deterministic failure-injection
 options used by the focused tests. The former must roll back creator-owned
 changes; the latter intentionally leaves staging for `doctor` to report.
