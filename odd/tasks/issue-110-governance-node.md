@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `IMPLEMENTATION`; Child 04 ports the structural delivery-contract validator after Child 03 PR-governance validation in PR #138 at commit `b54f3d9`.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-04-delivery-contract`
-- Branch: `feat/issue-110-governance-node-04-delivery-contract`
-- Base: `origin/feat/issue-110-governance-node-03-pr-governance` at `b54f3d9`
+- State: `ACTIVE` in `IMPLEMENTATION`; Child 05a ports only the bounded Node evidence contract after Child 04 delivery-contract validation at commit `f556fc7`.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-05-triage`
+- Branch: `feat/issue-110-governance-node-05-triage`
+- Base: `origin/feat/issue-110-governance-node-04-delivery-contract` at `f556fc7`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -150,3 +150,9 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 
 - The initialized `--no-clean` lifecycle regression runs `node scripts/check-delivery-contract.mjs --self-check` for structural validation, then retains `python3 scripts/check-delivery-contract.py --approval-self-check` for the protected-approval fixture.
 - This corrective work unit changes only validator dispatch; protected-approval policy and GitHub label mutation remain out of scope.
+
+## Child 05a bounded evidence boundary
+
+- `scripts/triage-bootstrap-failure.mjs` loads bounded JSON evidence, validates the versioned failure envelope and selected model, redacts untrusted diagnostics, and constructs the bounded payload and prompt for a later advisory client slice.
+- The Python triage command, active consumers, workflows, model request/output handling, and reporting remain unchanged for Child 05b/05c.
+- The Node fixture suite covers secret/path/instruction redaction, malformed envelope/model rejection, selected-model matching, payload construction, and prompt bounds offline.
