@@ -188,6 +188,24 @@ owner and repository readback. It never lists by a broad prefix, guesses an
 owner, or deletes a candidate from another run. If cleanup is inconclusive, the
 journey is failed and the artifact records the exact run-scoped recovery target.
 
+## Failure reporting contract (slice 1)
+
+`scripts/real-agent-journey.py` provides a pure `build_bug_report` contract for
+failed, aggregated journey evidence. It accepts the bounded aggregate plus the
+public artifact URL and returns `None` for a passing journey. For a failure, it
+validates the immutable source revision, supported runtime, first non-passing
+stage, normalized failure code, cleanup status, and run-scoped GitHub URLs.
+
+The returned payload contains the generated repository, deterministic
+fingerprint, canonical marker, title, and a body that matches
+`.github/ISSUE_TEMPLATE/bug.yml`. The fingerprint is derived only from source
+revision, runtime, stage, failure code, and check identifier. Raw diagnostics,
+credentials, prompts, and model output are not accepted as report fields.
+
+This slice performs no GitHub API read or mutation and does not modify workflow
+permissions or invocation. The next slice owns duplicate lookup, issue/comment
+creation and readback, and workflow integration.
+
 ## Scope boundary
 
 Repository provisioning (#88) and real-agent invocation (#89) remain separate

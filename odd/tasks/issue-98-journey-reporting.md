@@ -66,6 +66,22 @@ This ODD tracker is archetype-governance state and is registered as a `removed` 
 - Draft tracker PR: [#132](https://github.com/eff3ct0/factory-template/pull/132), targeting `main` with exactly `type:feature`.
 - Tracker verification: `python3 -m json.tool archetype-ownership.json` and `python3 init.py --self-check` passed; PR readback confirmed 66 additions, 0 deletions, and 2 changed files.
 
+## Slice 1 execution
+
+- Worktree and branch: `issue-98-journey-reporting-01-contract` on `feat/issue-98-journey-reporting-01-contract`, based on tracker commit `3a294267a3dd1c7734451c77f2d98ed835a6208c`.
+- Active boundary: define a pure reporting contract that normalizes failed journey evidence, calculates a deterministic fingerprint, and builds a validated bug-form body.
+- Verification plan: focused offline reporting-contract tests, `python3 scripts/real-agent-journey.py --self-check`, ownership-boundary validation, and a child diff count below 400 authored lines.
+- Explicit exclusion: no GitHub API calls or mutation/readback behavior, no workflow modifications, and no hosted validation in this slice.
+
+### Completed verification
+
+- Delivered a pure `build_bug_report` contract for failed aggregate evidence, including bounded normalization, first failed-stage selection, deterministic fingerprints, and bug-form validation.
+- Added offline coverage for deterministic payload construction, earliest-stage selection, pass suppression, malformed identity/runtime/failure/cleanup evidence, and unsafe artifact URLs.
+- Passed: `python3 scripts/test-real-agent-journey.py`; `python3 scripts/real-agent-journey.py --self-check`; `python3 init.py --self-check`; `python3 test_init.py`; `python3 scripts/check-bootstrap-workflow.py`; and `python3 scripts/check-determinism.py`.
+- Runtime harness: N/A — slice 1 deliberately has no external read, mutation, or workflow invocation boundary.
+- Rollback boundary: remove the reporting-contract functions, focused tests, and documentation section without changing journey aggregation or any workflow.
+- Next action: commit, push, and open the non-draft slice 1 PR to tracker PR #132; slice 2 retains all GitHub interaction and workflow work.
+
 ## Next action
 
 Create and verify the tracker commit and draft tracker PR, then implement only child slice 1 from the tracker branch. Record the child commit, tests, diff budget, and PR in this tracker before beginning slice 2.

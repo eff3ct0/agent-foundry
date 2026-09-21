@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate and independently assert the bounded real-agent journey contract."""
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -64,6 +65,7 @@ MAX_EVIDENCE_BYTES = 64 * 1024
 MAX_OUTPUT_CHARS = 1200
 MAX_CHECKS = 32
 MAX_FAILURES = 8
+MAX_REPORT_BODY_CHARS = 12000
 SAFE_REPOSITORY = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,99})")
 SAFE_BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}")
 SAFE_SHA = re.compile(r"[0-9a-f]{40}")
@@ -71,6 +73,9 @@ SAFE_RUN = re.compile(r"[0-9]{1,20}")
 SAFE_OWNER = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
 BOUNDARIES = ("source-readback", "initialization", "feature-issue", "implementation", "checkout", "test", "cleanup")
 APPROVAL_LABELS = {"status:approved", "approved", "approval"}
+REPORT_VERSION = "real-agent-journey-report/v1"
+REPORT_STATUSES = {"passed", "failed", "blocked", "inconclusive"}
+BUG_FORM_HEADINGS = ("Steps to reproduce", "Expected behavior", "Actual behavior", "Environment", "Severity")
 CHECK_COMMANDS = {
     "init-check": ["init.py", "--check"],
     "determinism": ["scripts/check-determinism.py"],
@@ -183,6 +188,118 @@ def validate_url(value, repository_name, run):
     if parsed.path.rstrip("/").lower() != prefix.lower() and not parsed.path.lower().startswith(prefix.lower() + "/"):
         raise JourneyError("source-readback", "workflow_url_mismatch", "workflow URL does not identify this run")
     return value
+
+
+def failure_fingerprint(revision, runtime, stage, failure_code, check_identifier):
+    """Return the stable identifier for one immutable journey failure."""
+    revision = sha(revision, "reporting")
+    runtime = validate_runtime(runtime)
+    if stage not in STAGES:
+        raise JourneyError("reporting", "stage_invalid", "report stage is invalid")
+    failure_code = str(failure_code or "").strip().lower()
+    if not SAFE_STAGE.fullmatch(failure_code):
+        raise JourneyError("reporting", "failure_code_invalid", "failure code is invalid")
+    check_identifier = str(check_identifier or "").strip()
+    if not re.fullmatch(r"real-agent-journey/[a-z0-9_-]{1,32}", check_identifier):
+        raise JourneyError("reporting", "check_identifier_invalid", "check identifier is invalid")
+    return hashlib.sha256("\0".join((revision, runtime, stage, failure_code, check_identifier)).encode("utf-8")).hexdigest()[:32]
+
+
+def earliest_failed_stage(stages):
+    if not isinstance(stages, dict) or set(stages) - set(STAGES):
+        raise JourneyError("reporting", "stages_invalid", "report stages are invalid")
+    for stage in STAGES:
+        status = stages.get(stage, "missing")
+        if status != "missing" and status not in REPORT_STATUSES:
+            raise JourneyError("reporting", "stages_invalid", "report stage status is invalid")
+        if status != "passed":
+            return stage
+    raise JourneyError("reporting", "stages_invalid", "failed evidence has no failed stage")
+
+
+def normalize_report_failure(evidence, artifact_url):
+    """Validate bounded failed evidence without reading or mutating external systems."""
+    if not isinstance(evidence, dict) or evidence.get("schema_version") != ENVELOPE_VERSION:
+        raise JourneyError("reporting", "evidence_schema_invalid", "report evidence has an unsupported schema")
+    if evidence.get("result") == "passed":
+        return None
+    if evidence.get("result") != "failed":
+        raise JourneyError("reporting", "evidence_status_invalid", "report evidence result is invalid")
+    source_repository = repository(evidence.get("source_template"))
+    revision = sha(evidence.get("tested_revision"), "reporting")
+    runtime = validate_runtime(evidence.get("runtime"))
+    run = run_id(evidence.get("run_id"))
+    generated_repository = repository(evidence.get("repository"))
+    stage = earliest_failed_stage(evidence.get("stages"))
+    failure_code = str(evidence.get("failure_code") or "").strip().lower()
+    if not SAFE_STAGE.fullmatch(failure_code):
+        raise JourneyError("reporting", "failure_code_invalid", "report failure code is invalid")
+    cleanup_status = evidence.get("cleanup_status")
+    if cleanup_status not in {"passed", "failed", "skipped", "not-attempted"}:
+        raise JourneyError("reporting", "cleanup_status_invalid", "report cleanup status is invalid")
+    return {
+        "schema_version": REPORT_VERSION,
+        "source_repository": source_repository,
+        "revision": revision,
+        "runtime": runtime,
+        "run_id": run,
+        "generated_repository": generated_repository,
+        "stage": stage,
+        "failure_code": failure_code,
+        "check_identifier": "real-agent-journey/%s" % stage,
+        "cleanup_status": cleanup_status,
+        "workflow_url": validate_url(evidence.get("workflow_url"), source_repository, run),
+        "artifact_url": validate_url(artifact_url, source_repository, run),
+    }
+
+
+def validate_bug_body(body):
+    headings = [match.group(1).strip() for match in re.finditer(r"^### ([^\n]+)$", body or "", re.MULTILINE)]
+    sections = re.split(r"^### [^\n]+$", body or "", flags=re.MULTILINE)[1:]
+    if headings != list(BUG_FORM_HEADINGS) or len(sections) != len(BUG_FORM_HEADINGS):
+        raise JourneyError("reporting", "bug_body_invalid", "bug report body does not match the form")
+    if any(not section.strip() for section in sections) or sections[-1].strip() != "High":
+        raise JourneyError("reporting", "bug_body_invalid", "bug report body has missing required fields")
+
+
+def build_bug_report(evidence, artifact_url):
+    """Build a pure, validated canonical issue payload for failed journey evidence."""
+    report = normalize_report_failure(evidence, artifact_url)
+    if report is None:
+        return None
+    report["fingerprint"] = failure_fingerprint(
+        report["revision"], report["runtime"], report["stage"], report["failure_code"], report["check_identifier"]
+    )
+    marker = "\n".join((
+        "Real-Agent-Journey-Failure: %s@%s" % (report["source_repository"], report["revision"]),
+        "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"],
+    ))
+    body = "\n".join((
+        "### Steps to reproduce",
+        "1. Run the real-agent journey for `%s` at `%s`." % (report["source_repository"], report["workflow_url"]),
+        "2. Review the bounded evidence artifact at `%s`." % report["artifact_url"],
+        "",
+        "### Expected behavior",
+        "Every real-agent journey stage completes and cleanup evidence is available.",
+        "",
+        "### Actual behavior",
+        "The earliest failed stage was `%s` with failure code `%s`." % (report["stage"], report["failure_code"]),
+        "Generated repository: `%s`." % report["generated_repository"],
+        "Cleanup status: `%s`." % report["cleanup_status"],
+        marker,
+        "",
+        "### Environment",
+        "GitHub Actions real-agent journey; source revision `%s`; runtime `%s`; run `%s`." % (
+            report["revision"], report["runtime"], report["run_id"]
+        ),
+        "",
+        "### Severity",
+        "High",
+    ))
+    if len(body) > MAX_REPORT_BODY_CHARS:
+        raise JourneyError("reporting", "bug_body_oversized", "bug report body exceeds its limit")
+    validate_bug_body(body)
+    return {"title": "[Bug] Real-agent journey failed: %s" % report["stage"], "body": body, **report}
 
 
 def issue_form(path):

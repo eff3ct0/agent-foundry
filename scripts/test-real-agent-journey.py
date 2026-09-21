@@ -260,9 +260,69 @@ def test_unsupported_runtime_keeps_cleanup_evidence():
         assert result["cleanup_status"] == "passed"
 
 
+def reporting_evidence(stages=None, failure_code="agent_failed"):
+    return {
+        "schema_version": journey.ENVELOPE_VERSION,
+        "result": "failed",
+        "run_id": "123",
+        "repository": "acme/real-agent-journey-123",
+        "source_template": "eff3ct0/factory-template",
+        "tested_revision": SHA,
+        "runtime": "codex-cli",
+        "stages": stages or {"provision": "passed", "agent": "failed", "assert": "passed", "cleanup": "passed"},
+        "failure_code": failure_code,
+        "cleanup_status": "passed",
+        "workflow_url": "https://github.com/eff3ct0/factory-template/actions/runs/123",
+    }
+
+
+def test_reporting_contract_builds_deterministic_bug_form_payload():
+    artifact = "https://github.com/eff3ct0/factory-template/actions/runs/123/artifacts/456"
+    report = journey.build_bug_report(reporting_evidence(), artifact)
+    assert report["schema_version"] == journey.REPORT_VERSION
+    assert report["title"] == "[Bug] Real-agent journey failed: agent"
+    assert report["stage"] == "agent" and report["check_identifier"] == "real-agent-journey/agent"
+    assert report["fingerprint"] == journey.failure_fingerprint(SHA, "codex-cli", "agent", "agent_failed", "real-agent-journey/agent")
+    assert "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"] in report["body"]
+    journey.validate_bug_body(report["body"])
+
+
+def test_reporting_contract_uses_the_earliest_non_passing_stage():
+    evidence = reporting_evidence({"provision": "passed", "agent": "blocked", "assert": "failed", "cleanup": "failed"})
+    report = journey.build_bug_report(evidence, "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    assert report["stage"] == "agent"
+    assert report["cleanup_status"] == "passed"
+
+
+def test_reporting_contract_ignores_success_and_rejects_unsafe_evidence():
+    artifact = "https://github.com/eff3ct0/factory-template/actions/runs/123"
+    passed = reporting_evidence()
+    passed["result"] = "passed"
+    assert journey.build_bug_report(passed, artifact) is None
+    for field, value in (("tested_revision", "short"), ("runtime", "unsupported"),
+                         ("failure_code", "unsafe code"), ("cleanup_status", "unknown")):
+        evidence = reporting_evidence()
+        evidence[field] = value
+        try:
+            journey.build_bug_report(evidence, artifact)
+        except journey.JourneyError:
+            pass
+        else:
+            raise AssertionError("unsafe report evidence accepted: %s" % field)
+    try:
+        journey.build_bug_report(reporting_evidence(), "https://example.invalid/artifact")
+    except journey.JourneyError:
+        pass
+    else:
+        raise AssertionError("unsafe artifact URL accepted")
+
+
 if __name__ == "__main__":
     test_contract_plan_is_provider_neutral()
     test_identity_and_decisions_fail_closed()
     test_aggregate_rejects_mismatch_and_cleanup_failure()
     test_unsupported_runtime_keeps_cleanup_evidence()
+    test_reporting_contract_builds_deterministic_bug_form_payload()
+    test_reporting_contract_uses_the_earliest_non_passing_stage()
+    test_reporting_contract_ignores_success_and_rejects_unsafe_evidence()
     print("real-agent journey offline tests OK")
