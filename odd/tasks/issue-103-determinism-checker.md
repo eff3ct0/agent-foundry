@@ -2,7 +2,7 @@
 
 ## Status
 
-VERIFICATION complete; EVIDENCE/DELIVERY active.
+EVIDENCE/DELIVERY active; implementation work unit committed.
 
 ## Scope
 
@@ -75,7 +75,9 @@ commit and one PR are appropriate.
 - Expected source-template signal: `python3 init.py --check` reported the four
   unresolved required placeholder keys and exited nonzero. ShellCheck is not
   applicable because `scripts/` has no shell scripts.
+- Work-unit commit: `813f340 fix(initializer): remove unusable determinism checker`.
 
 ## Next action
 
-Review the final work unit, commit it, push the branch, and open the linked PR.
+Push the delivery branch and open the linked PR with the required `type:bug`
+label.
