@@ -82,7 +82,6 @@ test("packaging rejects missing, undeclared, and changed integrity inputs", () =
     /integrity contract/,
   );
 });
-
 test("npm-installed packages restore the manifest .gitignore from npm transport", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-npm-package-"));
   const config = path.join(parent, "answers.json");

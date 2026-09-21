@@ -81,7 +81,6 @@ export interface OwnershipManifest {
   text_files: string[];
   categories: Record<string, OwnershipCategory>;
 }
-
 interface CreatorState {
   schema_version: number;
   payload_version: string;
