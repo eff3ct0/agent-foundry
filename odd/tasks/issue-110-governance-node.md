@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `IMPLEMENTATION`; Child 06a ports only the reporter's pure evidence, triage, form/body, and fingerprint contract while retaining Python reporting I/O and workflow consumers.
+- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 06a ports only the reporter's pure evidence, triage, form/body, and fingerprint contract while retaining Python reporting I/O and workflow consumers.
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-06-reporter`
 - Branch: `feat/issue-110-governance-node-06-reporter`
 - Base: `origin/feat/issue-110-governance-node-05c-triage-cutover` at `4c65219`
