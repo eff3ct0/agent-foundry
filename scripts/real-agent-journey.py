@@ -804,12 +804,13 @@ def write_json(path, value):
 def contract_plan(run_id, template, owner="", runtime=""):
     run_id = validate_run_id(run_id)
     template = validate_repository(template)
+    runtime = validate_runtime(runtime)
     return {
         "schema_version": ENVELOPE_VERSION,
         "run_id": run_id,
         "source_template": template,
         "generated_repository": journey_repository(owner, run_id) if owner else None,
-        "runtime": validate_runtime(runtime) if runtime else None,
+        "runtime": runtime,
         "stages": list(STAGES),
         "explicit_decisions": list(DECISIONS),
         "components": dict(COMPONENTS),
@@ -885,7 +886,7 @@ def main():
     plan.add_argument("--run-id", required=True)
     plan.add_argument("--template", required=True)
     plan.add_argument("--owner")
-    plan.add_argument("--runtime")
+    plan.add_argument("--runtime", required=True)
     plan.add_argument("--output", required=True)
     install = subparsers.add_parser("install")
     install.add_argument("--runtime", required=True)

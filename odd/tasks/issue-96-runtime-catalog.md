@@ -88,6 +88,14 @@ Delivery evidence commit: `4fbe80a docs(odd): record issue 96 delivery evidence`
 Pull request: `https://github.com/eff3ct0/factory-template/pull/130` with
 exactly one type label, `type:feature`.
 
+Corrective verification: contract-plan now requires a supported `--runtime`
+before it writes a plan. The route-level regression proves a missing runtime
+fails without creating output and `codex-cli` succeeds. The ODD tracker is
+classified as an archetype-governance asset in the ownership manifest.
+`python3 scripts/test-real-agent-journey.py`,
+`python3 scripts/real-agent-journey.py --self-check`, and
+`python3 scripts/check-determinism.py` passed after the correction.
+
 ## Next action
 
 Await review and do not merge without approval.

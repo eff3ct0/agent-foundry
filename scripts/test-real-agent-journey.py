@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -154,11 +155,29 @@ if __name__ == "__main__":
     test_timeout_fails_closed()
     test_assert_stage_can_finish_before_cleanup()
 def test_contract_plan_is_provider_neutral():
-    plan = journey.contract_plan("123", "eff3ct0/factory-template")
-    assert plan["runtime"] is None
+    plan = journey.contract_plan("123", "eff3ct0/factory-template", runtime="codex-cli")
+    assert plan["runtime"] == "codex-cli"
     assert plan["stages"] == ["provision", "agent", "assert", "cleanup"]
     assert plan["explicit_decisions"] == list(journey.DECISIONS)
     assert "status:approved" in plan["approval_boundary"]
+
+
+def test_plan_route_requires_runtime_before_writing_output():
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "plan.json"
+        command = [
+            journey.sys.executable, str(ROOT / "scripts" / "real-agent-journey.py"),
+            "plan", "--run-id", "123", "--template", "eff3ct0/factory-template",
+            "--output", str(output),
+        ]
+        missing = subprocess.run(command, capture_output=True, text=True)
+        assert missing.returncode != 0
+        assert "the following arguments are required: --runtime" in missing.stderr
+        assert not output.exists()
+
+        accepted = subprocess.run(command + ["--runtime", "codex-cli"], capture_output=True, text=True)
+        assert accepted.returncode == 0, accepted.stderr
+        assert json.loads(output.read_text(encoding="utf-8"))["runtime"] == "codex-cli"
 
 
 def test_identity_and_decisions_fail_closed():
@@ -292,6 +311,7 @@ def test_unsupported_runtime_keeps_cleanup_evidence():
 
 if __name__ == "__main__":
     test_contract_plan_is_provider_neutral()
+    test_plan_route_requires_runtime_before_writing_output()
     test_identity_and_decisions_fail_closed()
     test_aggregate_rejects_mismatch_and_cleanup_failure()
     test_unsupported_runtime_keeps_cleanup_evidence()
