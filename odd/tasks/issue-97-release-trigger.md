@@ -80,9 +80,11 @@ validation for the repository owner; the implementation fails closed rather
 than substituting mutable `main` when a release source revision differs from the
 template default branch.
 
-Commit evidence: pending final diff review and work-unit commit.
+Work-unit commit: `dbded7c25d1b4295f5f7c598584caf4b61941ffe`
+`feat(journey): trigger real-agent journey on releases (#97)`.
 
 ## Next action
 
-Review the final scoped diff, regenerate the payload manifest after this update,
-and create the focused work-unit commit.
+Push the stacked branch and open the `main`-targeted PR with its predecessor
+context, exactly one `type:feature` label, and the recorded hosted-validation
+limitation.
