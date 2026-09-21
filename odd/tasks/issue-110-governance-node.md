@@ -194,3 +194,9 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 
 - The active Node CLI now loads configured recipe names before validating evidence, accepts every non-passed matrix result, and rejects missing, malformed, or inconsistent evidence `OPENAI_MODEL` values, matching the retained Python reporter boundary.
 - The focused CLI fixture writes a configured `python` matrix record with a non-passed result and proves it reaches the GitHub credential boundary rather than being rejected as an invalid case. The offline replay still proves no-failure reports perform no GitHub request.
+
+## Child 06d Python triage retirement boundary
+
+- The obsolete Python triage command and its dedicated legacy test module are retired after the completed Node triage consumer cutover. The Node triage command and both reporter implementations remain unchanged; Python reporter retirement is reserved for Child 06e.
+- The `legacy_python_triage` ownership category is removed, and the payload integrity mirror is regenerated for the ownership-manifest change.
+- Accepted exception evidence: the maintainer explicitly approved `size:exception` in the 500-620 review range for the cohesive Child 06d work unit. The retirement, ownership cleanup, ODD evidence, and regenerated payload mirror must remain reviewable as one lifecycle boundary.

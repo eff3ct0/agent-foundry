@@ -110,13 +110,6 @@
         {"path": "scripts/real-agent-journey-cleanup.py", "kind": "file"}
       ]
     },
-    "legacy_python_triage": {
-      "disposition": "removed",
-      "paths": [
-        {"path": "scripts/triage-bootstrap-failure.py", "kind": "file"},
-        {"path": "scripts/test-bootstrap-triage.py", "kind": "file"}
-      ]
-    },
     "initializer_inputs": {
       "disposition": "removed",
       "paths": [
