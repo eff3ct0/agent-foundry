@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `IMPLEMENTATION`; Child 03 ports the PR-governance command after Child 02 release-reference validation in PR #137 at commit `9d9b3d15f874968636e3cfd7b6bd6383f539ab25`
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-03-pr-governance`
-- Branch: `feat/issue-110-governance-node-03-pr-governance`
-- Base: `origin/feat/issue-110-governance-node-02-release-reference` at `e556d1d31ba0857d6f3302051622219f9329fb69`
+- State: `ACTIVE` in `IMPLEMENTATION`; Child 04 ports the structural delivery-contract validator after Child 03 PR-governance validation in PR #138 at commit `b54f3d9`.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-04-delivery-contract`
+- Branch: `feat/issue-110-governance-node-04-delivery-contract`
+- Base: `origin/feat/issue-110-governance-node-03-pr-governance` at `b54f3d9`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -26,7 +26,7 @@
 ### Out of scope
 
 - Resolving #99 or #100, changing protected-label authority, adding governance products, or changing bootstrap project-generation E2E.
-- Any live GitHub mutation other than the user-authorized branch push and PR creation, which remain prohibited while this delivery guard is blocked.
+- Protected-approval cutover or any live GitHub mutation beyond the user-authorized branch push, PR creation, and existing-label application.
 
 ## Acceptance criteria
 
@@ -82,7 +82,7 @@ The feature must integrate as one migration, so it uses a draft tracker rather t
 2. Child 01: `feat/issue-110-governance-node-01` -> tracker. Ports the independently executable label-synchronization command, catalog validation, dry-run/self-check behavior, documentation, determinism consumer, and label workflow to Node. Current review budget: 297 authored changed lines. It deliberately excludes release-reference validation because its current consumers remain Python.
 3. Child 02: release-reference validation with its Node consumer boundary and fixtures. Forecast: 260-360 lines after the affected consumers can move together.
 4. Child 03: PR governance command, provider-aware contract fixtures, and workflow consumer. The maintainer explicitly accepted a one-child `size:exception` of 430-520 authored changed lines: splitting its command, provider fixtures, and trusted workflow consumer would leave a non-verifiable governance boundary.
-5. Child 04: delivery-contract command and protected-approval fixtures. Forecast: 1,050-1,350 lines; split further only if one coherent command boundary fits.
+5. Child 04: structural delivery-contract command, fixtures, Node consumers, and deterministic integrity. The user explicitly accepted `size:exception` for its 480-600 authored-line boundary because the command, provider fixtures, generated-payload registration, and consumers must remain verifiable together. Protected-approval cutover remains a separate follow-up.
 6. Child 05: advisory bootstrap triage command and bounded-evidence/model-output fixtures. Forecast: 950-1,250 lines; split further only if one coherent command boundary fits.
 7. Child 06: bootstrap failure reporter command, deduplication/readback fixtures, workflow consumers, and final Python removal. Forecast: 1,450-1,850 lines; split further only if one coherent command boundary fits.
 
@@ -138,3 +138,10 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - `node --test test/check-pr-governance.test.mjs` passed: 7 tests, including the dedicated Linear binding fixture and a regression that supplies altered PR-side validator and bindings while asserting the required workflow checks out only `github.event.pull_request.base.sha`.
 - `node scripts/check-pr-governance.mjs --self-check`, `pnpm typecheck`, and `git diff --check` passed.
 - `node scripts/build-payload.mjs --write-lock`, `pnpm build`, and `python3 scripts/check-determinism.py` passed; the payload mirror was regenerated before the determinism check.
+
+## Child 04 delivery-contract boundary
+
+- `scripts/check-delivery-contract.mjs` is the authoritative structural validator for required documents, local links, provider contracts, and CI recipe shape. Its offline fixtures preserve deterministic root-relative diagnostics.
+- `scripts/check-delivery-contract.py --approval-self-check` remains the protected-approval authority until its separately scoped cutover; this slice does not change protected-label policy or perform a GitHub label mutation.
+- The bootstrap and real-agent consumers invoke the Node structural command. Determinism repeats that command and the retained Python protected-approval fixture independently.
+- Accepted exception evidence: the maintainer explicitly approved `size:exception` for the 480-600 authored-line cohesive work unit; splitting its command, fixtures, payload registration, and consumers would leave a non-verifiable delivery boundary.

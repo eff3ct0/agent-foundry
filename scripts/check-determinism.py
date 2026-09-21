@@ -390,7 +390,7 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(delivery, factory_layout, release_scripts=(), real_agent=()):
+def check_scripts(factory_layout, release_scripts=(), real_agent=()):
     labels_script = (
         ".factory/scripts/sync-github-labels.mjs"
         if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.mjs"))
@@ -404,7 +404,18 @@ def check_scripts(delivery, factory_layout, release_scripts=(), real_agent=()):
         else "scripts/check-pr-governance.mjs"
     )
     assert_repeatable_command(["node", governance_script, "--self-check"])
-    assert_same_output(delivery.self_check)
+    delivery_script = (
+        ".factory/scripts/check-delivery-contract.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "check-delivery-contract.mjs"))
+        else "scripts/check-delivery-contract.mjs"
+    )
+    approval_script = (
+        ".factory/scripts/check-delivery-contract.py"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "check-delivery-contract.py"))
+        else "scripts/check-delivery-contract.py"
+    )
+    assert_repeatable_command(["node", delivery_script, "--self-check"])
+    assert_repeatable_command([sys.executable, approval_script, "--approval-self-check"])
     assert_same_output(factory_layout.self_check)
     if release_scripts:
         bootstrap, reporter, triage, workflow = release_scripts
@@ -442,7 +453,6 @@ def self_check():
     init = load_module("archetype_init", "init.py") if source_mode else None
     factory = load_module("factory_bootstrap", "factory_bootstrap.py") if source_mode else None
     script_dir = ".factory/scripts" if not source_mode else "scripts"
-    delivery = load_module("check_delivery_contract", script_dir + "/check-delivery-contract.py")
     factory_layout = load_module("check_factory_layout", script_dir + "/check-factory-layout.py")
     release_paths = (
         "scripts/bootstrap-e2e.py",
@@ -474,7 +484,7 @@ def self_check():
         check_initializer_lifecycle(init)
     if factory:
         check_factory_bootstrap(factory)
-    check_scripts(delivery, factory_layout, release_scripts, real_agent)
+    check_scripts(factory_layout, release_scripts, real_agent)
     check_cli_commands(source_mode)
     print("determinism self-check OK")
 

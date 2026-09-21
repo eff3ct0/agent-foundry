@@ -517,7 +517,7 @@ VALIDATION_COMMANDS = (
     ("initializer-self-check", ["python3", "init.py", "--self-check"]),
     ("startup-self-check", ["python3", "start.py", "--self-check"]),
     ("governance", ["node", "scripts/check-pr-governance.mjs", "--self-check"]),
-    ("delivery-contract", ["python3", "scripts/check-delivery-contract.py"]),
+    ("delivery-contract", ["node", "scripts/check-delivery-contract.mjs", "--self-check"]),
     ("bootstrap-workflow", ["python3", "scripts/check-bootstrap-workflow.py"]),
 )
 
