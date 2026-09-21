@@ -390,6 +390,25 @@ def test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguit
         raise AssertionError("mismatched report target accepted")
 
 
+def test_reporting_github_integration_rejects_inconsistent_lookup_counts_before_writing():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    calls = []
+
+    def inconsistent_count(method, path, _token, expected=(200,), payload=None):
+        calls.append((method, path, payload))
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": []}
+        raise AssertionError("inconsistent duplicate lookup must not classify or mutate")
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", inconsistent_count)
+    except journey.JourneyError as error:
+        assert error.failure_code == "duplicate_lookup_incomplete"
+    else:
+        raise AssertionError("inconsistent duplicate lookup count accepted")
+    assert calls and all(method == "GET" and path.startswith("search/issues?") for method, path, _ in calls)
+
+
 def test_reporting_github_integration_rejects_comment_readback_identity_mismatch():
     report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
     marker = "Real-Agent-Journey-Fingerprint: " + report["fingerprint"]
@@ -458,6 +477,7 @@ if __name__ == "__main__":
     test_reporting_contract_ignores_success_and_rejects_unsafe_evidence()
     test_reporting_github_integration_is_bounded_and_reads_back_mutations()
     test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity()
+    test_reporting_github_integration_rejects_inconsistent_lookup_counts_before_writing()
     test_reporting_github_integration_rejects_comment_readback_identity_mismatch()
     test_reporting_github_integration_rejects_mutation_readback_mismatch()
     test_report_cli_dispatch_does_not_require_assertion_arguments()

@@ -319,7 +319,7 @@ def _canonical_issue(report, target, token, request_fn):
         result = request_fn("GET", "search/issues?" + query, token)
         if (not isinstance(result, dict) or result.get("incomplete_results") or
                 not isinstance(result.get("total_count"), int) or result["total_count"] > MAX_REPORT_RESULTS or
-                not isinstance(result.get("items"), list)):
+                not isinstance(result.get("items"), list) or result["total_count"] != len(result["items"])):
             raise JourneyError("reporting", "duplicate_lookup_incomplete", "GitHub duplicate lookup was incomplete")
         for issue in result["items"]:
             labels = issue.get("labels", []) if isinstance(issue, dict) else []

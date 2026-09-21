@@ -93,6 +93,8 @@ This ODD tracker is archetype-governance state and is registered as a `removed` 
 - The `report` subcommand now dispatches before assertion-mode argument validation, so the workflow invocation needs no `--checkout` or `--workflow-url`.
 - Public bug-form bodies exclude `generated_repository`; focused coverage asserts the identifier is absent.
 - Comment readback now requires the returned comment `id` to equal the created `comment_id`; a mismatched identity fails closed.
+- Each open/closed duplicate-lookup response now requires `total_count == len(items)` before classification; inconsistent counts fail closed before any write.
+- Added an injected `{total_count: 1, items: []}` regression that proves the reporter does not create or comment on an issue.
 - Passed: `python3 scripts/test-real-agent-journey.py`; `python3 scripts/real-agent-journey.py --self-check`; `python3 scripts/check-real-agent-workflow.py`; `python3 scripts/check-bootstrap-workflow.py`; and `python3 scripts/check-determinism.py`.
 - Runtime harness: N/A — this correction validates CLI dispatch and injected offline GitHub request fixtures only; no hosted workflow or live mutation is authorized.
 - Rollback boundary: remove the report-route dispatch guard, public-body redaction, strict comment identity check, their focused regressions, and matching documentation without altering aggregation or workflow execution.
