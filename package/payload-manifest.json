@@ -37,14 +37,14 @@
     {
       "path": ".github/pull_request_template.md",
       "mode": "100644",
-      "size": 1104,
-      "sha256": "0878c85a1df44f742123e100a7900d54a69cec1ebd30e7842d757054a703f338"
+      "size": 1102,
+      "sha256": "a9847abe541e15ba8abc08c8d69b51330ed4c3fb32093555dd34214c3f6ffec3"
     },
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 694,
-      "sha256": "a7deef5595b4aad0ac5c9f35e6f60f482ebd5a5b3c25a86f5b0cb2ad72ad4ebd"
+      "size": 727,
+      "sha256": "d00694ab54bc82c141755b5f4e2895c57d1a46a77a180de3b5070caa76e14dd3"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -73,8 +73,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 9230,
-      "sha256": "5262322d768144c6c3c524f662dca19211e23166d9a2c287b58c02bec3800984"
+      "size": 9651,
+      "sha256": "fb99db9bf1ec6c844f596079d52e65e925c429eb467222c4f7aacecbdb2f9c19"
     },
     {
       "path": "archetype-ownership.json",
@@ -91,8 +91,8 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 9130,
-      "sha256": "3e3f02db9f6aec4a7020162d53a27265c97394cd25694be8181d45fc11fc3661"
+      "size": 9345,
+      "sha256": "e8ec775274a61fa70482f6c73645a2ae4966e69c23c51816735f2246103e156e"
     },
     {
       "path": "docs/bootstrap.md",
@@ -103,8 +103,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 9815,
-      "sha256": "6c647f009f3223cb09d9a8323f30222d85e65891075f105c8cc4e00fd23bf033"
+      "size": 10081,
+      "sha256": "7ae51ee71864aaf4d23eb831cc47bb6e79287736f4b948a2f6c3b0fd7164687a"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -121,8 +121,8 @@
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 1711,
-      "sha256": "17a3a5b105e4c261d264688a90f07eee20b8be9f213a0eff4566454cc4bc1b64"
+      "size": 2671,
+      "sha256": "e62854982cad8493f9b632fa2c5c5282658ef9e5670ecdc67b39f3df5a6d6fef"
     },
     {
       "path": "docs/org-factory.md",
@@ -187,8 +187,8 @@
     {
       "path": "scripts/check-pr-governance.py",
       "mode": "100644",
-      "size": 4844,
-      "sha256": "e8d4c478aac4fe5f6ab2c788a5c65e65d7a93b0168a0ece4f4d712fb5887e560"
+      "size": 8995,
+      "sha256": "bc78d02745409111ac465620aa31ff71f5454483e69b085e89c1704d01aa1307"
     },
     {
       "path": "scripts/sync-github-labels.py",
@@ -229,8 +229,8 @@
     {
       "path": "templates/pull-request.md",
       "mode": "100644",
-      "size": 839,
-      "sha256": "0c32c20a6c617a3489decf8d4e0d97a1993d2653df53ce8066bf67de005c5a9d"
+      "size": 967,
+      "sha256": "0402fa678e4122b854fe49972dd81a4cb6f9b17114be43e72dc6ea6f3b07f1c0"
     },
     {
       "path": "templates/spec.md",
@@ -257,5 +257,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:0450cfa985628d69ad97c2c8abad60efd398ab553400e96e3f723c72dd7a6abb"
+  "payload_digest": "sha256:2159811cb313f047b46762405b2bcd12243d689ad8d0ca069404696c4699d424"
 }

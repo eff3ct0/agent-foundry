@@ -16,6 +16,11 @@ to epic `<EPIC_ID>`.
 corresponding issue template for its type (`task` or `bug`); blank or free-form
 issues are prohibited.
 
+**Pull-request governance:** PRs use the native reference `Jira: <TICKET_ID>`.
+The Jira issue key provides the development link; approval remains an explicit
+Jira-side gate. GitHub must not require a closing reference or inspect GitHub
+issue labels for this provider.
+
 **Rules and lifecycle:**
 - Statuses: *To Do* -> *In Progress* -> *Done* (map to the board's actual equivalents when different).
 - At start, move the issue to *In Progress* and comment the plan; at close, move it to *Done*.

@@ -14,6 +14,10 @@ retain the provider-neutral phase contract:
 - Do not mark *Done* before the Definition of Done and required review gates pass.
 - Approval-gated work stops with `BLOCKED: requires approval`; do not assign human approval labels.
 
+**Pull-request governance:** PRs use `Task: <TICKET_ID>` unless the bound
+custom provider documents another native syntax. Approval remains an explicit
+provider-side gate; GitHub issue labels are not required.
+
 <TASK_TRACKER_CUSTOM_RULES>
 
 **Binding:** Tasks live exclusively in the system declared by the project.
