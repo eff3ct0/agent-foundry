@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 10329,
-      "sha256": "3d145e406e207afc5b2badf47f9720192a5baa206d5ab48bdedda2b37ca1e103"
+      "size": 10330,
+      "sha256": "692e76e299d6536d3796613446ed7af61e29ca69249b3227e53ef6acfaec5797"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -319,8 +319,8 @@
     {
       "path": "scripts/check-determinism.py",
       "mode": "100644",
-      "size": 22204,
-      "sha256": "2721dce0a4338a242ddeea8f30896112698fe105149a8bea51fc35653ec0e7ee"
+      "size": 22155,
+      "sha256": "ea3548b93fd12c1f8d4115f43b37e296327fe9961807d3368af965ba080125ca"
     },
     {
       "path": "scripts/check-factory-layout.py",
@@ -407,5 +407,5 @@
       "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
     }
   ],
-  "payload_digest": "sha256:48e899939d3788e4d656030160f7eca412b293c6c8e3f63410e8df76430fa528"
+  "payload_digest": "sha256:9ce9b62c041d43d450449fb3027abe2f99a3dc9ae1920359aebd5062734dde0d"
 }

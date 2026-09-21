@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 06b adds the Node reporter's bounded GitHub adapter while retaining Python reporting I/O and workflow consumers.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-06b-reporter-adapter`
-- Branch: `feat/issue-110-governance-node-06b-reporter-adapter`
-- Base: `origin/feat/issue-110-governance-node-06-reporter` at `7ee0466`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 06c cuts static workflow and determinism consumers over to the Node reporter while retaining Python compatibility paths.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-06c-reporter-cutover`
+- Branch: `feat/issue-110-governance-node-06c-reporter-cutover`
+- Base: `origin/feat/issue-110-governance-node-06b-reporter-adapter` at `d5d27fe`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -183,3 +183,9 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - Offline Node fixtures exercise pagination, unsafe pagination rejection, artifact discovery, canonical comment reporting, issue creation, and mutation readback. No CLI/workflow consumer changes, Python removal, or live GitHub mutation are included.
 - The reporter remains release-only, so its changed source is excluded from the retained payload; `pnpm build` refreshes and verifies the payload mirror without adding this adapter.
 - Verification: focused reporter fixtures (6 tests), full Node suite (82 tests), `pnpm typecheck`, `pnpm build`, and `python3 scripts/check-determinism.py` pass; the 222 changed lines remain within the 400-line child review budget.
+
+## Child 06c reporter CLI and consumer cutover
+
+- `scripts/report-bootstrap-failure.mjs` now provides the bounded reporter CLI: it reads sorted, size-limited evidence; derives status failures, release identity, fingerprints, and bug-form bodies; then invokes the injected-fetch adapter and emits a stable JSON outcome. A no-failure replay exits without a GitHub request.
+- The release and template bootstrap report jobs pin Node.js 20.19.0 and invoke the Node CLI. Workflow static validation, determinism, and smoke-test documentation now consume the Node reporter; Python reporter files and compatibility tests remain intact for a later retirement slice.
+- Verification: focused reporter suite (7 tests, including an offline CLI replay), full `pnpm test` (83 tests), `pnpm typecheck`, `pnpm build`, bootstrap-workflow static checks, determinism, and initializer self-check all pass. `package/payload-manifest.json` was regenerated after the documentation and ODD changes. The work unit changes 166 authored lines, below the 400-line budget.

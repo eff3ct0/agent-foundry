@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import { readdir, readFile, stat } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { validateTag } from "./release-ref.mjs";
 
 export const ENVELOPE_VERSION = "bootstrap-e2e-failure/v1";
 export const TRIAGE_VERSION = "bootstrap-e2e-triage/v1";
@@ -296,3 +301,94 @@ export const reportCanonicalIssue = async ({ repository, title, body, markerText
   if (!isCanonicalIssue(readback, target) || readback.number !== created.number || readback.title !== title || !sameText(readback.body, body)) fail("created issue identity read-back failed");
   return { outcome: "created", issueNumber: created.number };
 };
+
+const readEvidence = async (directory) => {
+  let names;
+  try { names = (await readdir(directory)).filter((name) => name.endsWith(".json")).sort(); } catch { fail("evidence is unavailable or invalid"); }
+  if (names.length > MAX_RECORDS) fail("too many evidence files");
+  let totalBytes = 0;
+  const evidence = [];
+  for (const name of names) {
+    const file = path.join(directory, name);
+    try {
+      totalBytes += (await stat(file)).size;
+      if (totalBytes > 512 * 1024) fail("evidence exceeds the size limit");
+      evidence.push(parseBoundedJson(await readFile(file), 64 * 1024, "invalid evidence file"));
+    } catch (error) {
+      if (error instanceof ReporterError) throw error;
+      fail("invalid evidence file");
+    }
+  }
+  return evidence;
+};
+
+const runUrl = (value, repository, runId) => {
+  let url;
+  try { url = new URL(value); } catch { fail("workflow and artifact URLs must be public GitHub HTTPS URLs"); }
+  const prefix = `/${repository}/actions/runs/${runId}`.toLowerCase();
+  if (url.protocol !== "https:" || url.hostname !== "github.com" || url.username || url.password || url.search || url.hash || !(url.pathname.replace(/\/$/u, "").toLowerCase() === prefix || url.pathname.toLowerCase().startsWith(`${prefix}/`))) fail("workflow or artifact URL does not identify this run");
+  return value;
+};
+
+export const parseArgs = (values) => {
+  const options = { failedCase: [], prepareStatus: "success", bootstrapStatus: "success", cleanupStatus: "success", tokenEnv: "GITHUB_TOKEN", tagEnv: "RELEASE_TAG", shaEnv: "RELEASE_SHA", templateE2e: false };
+  if (values.length === 1 && values[0] === "--self-check") return { selfCheck: true };
+  if (values.shift() !== "report") fail("report or --self-check is required");
+  const fields = new Map([["--repository", "repository"], ["--tag", "tag"], ["--sha", "sha"], ["--triage-file", "triageFile"], ["--workflow-url", "workflowUrl"], ["--artifact-url", "artifactUrl"], ["--evidence-dir", "evidenceDir"], ["--prepare-status", "prepareStatus"], ["--bootstrap-status", "bootstrapStatus"], ["--cleanup-status", "cleanupStatus"], ["--run-id", "runId"], ["--token-env", "tokenEnv"], ["--tag-env", "tagEnv"], ["--sha-env", "shaEnv"]]);
+  while (values.length) {
+    const value = values.shift();
+    if (value === "--template-e2e") options.templateE2e = true;
+    else if (value === "--failed-case") options.failedCase.push(values.shift() ?? "");
+    else if (fields.has(value)) options[fields.get(value)] = values.shift() ?? "";
+    else fail(`unknown argument: ${value}`);
+  }
+  for (const key of ["repository", "workflowUrl", "artifactUrl", "runId"]) if (!options[key]) fail(`--${key.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`)} is required`);
+  return options;
+};
+
+export const report = async (options, environment = process.env) => {
+  const repository = validateRepository(options.repository);
+  const runId = validateRunId(options.runId);
+  const evidence = options.evidenceDir ? await readEvidence(options.evidenceDir) : options.failedCase.map((matrixCase) => ({ schema_version: ENVELOPE_VERSION, matrix_case: matrixCase, release_sha: "", release_tag: "", failure_code: "unknown", check_identifier: `bootstrap-e2e/${matrixCase}`, exit_code: null, logs: [], result: "failed" }));
+  const records = loadFailureRecords(evidence);
+  for (const [matrixCase, status] of [["prepare", options.prepareStatus], ["matrix", options.bootstrapStatus], ["cleanup", options.cleanupStatus]]) if (status !== "success" && !records.some((record) => record.matrix_case === matrixCase)) records.push({ matrix_case: matrixCase, release_sha: "", release_tag: "", failure_code: `${matrixCase}_failed`, check_identifier: `bootstrap-e2e/${matrixCase}`, exit_code: null, logs: [] });
+  const cases = [...new Set(records.map((record) => validateCase(record.matrix_case)))].sort();
+  if (cases.length > MAX_RECORDS) fail("too many report cases");
+  if (!cases.length) return { outcome: "no_failures" };
+  const rawTag = options.tag || environment[options.tagEnv];
+  let tag = "";
+  if (rawTag) try { tag = validateTag(rawTag); } catch (error) { if (options.prepareStatus === "success") throw error; }
+  const recordShas = [...new Set(records.map((record) => record.release_sha).filter(Boolean))];
+  const sha = options.sha || environment[options.shaEnv] || (recordShas.length === 1 ? recordShas[0] : "");
+  if (sha) validateSha(sha);
+  if (recordShas.some((recordSha) => recordSha !== sha)) fail("evidence release SHA does not match report SHA");
+  const fingerprints = sha ? records.map((record) => failureFingerprint(sha, record.matrix_case, record.failure_code, record.check_identifier)) : [];
+  const markerText = markerWithFingerprints(repository, sha, cases, fingerprints, tag, runId);
+  let triage = { status: "fallback", selected_model: null };
+  if (options.triageFile) try { triage = loadTriage(await readFile(options.triageFile)); } catch { /* Deterministic evidence remains authoritative. */ }
+  const workflowUrl = runUrl(options.workflowUrl, repository, runId);
+  const artifactUrl = runUrl(options.artifactUrl, repository, runId);
+  const artifacts = await artifactUrls(repository, runId, environment[options.tokenEnv], artifactUrl);
+  const body = options.templateE2e ? buildTemplateBody(repository, tag, sha, cases, workflowUrl, artifacts.artifactUrl, markerText) : buildBody(repository, tag, sha, cases, workflowUrl, artifacts.artifactUrl, markerText, triage, artifacts.triageArtifactUrl);
+  const title = options.templateE2e ? `[Bug] Template bootstrap E2E failed: ${tag || "published template"}` : `[Bug] Release bootstrap E2E failed: ${tag || "release preparation"}`;
+  return reportCanonicalIssue({ repository, title, body, markerText, fingerprints, token: environment[options.tokenEnv] });
+};
+
+export const selfCheck = () => {
+  const sha = "a".repeat(40);
+  const markerText = markerWithFingerprints("eff3ct0/factory-template", sha, ["python"], [failureFingerprint(sha, "python", "initializer_failed", "bootstrap-e2e/python")]);
+  validateIssueBody(buildBody("eff3ct0/factory-template", "v1.0.0", sha, ["python"], "https://github.com/eff3ct0/factory-template/actions/runs/123", "https://github.com/eff3ct0/factory-template/actions/runs/123", markerText));
+};
+
+export const main = async (values = process.argv.slice(2)) => {
+  const options = parseArgs([...values]);
+  if (options.selfCheck) { selfCheck(); process.stdout.write("bootstrap failure reporter self-check OK\n"); return; }
+  process.stdout.write(`${JSON.stringify(await report(options))}\n`);
+};
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((error) => {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+  });
+}
