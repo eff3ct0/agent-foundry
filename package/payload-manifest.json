@@ -49,8 +49,8 @@
     {
       "path": ".github/workflows/sync-labels.yml",
       "mode": "100644",
-      "size": 455,
-      "sha256": "6ae1bb2bb70991bbff8ec07b0180206a520e0d0e913ea8a32a0f3c96a62c5c33"
+      "size": 575,
+      "sha256": "f50ce7dcf82cbfda5f360a20b3fce39a96d2a978f11acdfe16ff81e420048cf7"
     },
     {
       "path": ".gitignore",
@@ -331,8 +331,8 @@
     {
       "path": "scripts/sync-github-labels.mjs",
       "mode": "100644",
-      "size": 2967,
-      "sha256": "0f37518ae13e6f2db2344a57a94d1a58fbcac1709d105a70c4471ad46bf643f5"
+      "size": 3083,
+      "sha256": "181618275724d6f48b42b0f38aa85490ed7fc47a6767c00937950516540ad776"
     },
     {
       "path": "start.mjs",
@@ -401,5 +401,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:5f6ae54fb7e953bee2fd314c3f443a2ee4b6cbb23c50bd52a992a19ed187ba08"
+  "payload_digest": "sha256:d79fb294d69d19d86585de023c338e5eafade88aab32722e67c033249d3e2dcc"
 }

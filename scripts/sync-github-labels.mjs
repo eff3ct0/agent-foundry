@@ -4,7 +4,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(scriptsDirectory, path.basename(path.dirname(scriptsDirectory)) === ".factory" ? "../.." : "..");
 const catalogPath = path.join(root, ".github", "labels.json");
 
 const invalidCatalog = () => new Error("labels.json must contain unique non-empty label names");
