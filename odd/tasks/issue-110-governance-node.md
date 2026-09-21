@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `IMPLEMENTATION`; Child 05c cuts the release triage job over to the reviewed Node CLI while retaining the `bootstrap-e2e-triage/v1` reporter handoff.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-05c-triage-cutover`
-- Branch: `feat/issue-110-governance-node-05c-triage-cutover`
-- Base: `origin/feat/issue-110-governance-node-05b-triage-cli` at `96fc81f`
+- State: `ACTIVE` in `IMPLEMENTATION`; Child 06a ports only the reporter's pure evidence, triage, form/body, and fingerprint contract while retaining Python reporting I/O and workflow consumers.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-06-reporter`
+- Branch: `feat/issue-110-governance-node-06-reporter`
+- Base: `origin/feat/issue-110-governance-node-05c-triage-cutover` at `4c65219`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -170,3 +170,9 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - The artifact contract remains `bootstrap-e2e-triage/v1`, so the Python reporter continues to consume the same handoff without a reporting migration.
 - Determinism and local smoke documentation now exercise the Node self-check and Node contract suites; the legacy Python triage test consumers are no longer part of the active verification path. The legacy Python implementation remains lifecycle-classified until Child 06 removes the final Python reporting/triage paths.
 - Verification passed: `pnpm test` (76 tests), `pnpm typecheck`, workflow static validation, ownership/determinism and initializer self-checks, and a clean-environment fallback replay. The payload integrity mirror was regenerated after the ownership and determinism inputs changed.
+
+## Child 06a reporter pure-contract boundary
+
+- `scripts/report-bootstrap-failure.mjs` ports bounded evidence and triage loading, release identity/case validation, stable fingerprints and markers, bug-form validation, and deterministic release/template issue-body construction.
+- This child makes no GitHub request, workflow change, consumer cutover, or Python removal; reporter pagination, deduplication, mutation, readback, and CLI integration remain a later coherent boundary.
+- Offline fixtures replay invalid evidence and triage, cleanup failures, redaction, fingerprints/markers, and bug-form-compatible bodies. The Node reporter is registered as release-only ownership; the payload mirror is regenerated with its inventory change.
