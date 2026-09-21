@@ -2,7 +2,7 @@
 
 ## Status
 
-`EVIDENCE/DELIVERY` — active.
+`EVIDENCE/DELIVERY` — completed; pull request pending.
 
 ## Scope
 
@@ -83,7 +83,8 @@ Hosted dispatch is not run because it needs configured repository credentials
 and would create a remote disposable repository, outside this task's authorized
 remote operations.
 
+Work-unit commit: `25c7057 feat(journey): add selectable runtime catalog (#96)`.
+
 ## Next action
 
-Review the complete diff, create the work-unit commit, push the branch, and
-open the issue-linked feature PR.
+Push the committed branch and open the issue-linked feature PR.
