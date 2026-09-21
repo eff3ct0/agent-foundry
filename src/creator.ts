@@ -89,7 +89,6 @@ export interface OwnershipManifest {
   text_files: string[];
   categories: Record<string, OwnershipCategory>;
 }
-
 interface CreatorState {
   schema_version: number;
   payload_version: string;
@@ -126,7 +125,6 @@ export interface HandoffResult {
   signal: NodeJS.Signals | null;
   message: string;
 }
-
 export type Command = "plan" | "dry-run" | "apply" | "verify" | "doctor";
 export type OperationAction = "create" | "update" | "remove" | "noop" | "conflict";
 
@@ -646,7 +644,6 @@ const composeProviderFiles = (
   files.push({ relativePath: providerManifestPath, bytes, mode: 0o644, sha256: sha256(bytes), size: bytes.byteLength });
   return { files, summary };
 };
-
 const bindingHeader = `# Bindings - mandatory project providers
 
 These bindings are mandatory for every agent, regardless of harness.

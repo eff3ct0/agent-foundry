@@ -118,6 +118,7 @@
         {"path": "src", "kind": "directory"},
         {"path": "test", "kind": "directory"},
         {"path": "docs/creator.md", "kind": "file"},
+        {"path": "docs/github-provisioning.md", "kind": "file"},
         {"path": "scripts/build-payload.mjs", "kind": "file"},
         {"path": "scripts/build.mjs", "kind": "file"}
       ]

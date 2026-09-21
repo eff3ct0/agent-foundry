@@ -44,6 +44,9 @@ When `init.py` runs, these enums select catalog fragments from [`providers/`](..
 and compose [`docs/bindings.md`](bindings.md), whose header restates the shape
 source. The agent is then **bound by that contract** and must use it exclusively. Code intelligence is
 optional: `none` uses native repository tools and does not compose a provider fragment.
+The selected task provider also composes its pull-request reference into
+`.github/pull_request_template.md` and `templates/pull-request.md`; GitHub issue
+label validation is retained only for GitHub task providers.
 
 ## Step 2b - Prepare an optional agent handoff
 
