@@ -1,0 +1,31 @@
+{
+  "name": "factory-template-creator",
+  "version": "0.1.0",
+  "description": "Immutable, versioned, transactional project creator for the factory template.",
+  "type": "commonjs",
+  "bin": {
+    "factory-template": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "start.mjs"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && node --test test/*.test.mjs",
+    "test:creator": "pnpm build && node --test test/creator.test.mjs",
+    "test:installer-ux": "pnpm build && node --test test/installer-ui.test.mjs test/installer-pty.test.mjs test/creator.test.mjs",
+    "test:provisioning": "pnpm build && node --test test/github-provisioning.test.mjs",
+    "prepack": "pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.21",
+    "typescript": "5.8.3"
+  },
+  "license": "MIT"
+}

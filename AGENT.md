@@ -8,7 +8,7 @@ It is not tied to any language or stack.
 > (initialize vs. work) and prints the next step; it does not execute actions itself.
 >
 > If the harness supports session hooks, [`hooks/README.md`](hooks/README.md) documents an optional
-> integration that delegates to `start.py`; the manual rule above remains the universal fallback.
+> integration that delegates to `start.mjs`; `python3 start.py` remains the universal compatibility fallback.
 
 > Placeholder convention: `<UPPER_SNAKE>` = value to fill; `<!-- guide: ... -->` = instruction for the
 > person filling it; a section marked `OPTIONAL` is removed when it does not apply.
@@ -30,9 +30,10 @@ It is not tied to any language or stack.
 - [`docs/bootstrap.md`](docs/bootstrap.md) - **how to initialize** a new project from this template (placeholders, tooling, first commit, checklist).
 - [`docs/bindings.md`](docs/bindings.md) - **provider contract**: the task tracker and secrets manager bound to the project (composed from `providers/` during initialization). Mandatory and exclusive use.
 - [`docs/org-factory.md`](docs/org-factory.md) - **organization layer**: how projects reference the org spec (the `.github` repo and `FACTORY_SPEC` pin).
+- [`docs/factory-layout.md`](docs/factory-layout.md) - **layout contract**: root allowlist and `.factory/` support boundary.
 - [`docs/agent-init.md`](docs/agent-init.md) - **agent mode**: procedure for initializing a project from the template (stack detection, bindings, verification).
 - [`templates/`](templates/) - reusable task, pull request, Definition of Done, ADR, and agent runbook templates. The runbook is the project's **loop execution contract**.
-- [`hooks/README.md`](hooks/README.md) - optional harness startup adapters; they always delegate to `start.py`.
+- [`hooks/README.md`](hooks/README.md) - optional harness startup adapters; they always delegate to `start.mjs`.
 
 ## Operating rules (language-agnostic core)
 1. **Durable state lives outside the session:** in the tracker (`<TRACKER>`) and version control. Never only in session memory. A session is disposable.

@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "package_name": "factory-template-creator",
+  "package_version": "0.1.0",
+  "payload_version": "1.0.0",
+  "files": [
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug.yml",
+      "mode": "100644",
+      "size": 952,
+      "sha256": "d9be6f81c8835d68c9e2ee73d9e0750e78dddb7c067c43dd7933318da67bae55"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "mode": "100644",
+      "size": 28,
+      "sha256": "1f103c6a9dd07cd13a9a6f17ace6b813f47747eb9cb7e00488cb2073caaf91bb"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/dx-feedback.yml",
+      "mode": "100644",
+      "size": 1161,
+      "sha256": "a71cd2de6fca2adde2de1975188d79c58b6cd6712bfcf3251a546c9a66b977f1"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/task.yml",
+      "mode": "100644",
+      "size": 1115,
+      "sha256": "9ee423524b0cc1f7aab07ceb8c5fff832c42a3d47240159dc2294c1b4dfd9593"
+    },
+    {
+      "path": ".github/labels.json",
+      "mode": "100644",
+      "size": 1019,
+      "sha256": "76a0b99f5357ae9ea25e6dec4cbe898dd5efe156d19e831f4f3767aa190bca2c"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "mode": "100644",
+      "size": 1102,
+      "sha256": "a9847abe541e15ba8abc08c8d69b51330ed4c3fb32093555dd34214c3f6ffec3"
+    },
+    {
+      "path": ".github/workflows/governance.yml",
+      "mode": "100644",
+      "size": 727,
+      "sha256": "d00694ab54bc82c141755b5f4e2895c57d1a46a77a180de3b5070caa76e14dd3"
+    },
+    {
+      "path": ".github/workflows/sync-labels.yml",
+      "mode": "100644",
+      "size": 418,
+      "sha256": "af67210e38d90f1ed7f33317f88407dc6b1f28608a76b00b605435460f2ea427"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "size": 294,
+      "sha256": "fd529ea706bdbf87db72cca6977aaffb0e108c81104a997e019e9e4f728a93c1"
+    },
+    {
+      "path": "AGENT.md",
+      "mode": "100644",
+      "size": 10273,
+      "sha256": "cc5785d982c51294cd32973c9e246e0a3244064f70de666626fb1cf61e8595c8"
+    },
+    {
+      "path": "CLAUDE.md",
+      "mode": "100644",
+      "size": 545,
+      "sha256": "40513cd15cb808f81441d7734cd24bdad3dd4846404e1bca64906e8fab641453"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "size": 10310,
+      "sha256": "2581d700aa4f3bed12a2099135cc2abe5099b501db1dd2149b53b61b1f022063"
+    },
+    {
+      "path": "archetype-ownership.json",
+      "mode": "100644",
+      "size": 7560,
+      "sha256": "08fb106678c42b8f1956d3e04ef8afcc8e380aa30d0bf80c832f5035521e0ee1"
+    },
+    {
+      "path": "checks/phase_state_check.py",
+      "mode": "100644",
+      "size": 10734,
+      "sha256": "549111f8db138715f4d004f462366912dc4e121439c8afd428919cb072ed44e7"
+    },
+    {
+      "path": "ci/_contract.md",
+      "mode": "100644",
+      "size": 1150,
+      "sha256": "45cbbdea065f04a795745a67f42c82c0f6776bbaf14c73672ea23a595dad5a14"
+    },
+    {
+      "path": "ci/recipes.json",
+      "mode": "100644",
+      "size": 1985,
+      "sha256": "efde2c315256d9bc5ac18b798e4a1d534e24bb838d84ed7a8267856ba24543d5"
+    },
+    {
+      "path": "docs/agent-init.md",
+      "mode": "100644",
+      "size": 12316,
+      "sha256": "5607c5dcb465447496e8e3c86ed73e888a86b6ef1d6474a5ebc402215b222af6"
+    },
+    {
+      "path": "docs/bootstrap.md",
+      "mode": "100644",
+      "size": 6531,
+      "sha256": "bc5d84395371775dad99263f74aa80951de9dabfc50e91f448a46ad97545ba50"
+    },
+    {
+      "path": "docs/determinism.md",
+      "mode": "100644",
+      "size": 10195,
+      "sha256": "a64d4a357cf2a0dd72687959ca9aeb85e8a2f95c0f1cfd872b17fb8a60c55546"
+    },
+    {
+      "path": "docs/engineering-handbook.md",
+      "mode": "100644",
+      "size": 2042,
+      "sha256": "09ceb1808bb6937f04e598f8bdef065f69c07521a42f4640bcdff5bcd0cca0a3"
+    },
+    {
+      "path": "docs/factory-layout.md",
+      "mode": "100644",
+      "size": 9455,
+      "sha256": "168623507407cd5b88fb1fef0a7ea13ee70d55f3c47eebb5eb2998f70f63ddf7"
+    },
+    {
+      "path": "docs/github-governance.md",
+      "mode": "100644",
+      "size": 2671,
+      "sha256": "e62854982cad8493f9b632fa2c5c5282658ef9e5670ecdc67b39f3df5a6d6fef"
+    },
+    {
+      "path": "docs/org-factory.md",
+      "mode": "100644",
+      "size": 3205,
+      "sha256": "19f01af2cf3ae10fee04744e6a8c81857a956427570fdcd593bcae44371fb5dc"
+    },
+    {
+      "path": "docs/workflow.md",
+      "mode": "100644",
+      "size": 3255,
+      "sha256": "7f15a68cc77bae682674e8ac0911535cf477a1832c24e933a4681f5e4fc38098"
+    },
+    {
+      "path": "hooks/README.md",
+      "mode": "100644",
+      "size": 2783,
+      "sha256": "e1b1aeea82419c4d1e213c654520d6c77f5a2a1fc12dc8f2d7c9482a0fd68fd4"
+    },
+    {
+      "path": "hooks/claude-code/session-start.sh",
+      "mode": "100644",
+      "size": 287,
+      "sha256": "ef942b533f59080a5da239857dc31613ccbdb6e54c1e92a2d2b3c8f6002ffcdf"
+    },
+    {
+      "path": "hooks/opencode/factory-start.ts",
+      "mode": "100644",
+      "size": 813,
+      "sha256": "448482fc9cbdb9dafbf87c1a7295fb6f8cd8696f68f02273a6c9a083c12597db"
+    },
+    {
+      "path": "hooks/pi/factory-start.ts",
+      "mode": "100644",
+      "size": 701,
+      "sha256": "89005ec5f447f38e8fda4d0585b4362d1b631b1cfe9d1d406d5c1d617429c59f"
+    },
+    {
+      "path": "placeholders.json",
+      "mode": "100644",
+      "size": 5998,
+      "sha256": "41cc72b3e94c5b59e641b859758b44bb3f4ad764909ba35cea34a49a49ce378b"
+    },
+    {
+      "path": "providers/agents/catalog.json",
+      "mode": "100644",
+      "size": 2833,
+      "sha256": "c89f155da6000464085706f8b1267188c262dff0bbe639a6dd7d8be16212b054"
+    },
+    {
+      "path": "providers/agents/templates/claude-code.md",
+      "mode": "100644",
+      "size": 570,
+      "sha256": "e0246d13562da0942c3459aefe8beffe4f716baf9113d92e38378bdb60d9a252"
+    },
+    {
+      "path": "providers/agents/templates/codex.md",
+      "mode": "100644",
+      "size": 558,
+      "sha256": "76c7324f431db358b64d12e053c6fbfcd28a9ecd39ffa2d69963d5725ab6f882"
+    },
+    {
+      "path": "providers/agents/templates/opencode.md",
+      "mode": "100644",
+      "size": 564,
+      "sha256": "0215578917a9b402e03fc44f5a4206ff82bbd6a16c0c438f1a6c870c4cdb4a2e"
+    },
+    {
+      "path": "providers/agents/templates/pi.md",
+      "mode": "100644",
+      "size": 552,
+      "sha256": "3d4fdc815d4a6fdb48557d81d83bc74386e65fb622924b54deebe16dbd9a0646"
+    },
+    {
+      "path": "providers/code-intel/_contract.md",
+      "mode": "100644",
+      "size": 1083,
+      "sha256": "ebf4599821e567d889bf3b07ae1547939befb62e19eb59e125ead1f3c3dfe803"
+    },
+    {
+      "path": "providers/code-intel/codegraph.md",
+      "mode": "100644",
+      "size": 1191,
+      "sha256": "5ab9f6ac58cea8aabcc7a4ff048de7e917e50ad8846ab3d4b53bc2477d6c28bc"
+    },
+    {
+      "path": "providers/code-intel/custom.md",
+      "mode": "100644",
+      "size": 982,
+      "sha256": "02d476baf7ef948c43e6f19bd437c2eb06f79648054c58c239b155d01312a3f7"
+    },
+    {
+      "path": "providers/code-intel/none.md",
+      "mode": "100644",
+      "size": 1077,
+      "sha256": "8adeb42164a2491c9a77664a4d4349da43d0f77cc77c94a5c74137d2ba407d02"
+    },
+    {
+      "path": "providers/secrets/_contract.md",
+      "mode": "100644",
+      "size": 1001,
+      "sha256": "30fd996d359e5abc6381c6dca6eb06f2038a0ae41cca33fe11e31bfaa2b90b20"
+    },
+    {
+      "path": "providers/secrets/custom.md",
+      "mode": "100644",
+      "size": 731,
+      "sha256": "b94e9b44e60de4eb1c8edfb57629b92cce894a4eab2ee1eeeca237cffd2f0b1c"
+    },
+    {
+      "path": "providers/secrets/doppler.md",
+      "mode": "100644",
+      "size": 862,
+      "sha256": "78489cba2e67574d1090a6816b84161faa425b4c8536b95b7322703c0036a2f7"
+    },
+    {
+      "path": "providers/secrets/infisical.md",
+      "mode": "100644",
+      "size": 851,
+      "sha256": "7e06b4235cf6ae9440590db4fafaa108362e19873c97882e4f1dfa8e9aaf5ccf"
+    },
+    {
+      "path": "providers/secrets/none.md",
+      "mode": "100644",
+      "size": 665,
+      "sha256": "13f587c64006642bd4e493dcb4ffd23b6c816af466c85df143266aff1f25cb30"
+    },
+    {
+      "path": "providers/secrets/vault.md",
+      "mode": "100644",
+      "size": 788,
+      "sha256": "a3e8b0365ac3352b8ff68b790a23cfa8b8199ecb3cbf7feb06ba6a6962a9dbed"
+    },
+    {
+      "path": "providers/task/_contract.md",
+      "mode": "100644",
+      "size": 2296,
+      "sha256": "c268e2eed3654e768c74647317751c9f2d26fd6feb8d176fbd553608fb23f4eb"
+    },
+    {
+      "path": "providers/task/custom.md",
+      "mode": "100644",
+      "size": 2176,
+      "sha256": "36b13256ab16c1e869b73c4a1896cbf2833be34130529b0c34abd3934a2b38b0"
+    },
+    {
+      "path": "providers/task/github-issues.md",
+      "mode": "100644",
+      "size": 3690,
+      "sha256": "911448f80a5a610701ca326c0df4f436d40bb559c4a5fc5c6f7875024484d282"
+    },
+    {
+      "path": "providers/task/github-projects.md",
+      "mode": "100644",
+      "size": 3618,
+      "sha256": "14e5af09f1c859ef1179aff3bea46a5a4b912df12156334ea8e5fadbe6547461"
+    },
+    {
+      "path": "providers/task/jira.md",
+      "mode": "100644",
+      "size": 2761,
+      "sha256": "a6b1ad6af24caee9cae840134702464d2951534c9224cbb8b41e76d5556256da"
+    },
+    {
+      "path": "providers/task/linear.md",
+      "mode": "100644",
+      "size": 2566,
+      "sha256": "1639ecf1e4f66e84405690ffe99d62104645168daa539f55c57ecdd72ed7ceda"
+    },
+    {
+      "path": "scripts/check-delivery-contract.py",
+      "mode": "100644",
+      "size": 17694,
+      "sha256": "42c89303d9f0e228bf86a75e2431a810697460cb3353c00e0fd5308152e7d3b7"
+    },
+    {
+      "path": "scripts/check-determinism.py",
+      "mode": "100644",
+      "size": 20994,
+      "sha256": "858773be4397bd1d8fc94404add30d98d4e17ff3a01d11488ef090e20227515e"
+    },
+    {
+      "path": "scripts/check-factory-layout.py",
+      "mode": "100644",
+      "size": 5480,
+      "sha256": "e47a20ba8c4bb74d5143d97d175b3ffaa6cb323f935030e49c04581e94b4b959"
+    },
+    {
+      "path": "scripts/check-pr-governance.py",
+      "mode": "100644",
+      "size": 8995,
+      "sha256": "bc78d02745409111ac465620aa31ff71f5454483e69b085e89c1704d01aa1307"
+    },
+    {
+      "path": "scripts/sync-github-labels.py",
+      "mode": "100644",
+      "size": 2428,
+      "sha256": "ff40fd8568def858f100fff682559a3e75e6011860eb467143875a8625168ac6"
+    },
+    {
+      "path": "start.mjs",
+      "mode": "100644",
+      "size": 11236,
+      "sha256": "56a04660e1785ea9297db15a73b5fe0a74c2623a0fa9b8ce9ac0622f7022c9b9"
+    },
+    {
+      "path": "start.py",
+      "mode": "100644",
+      "size": 729,
+      "sha256": "a2fcc0b1f0cb2cb37001acc16edfd0fdd0a456d8fd56169823fd0f69d1b4f3d9"
+    },
+    {
+      "path": "templates/adr.md",
+      "mode": "100644",
+      "size": 418,
+      "sha256": "f80da6b5bcf7e4b3828667e3a6779f8902b792eeee01395d57374c9f02b97bcc"
+    },
+    {
+      "path": "templates/agent-runbook.md",
+      "mode": "100644",
+      "size": 7375,
+      "sha256": "ae2383f49e2a694df369b15906afe65f653d54d63efc9c33f432120be87b668d"
+    },
+    {
+      "path": "templates/definition-of-done.md",
+      "mode": "100644",
+      "size": 765,
+      "sha256": "bb6589566fbecafa77ae635f3e1562a967665bf73a5d3987a87a2334388ef314"
+    },
+    {
+      "path": "templates/handoff.md",
+      "mode": "100644",
+      "size": 938,
+      "sha256": "ed71fc4f5169c110a159a33cc4662da29166fc4f810ce728695f6eadd4806adc"
+    },
+    {
+      "path": "templates/pull-request.md",
+      "mode": "100644",
+      "size": 967,
+      "sha256": "0402fa678e4122b854fe49972dd81a4cb6f9b17114be43e72dc6ea6f3b07f1c0"
+    },
+    {
+      "path": "templates/spec.md",
+      "mode": "100644",
+      "size": 577,
+      "sha256": "cfecccb6f391112254fbc5aabf1e6533f2d8467c62da3aabe9b2f572f3fe0a58"
+    },
+    {
+      "path": "templates/ticket.md",
+      "mode": "100644",
+      "size": 748,
+      "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
+    },
+    {
+      "path": "test_factory_bootstrap.py",
+      "mode": "100644",
+      "size": 4474,
+      "sha256": "7435f4f9ec749a37e770cee3afc405b762645cd8415fde41608fbc5ec4aeb510"
+    },
+    {
+      "path": "test_init.py",
+      "mode": "100644",
+      "size": 5787,
+      "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
+    }
+  ],
+  "payload_digest": "sha256:32b204e1e5a12d7ef4bc529a40cb2d20cdab206b2f4ee11502918030b7e3b76f"
+}

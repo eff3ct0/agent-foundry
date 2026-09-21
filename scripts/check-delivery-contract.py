@@ -8,17 +8,25 @@ import re
 import tempfile
 
 
-ROOT = Path(__file__).resolve().parents[1]
-CONTRACT_FILES = (
-    ROOT / "AGENT.md",
-    ROOT / "templates" / "agent-runbook.md",
-    ROOT / "docs" / "bindings.md",
-    ROOT / "providers" / "task" / "_contract.md",
-    ROOT / "providers" / "secrets" / "_contract.md",
-    ROOT / "providers" / "code-intel" / "_contract.md",
-    ROOT / "ci" / "_contract.md",
-    ROOT / "ci" / "recipes.json",
-)
+_SCRIPT_PATH = Path(__file__).resolve()
+ROOT = _SCRIPT_PATH.parents[2] if _SCRIPT_PATH.parent.parent.name == ".factory" else _SCRIPT_PATH.parents[1]
+
+
+def _contract_files(root):
+    factory = root / ".factory"
+    templates = factory / "templates" if factory.is_dir() else root / "templates"
+    files = [root / "AGENT.md", templates / "agent-runbook.md", root / "docs" / "bindings.md"]
+    if (root / "providers").is_dir():
+        files.extend(
+            root / "providers" / capability / "_contract.md"
+            for capability in ("task", "secrets", "code-intel")
+        )
+    if (root / "ci").is_dir():
+        files.extend((root / "ci" / "_contract.md", root / "ci" / "recipes.json"))
+    return tuple(files)
+
+
+CONTRACT_FILES = _contract_files(ROOT)
 PROVIDER_DIRS = {
     "task": "task",
     "secrets": "secrets",
@@ -143,6 +151,8 @@ def _check_document(path, text, root, errors):
             "providers/code-intel/_contract.md",
             "ci/_contract.md",
         ):
+            if not (root / relative).exists():
+                continue
             if (root / relative).resolve() not in linked:
                 errors.append(
                     "%s missing contract link: %s" % (_display(path, root), relative)
@@ -220,7 +230,7 @@ def _check_ci(path, root, errors):
 
 
 def _all_paths(root):
-    required = [root / path.relative_to(ROOT) for path in CONTRACT_FILES]
+    required = list(_contract_files(root))
     return required + [path for _, path in _provider_files(root)]
 
 
