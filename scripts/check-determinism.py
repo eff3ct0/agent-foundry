@@ -141,18 +141,30 @@ def check_initializer_lifecycle(init):
                 )
                 assert repeat_opt_in.returncode == 0, (repeat_opt_in.stdout, repeat_opt_in.stderr)
                 assert os.stat(plugin).st_mtime_ns == plugin_mtime
-                contract_script = (
-                    ".factory/scripts/check-delivery-contract.py"
-                    if os.path.isfile(os.path.join(root, ".factory", "scripts", "check-delivery-contract.py"))
-                    else "scripts/check-delivery-contract.py"
+                structural_script = (
+                    ".factory/scripts/check-delivery-contract.mjs"
+                    if os.path.isfile(os.path.join(root, ".factory", "scripts", "check-delivery-contract.mjs"))
+                    else "scripts/check-delivery-contract.mjs"
                 )
-                contract = subprocess.run(
-                    [sys.executable, contract_script],
+                structural = subprocess.run(
+                    ["node", structural_script, "--self-check"],
                     cwd=root,
                     capture_output=True,
                     text=True,
                 )
-                assert contract.returncode == 0, (contract.stdout, contract.stderr)
+                assert structural.returncode == 0, (structural.stdout, structural.stderr)
+                approval_script = (
+                    ".factory/scripts/check-delivery-contract.py"
+                    if os.path.isfile(os.path.join(root, ".factory", "scripts", "check-delivery-contract.py"))
+                    else "scripts/check-delivery-contract.py"
+                )
+                approval = subprocess.run(
+                    [sys.executable, approval_script, "--approval-self-check"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert approval.returncode == 0, (approval.stdout, approval.stderr)
             else:
                 assert all(not os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
         finally:

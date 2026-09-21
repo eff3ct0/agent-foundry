@@ -145,3 +145,8 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - `scripts/check-delivery-contract.py --approval-self-check` remains the protected-approval authority until its separately scoped cutover; this slice does not change protected-label policy or perform a GitHub label mutation.
 - The bootstrap and real-agent consumers invoke the Node structural command. Determinism repeats that command and the retained Python protected-approval fixture independently.
 - Accepted exception evidence: the maintainer explicitly approved `size:exception` for the 480-600 authored-line cohesive work unit; splitting its command, fixtures, payload registration, and consumers would leave a non-verifiable delivery boundary.
+
+## Child 04 corrective lifecycle boundary
+
+- The initialized `--no-clean` lifecycle regression runs `node scripts/check-delivery-contract.mjs --self-check` for structural validation, then retains `python3 scripts/check-delivery-contract.py --approval-self-check` for the protected-approval fixture.
+- This corrective work unit changes only validator dispatch; protected-approval policy and GitHub label mutation remain out of scope.
