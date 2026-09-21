@@ -390,7 +390,7 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(governance, delivery, factory_layout, release_scripts=(), real_agent=()):
+def check_scripts(delivery, factory_layout, release_scripts=(), real_agent=()):
     labels_script = (
         ".factory/scripts/sync-github-labels.mjs"
         if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.mjs"))
@@ -398,7 +398,12 @@ def check_scripts(governance, delivery, factory_layout, release_scripts=(), real
     )
     assert_repeatable_command(["node", "start.mjs", "--self-check"])
     assert_repeatable_command(["node", labels_script, "--self-check"])
-    assert_same_output(governance.self_check)
+    governance_script = (
+        ".factory/scripts/check-pr-governance.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "check-pr-governance.mjs"))
+        else "scripts/check-pr-governance.mjs"
+    )
+    assert_repeatable_command(["node", governance_script, "--self-check"])
     assert_same_output(delivery.self_check)
     assert_same_output(factory_layout.self_check)
     if release_scripts:
@@ -437,7 +442,6 @@ def self_check():
     init = load_module("archetype_init", "init.py") if source_mode else None
     factory = load_module("factory_bootstrap", "factory_bootstrap.py") if source_mode else None
     script_dir = ".factory/scripts" if not source_mode else "scripts"
-    governance = load_module("check_pr_governance", script_dir + "/check-pr-governance.py")
     delivery = load_module("check_delivery_contract", script_dir + "/check-delivery-contract.py")
     factory_layout = load_module("check_factory_layout", script_dir + "/check-factory-layout.py")
     release_paths = (
@@ -470,7 +474,7 @@ def self_check():
         check_initializer_lifecycle(init)
     if factory:
         check_factory_bootstrap(factory)
-    check_scripts(governance, delivery, factory_layout, release_scripts, real_agent)
+    check_scripts(delivery, factory_layout, release_scripts, real_agent)
     check_cli_commands(source_mode)
     print("determinism self-check OK")
 

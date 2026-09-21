@@ -78,7 +78,7 @@ class InitializerChecks(unittest.TestCase):
                 "start.py": "print('start')\n",
                 "AGENT.md": "See [workflow](docs/workflow.md) and [runbook](templates/agent-runbook.md).\n",
                 "README.md": "Run `python3 scripts/check-determinism.py`.\n",
-                ".github/workflows/governance.yml": "run: python3 scripts/check-pr-governance.py\n",
+                ".github/workflows/governance.yml": "run: node scripts/check-pr-governance.mjs\n",
                 "docs/workflow.md": "Use [ticket](../templates/ticket.md).\nRun `python3 scripts/check-determinism.py`.\n",
                 "docs/bindings.md": "# Generated bindings\n",
                 "templates/agent-runbook.md": "runbook\n",
@@ -107,7 +107,7 @@ class InitializerChecks(unittest.TestCase):
             with open(os.path.join(directory, "README.md"), encoding="utf-8") as source:
                 self.assertIn(".factory/scripts/check-determinism.py", source.read())
             with open(os.path.join(directory, ".github", "workflows", "governance.yml"), encoding="utf-8") as source:
-                self.assertIn(".factory/scripts/check-pr-governance.py", source.read())
+                self.assertIn(".factory/scripts/check-pr-governance.mjs", source.read())
             self.assertEqual(init.relocate_factory_assets(directory), [])
         finally:
             shutil.rmtree(directory)

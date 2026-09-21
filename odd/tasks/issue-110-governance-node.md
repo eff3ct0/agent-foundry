@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 02 release-reference validation is delivered in PR #137 at commit `9d9b3d15f874968636e3cfd7b6bd6383f539ab25`
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-02-release-reference`
-- Branch: `feat/issue-110-governance-node-02-release-reference`
-- Base: fresh `origin/main` at `f0b7db1`
+- State: `ACTIVE` in `IMPLEMENTATION`; Child 03 ports the PR-governance command after Child 02 release-reference validation in PR #137 at commit `9d9b3d15f874968636e3cfd7b6bd6383f539ab25`
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-03-pr-governance`
+- Branch: `feat/issue-110-governance-node-03-pr-governance`
+- Base: `origin/feat/issue-110-governance-node-02-release-reference` at `e556d1d31ba0857d6f3302051622219f9329fb69`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -81,7 +81,7 @@ The feature must integrate as one migration, so it uses a draft tracker rather t
 1. Tracker: `feat/issue-110-governance-node` -> `main`. Records the approved chain, ownership, and review boundaries; it does not implement a Node port.
 2. Child 01: `feat/issue-110-governance-node-01` -> tracker. Ports the independently executable label-synchronization command, catalog validation, dry-run/self-check behavior, documentation, determinism consumer, and label workflow to Node. Current review budget: 297 authored changed lines. It deliberately excludes release-reference validation because its current consumers remain Python.
 3. Child 02: release-reference validation with its Node consumer boundary and fixtures. Forecast: 260-360 lines after the affected consumers can move together.
-4. Child 03: PR governance command, provider-aware contract fixtures, and workflow consumer. Forecast: 650-900 lines; split further only if one coherent command boundary fits.
+4. Child 03: PR governance command, provider-aware contract fixtures, and workflow consumer. The maintainer explicitly accepted a one-child `size:exception` of 430-520 authored changed lines: splitting its command, provider fixtures, and trusted workflow consumer would leave a non-verifiable governance boundary.
 5. Child 04: delivery-contract command and protected-approval fixtures. Forecast: 1,050-1,350 lines; split further only if one coherent command boundary fits.
 6. Child 05: advisory bootstrap triage command and bounded-evidence/model-output fixtures. Forecast: 950-1,250 lines; split further only if one coherent command boundary fits.
 7. Child 06: bootstrap failure reporter command, deduplication/readback fixtures, workflow consumers, and final Python removal. Forecast: 1,450-1,850 lines; split further only if one coherent command boundary fits.
@@ -98,9 +98,12 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - [x] Implemented and independently verified Child 01 within the 400-line budget; staged diff including this evidence update remains below the limit.
 - [x] Implemented Child 02's Node release-reference validator, Python consumer boundary, workflow runtime setup, and ownership registration.
 
-## Resume condition
+## Child 03 implementation boundary
 
-Reforecast Child 03 PR-governance command, provider-aware contract fixtures, and workflow consumer against delivered Child 02 branch `feat/issue-110-governance-node-02-release-reference` at commit `9d9b3d15f874968636e3cfd7b6bd6383f539ab25` (PR #137) before creating its child PR.
+- `scripts/check-pr-governance.mjs` is the authoritative Node validator for the GitHub and provider-native PR contract; the replaced Python command is removed with this complete consumer migration.
+- The provider fixtures cover GitHub close references and approval readback, plus Jira/Linear native references that must not query GitHub.
+- The trusted `pull_request_target` workflow pins Node.js 20.19.0 and validates the merge candidate without write permissions or persisted checkout credentials.
+- Accepted exception: the coherent command, fixtures, workflow, local consumers, ownership registration, and payload mirror are reviewed together at 430-520 authored changed lines; breaking this boundary would make the fixtures or workflow unverified in isolation.
 
 ## Child 01 verification evidence
 

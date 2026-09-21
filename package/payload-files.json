@@ -55,7 +55,7 @@
     "scripts/check-delivery-contract.py",
     "scripts/check-determinism.py",
     "scripts/check-factory-layout.py",
-    "scripts/check-pr-governance.py",
+    "scripts/check-pr-governance.mjs",
     "scripts/sync-github-labels.mjs",
     "start.mjs",
     "start.py",

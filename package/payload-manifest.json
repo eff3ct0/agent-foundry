@@ -43,8 +43,8 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 727,
-      "sha256": "d00694ab54bc82c141755b5f4e2895c57d1a46a77a180de3b5070caa76e14dd3"
+      "size": 854,
+      "sha256": "e87635df858dceb52c6c4298d75a7103bdc10dd74ff33a902a7a6e0b68cea108"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -79,8 +79,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7968,
-      "sha256": "501030f1a62c5962153a0af7a9454226d4cabe37673b82bf0a66afa755572852"
+      "size": 7970,
+      "sha256": "e286a54611b9c7af2be97b37bd2249b97cbe001c64c0d4444e55fe230e6539f5"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 10213,
-      "sha256": "013754bcfffcc7bd61cc427532d9a8b269fa531bcc0a37301d8ae30114fcb90e"
+      "size": 10220,
+      "sha256": "b2af9014b1bd42868efa3f204ea7577ba300ee9bbc3f922421a5f50991fa9a4f"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -313,8 +313,8 @@
     {
       "path": "scripts/check-determinism.py",
       "mode": "100644",
-      "size": 21045,
-      "sha256": "83ca02c9f55f7a4e5d548f5a48fce40eab720977205c90954cea81d5e404f80a"
+      "size": 21184,
+      "sha256": "a2f3744ea459ed8e24318b9474448e45e7fcfb03d04f1d10bd80bd761ddee352"
     },
     {
       "path": "scripts/check-factory-layout.py",
@@ -323,10 +323,10 @@
       "sha256": "e47a20ba8c4bb74d5143d97d175b3ffaa6cb323f935030e49c04581e94b4b959"
     },
     {
-      "path": "scripts/check-pr-governance.py",
+      "path": "scripts/check-pr-governance.mjs",
       "mode": "100644",
-      "size": 8995,
-      "sha256": "bc78d02745409111ac465620aa31ff71f5454483e69b085e89c1704d01aa1307"
+      "size": 7510,
+      "sha256": "05d1334e47f8d1fb65c0002b82427f6609aa0c45492545d9aced0b42f86a36c8"
     },
     {
       "path": "scripts/sync-github-labels.mjs",
@@ -397,9 +397,9 @@
     {
       "path": "test_init.py",
       "mode": "100644",
-      "size": 5787,
-      "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
+      "size": 5786,
+      "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
     }
   ],
-  "payload_digest": "sha256:a40f1eabc8b583aa4794004e4538220abc7c10a9e3dedd432ed16232907b485a"
+  "payload_digest": "sha256:555880cdb23bcc19747acacf946b2e04047971987a3a9a0650aa356bf10ae8cb"
 }

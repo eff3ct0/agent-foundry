@@ -20,7 +20,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.19.0
       - name: Validate PR metadata
-        run: python3 scripts/check-pr-governance.py
+        run: node scripts/check-pr-governance.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
