@@ -1,5 +1,9 @@
 #!/bin/sh
 set -eu
 
-project_dir=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
+adapter_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+project_dir=$(CDPATH= cd "$adapter_dir/../.." && pwd)
+if [ ! -f "$project_dir/start.py" ]; then
+    project_dir=$(CDPATH= cd "$adapter_dir/../../.." && pwd)
+fi
 exec python3 "$project_dir/start.py"

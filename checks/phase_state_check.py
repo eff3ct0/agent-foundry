@@ -229,26 +229,34 @@ def assert_handoff_is_resumable(tracker, state, expected_phase=None):
 
 
 def assert_documents_are_consistent(root):
+    factory = root / ".factory"
+    templates = factory / "templates" if factory.is_dir() else root / "templates"
+    providers = root / "providers" / "task"
     documents = [
         root / "AGENT.md",
-        root / "templates" / "agent-runbook.md",
-        root / "templates" / "handoff.md",
-        root / "providers" / "task" / "github-issues.md",
-        root / "providers" / "task" / "github-projects.md",
+        templates / "agent-runbook.md",
+        templates / "handoff.md",
     ]
+    documents.extend(
+        path for path in (
+            providers / "github-issues.md",
+            providers / "github-projects.md",
+        ) if path.exists()
+    )
     for path in documents:
         text = path.read_text(encoding="utf-8").lower()
         for phase in PHASES:
             assert phase.lower() in text, "%s misses %s" % (path, phase)
         for field in REQUIRED_HANDOFF_FIELDS:
             assert field in text, "%s misses %s" % (path, field)
-    handoff = (root / "templates" / "handoff.md").read_text(encoding="utf-8")
+    handoff = (templates / "handoff.md").read_text(encoding="utf-8")
     assert "BLOCKED: requires approval" in handoff
     assert "Definition of Done" in (root / "AGENT.md").read_text(encoding="utf-8")
 
 
 def run():
-    root = Path(__file__).resolve().parents[1]
+    script_path = Path(__file__).resolve()
+    root = script_path.parents[2] if script_path.parent.parent.name == ".factory" else script_path.parents[1]
     assert_documents_are_consistent(root)
 
     for provider in ("github-issues", "github-projects"):

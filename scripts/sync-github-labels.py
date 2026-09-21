@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+_SCRIPT_PATH = Path(__file__).resolve()
+ROOT = _SCRIPT_PATH.parents[2] if _SCRIPT_PATH.parent.parent.name == ".factory" else _SCRIPT_PATH.parents[1]
 CATALOG = ROOT / ".github" / "labels.json"
 
 

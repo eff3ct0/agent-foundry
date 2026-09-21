@@ -7,8 +7,9 @@ perform outward actions.
 
 ## Claude Code
 
-The reference adapter is `hooks/claude-code/session-start.sh`. Make it
-executable after copying the template, then add this to the project's
+The source reference adapter is `hooks/claude-code/session-start.sh`; after
+initialization it is retained at `.factory/hooks/claude-code/session-start.sh`.
+Make the initialized adapter executable after copying the template, then add this to the project's
 `.claude/settings.json`:
 
 ```json
@@ -20,7 +21,7 @@ executable after copying the template, then add this to the project's
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/hooks/claude-code/session-start.sh\""
+            "command": "\"$CLAUDE_PROJECT_DIR/.factory/hooks/claude-code/session-start.sh\""
           }
         ]
       }
@@ -32,7 +33,7 @@ executable after copying the template, then add this to the project's
 Run:
 
 ```sh
-chmod +x hooks/claude-code/session-start.sh
+chmod +x .factory/hooks/claude-code/session-start.sh
 ```
 
 Claude Code adds successful command-hook stdout to the session context. The
@@ -43,12 +44,13 @@ Official documentation: [Claude Code hooks](https://code.claude.com/docs/en/hook
 
 ## Pi
 
-The adapter is `hooks/pi/factory-start.ts`. Copy it to the project's
+The source adapter is `hooks/pi/factory-start.ts`; after initialization it is
+retained at `.factory/hooks/pi/factory-start.ts`. Copy it to the project's
 `.pi/extensions/` directory so Pi discovers it automatically:
 
 ```sh
 mkdir -p .pi/extensions
-cp hooks/pi/factory-start.ts .pi/extensions/factory-start.ts
+cp .factory/hooks/pi/factory-start.ts .pi/extensions/factory-start.ts
 ```
 
 It runs `python3 start.py` on `session_start`, then returns its stdout as the

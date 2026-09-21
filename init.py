@@ -65,6 +65,21 @@ SKIP_ROOT_FILES = {SELF, "placeholders.json", OWNERSHIP_MANIFEST_NAME}
 PROTECTED_VALIDATION_PREFIX = "scripts/check-"
 OPENCODE_PLUGIN_SOURCE = os.path.join("hooks", "opencode", "factory-start.ts")
 OPENCODE_PLUGIN_DESTINATION = os.path.join(".opencode", "plugins", "factory-start.ts")
+FACTORY_ROOT = ".factory"
+FACTORY_DIRECTORIES = ("checks", "docs", "hooks", "scripts", "templates")
+
+
+def _factory_asset_destination(relative):
+    """Return the initialized-project location for a retained factory asset."""
+    if relative == "docs/bindings.md" or relative.startswith(".factory/"):
+        return relative
+    if relative in {"checks", "hooks", "templates"}:
+        return os.path.join(FACTORY_ROOT, relative)
+    if relative.startswith(("checks/", "docs/", "scripts/")):
+        return os.path.join(FACTORY_ROOT, relative)
+    if relative in {"test_init.py", "test_factory_bootstrap.py"}:
+        return os.path.join(FACTORY_ROOT, "scripts", relative)
+    return None
 PR_GOVERNANCE_START = "<!-- provider-governance:start -->"
 PR_GOVERNANCE_END = "<!-- provider-governance:end -->"
 PR_GOVERNANCE_FILES = (
@@ -318,7 +333,9 @@ def _confirm_repository(prompt):
 
 def _is_protected_validation_source(path, root):
     relative = os.path.relpath(path, root).replace(os.sep, "/")
-    return relative.startswith(PROTECTED_VALIDATION_PREFIX)
+    return relative.startswith(PROTECTED_VALIDATION_PREFIX) or relative.startswith(
+        ".factory/" + PROTECTED_VALIDATION_PREFIX
+    )
 
 
 def iter_text_files(root):
@@ -386,6 +403,175 @@ def _rebase_links(text, source, destination):
         return match.group(1) + rebased
 
     return re.sub(r"(\]\()([^\s)]+)", replace, text)
+
+
+def factory_relocation_map(ownership=None):
+    """Return the one source-to-target map for retained factory support assets."""
+    mapping = {}
+    for _, disposition, entry in ownership_entries(ownership):
+        if disposition != "inherited":
+            continue
+        source = entry["path"].replace(os.sep, "/")
+        destination = _factory_asset_destination(source)
+        if destination and destination != source:
+            mapping[source] = destination.replace(os.sep, "/")
+    for directory in ("checks", "hooks", "scripts", "templates"):
+        if any(path == directory or path.startswith(directory + "/") for path in mapping):
+            mapping.setdefault(directory, os.path.join(FACTORY_ROOT, directory).replace(os.sep, "/"))
+    return mapping
+
+
+def _mapped_factory_path(relative, mapping):
+    relative = relative.replace(os.sep, "/")
+    for source in sorted(mapping, key=len, reverse=True):
+        if relative == source:
+            return mapping[source]
+        prefix = source + "/"
+        if relative.startswith(prefix):
+            return mapping[source] + relative[len(source):]
+    return relative
+
+
+def _rebase_factory_links(text, source, destination, root, mapping):
+    """Rebase relative Markdown links while accounting for moved target files."""
+    source_dir = os.path.dirname(source)
+    destination_dir = os.path.dirname(destination)
+
+    def replace(match):
+        target = match.group(2)
+        if target.startswith(("#", "/")) or "://" in target:
+            return match.group(0)
+        path, separator, anchor = target.partition("#")
+        if not path:
+            return match.group(0)
+        resolved = os.path.normpath(os.path.join(source_dir, path))
+        relative = os.path.relpath(resolved, root)
+        mapped = _mapped_factory_path(relative, mapping)
+        target_path = os.path.join(root, mapped)
+        rebased = os.path.relpath(target_path, destination_dir).replace(os.sep, "/")
+        if separator:
+            rebased += "#" + anchor
+        return match.group(1) + rebased
+
+    return re.sub(r"(\]\()([^\s)]+)", replace, text)
+
+
+def _rewrite_moved_commands(text, destination, root):
+    """Update command examples whose working directory is the repository root."""
+    destination_dir = os.path.relpath(os.path.dirname(destination), root).replace(os.sep, "/")
+    if destination_dir == ".":
+        return text
+    if destination_dir == ".factory/docs":
+        text = text.replace("python3 scripts/", "python3 .factory/scripts/")
+        text = text.replace("python scripts/", "python .factory/scripts/")
+        text = text.replace("cp hooks/", "cp .factory/hooks/")
+        text = text.replace("chmod +x hooks/", "chmod +x .factory/hooks/")
+    return text
+
+
+def _rewrite_root_references(path, root, mapping, dry_run=False):
+    """Update root-facing Markdown and retained workflows after relocation."""
+    try:
+        with open(path, encoding="utf-8") as source_file:
+            original = source_file.read()
+    except (OSError, UnicodeDecodeError):
+        return False
+    updated = _rebase_factory_links(original, path, path, root, mapping)
+    if path.endswith("README.md"):
+        updated = updated.replace("python3 scripts/", "python3 .factory/scripts/")
+    if path.endswith(("governance.yml", "sync-labels.yml")):
+        updated = re.sub(r"(?<![./])scripts/", ".factory/scripts/", updated)
+    if updated == original:
+        return False
+    if not dry_run:
+        with open(path, "w", encoding="utf-8") as target_file:
+            target_file.write(updated)
+    return True
+
+
+def factory_asset_path(root, relative):
+    """Resolve a retained asset in both the source and initialized layouts."""
+    source = os.path.join(root, relative)
+    if os.path.exists(source):
+        return source
+    return os.path.join(root, FACTORY_ROOT, relative)
+
+
+def relocate_factory_assets(root, dry_run=False):
+    """Move retained factory assets once, preserving root discovery paths."""
+    manifest = os.path.join(root, OWNERSHIP_MANIFEST_NAME)
+    ownership = load_ownership(manifest)
+    mapping = factory_relocation_map(ownership)
+    movable = {entry["path"] for _, disposition, entry in ownership_entries(ownership)
+               if disposition == "inherited"}
+    moves = []
+    for source, destination in sorted(mapping.items()):
+        if source not in movable:
+            continue
+        source_path = os.path.join(root, source)
+        destination_path = os.path.join(root, destination)
+        if not os.path.exists(source_path):
+            continue
+        if os.path.exists(destination_path):
+            raise ValueError(
+                "cannot relocate factory asset because the destination exists: %s" % destination
+            )
+        moves.append((source, destination, source_path, destination_path))
+
+    if dry_run:
+        for source, destination, _, _ in moves:
+            print("Would relocate %s -> %s" % (source, destination))
+        print("Would ensure .factory directories: %s" % ", ".join(FACTORY_DIRECTORIES))
+        return [destination for _, destination, _, _ in moves]
+
+    for _, _, source_path, destination_path in moves:
+        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+        shutil.move(source_path, destination_path)
+
+    for directory in FACTORY_DIRECTORIES:
+        os.makedirs(os.path.join(root, FACTORY_ROOT, directory), exist_ok=True)
+    for directory in ("checks", "hooks", "scripts", "templates"):
+        path = os.path.join(root, directory)
+        if os.path.isdir(path) and not os.listdir(path):
+            os.rmdir(path)
+
+    for source, destination, source_path, destination_path in moves:
+        if not os.path.isfile(destination_path) or not destination_path.endswith(".md"):
+            continue
+        try:
+            with open(destination_path, encoding="utf-8") as source_file:
+                original = source_file.read()
+        except (OSError, UnicodeDecodeError):
+            continue
+        updated = _rebase_factory_links(
+            original,
+            source_path,
+            destination_path,
+            root,
+            mapping,
+        )
+        updated = _rewrite_moved_commands(updated, destination_path, root)
+        if updated != original:
+            with open(destination_path, "w", encoding="utf-8") as target_file:
+                target_file.write(updated)
+
+    for relative in ("AGENT.md", "README.md", "docs/bindings.md"):
+        _rewrite_root_references(os.path.join(root, relative), root, mapping)
+    for relative in (
+        ".github/workflows/governance.yml",
+        ".github/workflows/sync-labels.yml",
+        ".github/pull_request_template.md",
+    ):
+        _rewrite_root_references(os.path.join(root, relative), root, mapping)
+    for directory in ("providers", "ci"):
+        base = os.path.join(root, directory)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _, filenames in os.walk(base):
+            for name in filenames:
+                if name.endswith(".md"):
+                    _rewrite_root_references(os.path.join(dirpath, name), root, mapping)
+    return [destination for _, destination, _, _ in moves]
 
 
 def gather(ph, args):
@@ -672,7 +858,9 @@ def compose_pr_governance(root, task_tracker, dry_run=False):
     block = "\n".join((PR_GOVERNANCE_START, reference, approval, PR_GOVERNANCE_END))
     changed = []
     for relative in PR_GOVERNANCE_FILES:
-        path = os.path.join(root, relative)
+        path = (factory_asset_path(root, relative)
+                if relative == "templates/pull-request.md"
+                else os.path.join(root, relative))
         try:
             with open(path, encoding="utf-8") as f:
                 text = f.read()
@@ -714,11 +902,74 @@ def cleanup(root):
     return removed
 
 
+def _prune_missing_local_links(path, root, remove_contract_lines=False):
+    """Remove links to consumed source-only files from one retained document."""
+    if not os.path.isfile(path):
+        return False
+    with open(path, encoding="utf-8") as source_file:
+        original = source_file.read()
+
+    def replace(match):
+        target = match.group(2)
+        if target.startswith(("#", "/")) or "://" in target:
+            return match.group(0)
+        destination = os.path.normpath(os.path.join(os.path.dirname(path), target.split("#", 1)[0]))
+        return match.group(1) if not os.path.exists(destination) else match.group(0)
+
+    updated = re.sub(r"\[([^]]+)\]\(([^)]+)\)", replace, original)
+    if remove_contract_lines:
+        source_only = (
+            "providers/task/_contract.md",
+            "providers/secrets/_contract.md",
+            "providers/code-intel/_contract.md",
+            "ci/_contract.md",
+        )
+        updated = "\n".join(
+            line for line in updated.splitlines()
+            if not any("`%s`" % relative in line and not os.path.exists(
+                os.path.join(root, relative)
+            ) for relative in source_only)
+        ) + "\n"
+    if updated == original:
+        return False
+    with open(path, "w", encoding="utf-8") as target_file:
+        target_file.write(updated)
+    return True
+
+
+def prune_missing_factory_links(root):
+    """Remove links to consumed source-only files from retained factory documents."""
+    paths = [
+        os.path.join(root, relative)
+        for relative in (
+            "AGENT.md",
+            "README.md",
+            ".github/pull_request_template.md",
+            "docs/bindings.md",
+        )
+    ]
+    factory = os.path.join(root, FACTORY_ROOT)
+    for directory in ("docs", "hooks", "templates"):
+        base = os.path.join(factory, directory)
+        if os.path.isdir(base):
+            paths.extend(
+                os.path.join(dirpath, name)
+                for dirpath, _, filenames in os.walk(base)
+                for name in filenames if name.endswith(".md")
+            )
+    changed = False
+    for path in paths:
+        changed = _prune_missing_local_links(
+            path, root, remove_contract_lines=path.endswith("docs/bindings.md")
+        ) or changed
+    return changed
+
+
 def configure_opencode_plugin(root, enabled, dry_run=False):
     """Generate the OpenCode adapter only after an explicit opt-in."""
     if str(enabled).strip().lower() != "true":
         return False
-    source = os.path.join(root, OPENCODE_PLUGIN_SOURCE)
+    source = factory_asset_path(root, OPENCODE_PLUGIN_SOURCE)
     destination = os.path.join(root, OPENCODE_PLUGIN_DESTINATION)
     if not os.path.isfile(source):
         sys.exit("OpenCode plugin source is missing: %s" % OPENCODE_PLUGIN_SOURCE)
@@ -1070,11 +1321,22 @@ def main():
     rem = remaining(ROOT, keys)
     if rem:
         print("Still unresolved (empty or omitted): %s" % ", ".join(sorted(rem)))
+    try:
+        relocated = relocate_factory_assets(ROOT, dry_run=args.dry_run)
+    except ValueError as exc:
+        sys.exit(str(exc))
     if args.dry_run:
         print("(dry-run: nothing was written)")
         return
+    if relocated:
+        print("Factory assets relocated under .factory: %s" % ", ".join(relocated))
     if not args.no_clean:
         removed = cleanup(ROOT)
+        for directory in ("checks", "hooks", "scripts", "templates"):
+            path = os.path.join(ROOT, directory)
+            if os.path.isdir(path) and not os.listdir(path):
+                os.rmdir(path)
+        prune_missing_factory_links(ROOT)
         if removed:
             print("Cleanup: removed %s." % ", ".join(removed))
         print("To start with a separate history: rm -rf .git && git init")

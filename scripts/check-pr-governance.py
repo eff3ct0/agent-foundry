@@ -28,7 +28,9 @@ TASK_REFERENCE = {
 
 def bound_task_provider(root=None):
     """Read the selected task provider from generated bindings."""
-    root = Path(root or Path(__file__).resolve().parents[1])
+    script_path = Path(__file__).resolve()
+    default_root = script_path.parents[2] if script_path.parent.parent.name == ".factory" else script_path.parents[1]
+    root = Path(root or default_root)
     try:
         text = (root / "docs" / "bindings.md").read_text(encoding="utf-8")
     except OSError:
@@ -113,7 +115,8 @@ def validate_event(event, repository, token):
 
 def self_check():
     global bound_task_provider, github_issue_labels
-    root = Path(__file__).resolve().parents[1]
+    script_path = Path(__file__).resolve()
+    root = script_path.parents[2] if script_path.parent.parent.name == ".factory" else script_path.parents[1]
     provider = bound_task_provider(root)
     workflow = (root / ".github" / "workflows" / "governance.yml").read_text(
         encoding="utf-8"
@@ -122,6 +125,8 @@ def self_check():
     assert re.search(
         r"^    name: %s$" % re.escape(REQUIRED_CHECK), workflow, re.MULTILINE
     )
+    factory = root / ".factory"
+    templates = factory / "templates" if factory.is_dir() else root / "templates"
     assert "pull_request_target:" in workflow
     assert "ref: ${{ github.event.pull_request.merge_commit_sha }}" in workflow
     assert "ref: ${{ github.event.repository.default_branch }}" not in workflow
@@ -131,7 +136,7 @@ def self_check():
     assert "pull-requests: write" not in workflow
     for template in (
         root / ".github" / "pull_request_template.md",
-        root / "templates" / "pull-request.md",
+        templates / "pull-request.md",
     ):
         text = template.read_text(encoding="utf-8")
         assert "provider-governance:start" in text and "provider-governance:end" in text
