@@ -56,7 +56,7 @@
     "scripts/check-determinism.py",
     "scripts/check-factory-layout.py",
     "scripts/check-pr-governance.py",
-    "scripts/sync-github-labels.py",
+    "scripts/sync-github-labels.mjs",
     "start.mjs",
     "start.py",
     "templates/adr.md",

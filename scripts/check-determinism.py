@@ -390,11 +390,14 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(labels, governance, delivery, factory_layout, release_scripts=(), real_agent=()):
-    catalog = labels.load_labels()
+def check_scripts(governance, delivery, factory_layout, release_scripts=(), real_agent=()):
+    labels_script = (
+        ".factory/scripts/sync-github-labels.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.mjs"))
+        else "scripts/sync-github-labels.mjs"
+    )
     assert_repeatable_command(["node", "start.mjs", "--self-check"])
-    assert_same_output(lambda: labels.sync(
-        catalog, repo="acme/example", dry_run=True))
+    assert_repeatable_command(["node", labels_script, "--self-check"])
     assert_same_output(governance.self_check)
     assert_same_output(delivery.self_check)
     assert_same_output(factory_layout.self_check)
@@ -420,12 +423,12 @@ def check_cli_commands(source_mode):
             sys.executable, "factory_bootstrap.py", "--plan", "--org", "acme",
         ])
     labels_script = (
-        ".factory/scripts/sync-github-labels.py"
-        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.py"))
-        else "scripts/sync-github-labels.py"
+        ".factory/scripts/sync-github-labels.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.mjs"))
+        else "scripts/sync-github-labels.mjs"
     )
     assert_repeatable_command([
-        sys.executable, labels_script, "--dry-run", "--repo", "acme/example",
+        "node", labels_script, "--dry-run", "--repo", "acme/example",
     ])
 
 
@@ -434,7 +437,6 @@ def self_check():
     init = load_module("archetype_init", "init.py") if source_mode else None
     factory = load_module("factory_bootstrap", "factory_bootstrap.py") if source_mode else None
     script_dir = ".factory/scripts" if not source_mode else "scripts"
-    labels = load_module("sync_github_labels", script_dir + "/sync-github-labels.py")
     governance = load_module("check_pr_governance", script_dir + "/check-pr-governance.py")
     delivery = load_module("check_delivery_contract", script_dir + "/check-delivery-contract.py")
     factory_layout = load_module("check_factory_layout", script_dir + "/check-factory-layout.py")
@@ -468,7 +470,7 @@ def self_check():
         check_initializer_lifecycle(init)
     if factory:
         check_factory_bootstrap(factory)
-    check_scripts(labels, governance, delivery, factory_layout, release_scripts, real_agent)
+    check_scripts(governance, delivery, factory_layout, release_scripts, real_agent)
     check_cli_commands(source_mode)
     print("determinism self-check OK")
 

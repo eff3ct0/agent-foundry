@@ -49,8 +49,8 @@
     {
       "path": ".github/workflows/sync-labels.yml",
       "mode": "100644",
-      "size": 418,
-      "sha256": "af67210e38d90f1ed7f33317f88407dc6b1f28608a76b00b605435460f2ea427"
+      "size": 455,
+      "sha256": "6ae1bb2bb70991bbff8ec07b0180206a520e0d0e913ea8a32a0f3c96a62c5c33"
     },
     {
       "path": ".gitignore",
@@ -73,14 +73,14 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 10310,
-      "sha256": "2581d700aa4f3bed12a2099135cc2abe5099b501db1dd2149b53b61b1f022063"
+      "size": 10308,
+      "sha256": "6353a7b66a37ea6278e2bf874106555c105856525cad068a4c40e6198181ba05"
     },
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7560,
-      "sha256": "08fb106678c42b8f1956d3e04ef8afcc8e380aa30d0bf80c832f5035521e0ee1"
+      "size": 7907,
+      "sha256": "bf240a38fe8febbb87afa1ce50625fe0fa91cf805b42be83ae309beb41239db5"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 10195,
-      "sha256": "a64d4a357cf2a0dd72687959ca9aeb85e8a2f95c0f1cfd872b17fb8a60c55546"
+      "size": 10213,
+      "sha256": "013754bcfffcc7bd61cc427532d9a8b269fa531bcc0a37301d8ae30114fcb90e"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -313,8 +313,8 @@
     {
       "path": "scripts/check-determinism.py",
       "mode": "100644",
-      "size": 20994,
-      "sha256": "858773be4397bd1d8fc94404add30d98d4e17ff3a01d11488ef090e20227515e"
+      "size": 21045,
+      "sha256": "83ca02c9f55f7a4e5d548f5a48fce40eab720977205c90954cea81d5e404f80a"
     },
     {
       "path": "scripts/check-factory-layout.py",
@@ -329,10 +329,10 @@
       "sha256": "bc78d02745409111ac465620aa31ff71f5454483e69b085e89c1704d01aa1307"
     },
     {
-      "path": "scripts/sync-github-labels.py",
+      "path": "scripts/sync-github-labels.mjs",
       "mode": "100644",
-      "size": 2428,
-      "sha256": "ff40fd8568def858f100fff682559a3e75e6011860eb467143875a8625168ac6"
+      "size": 2967,
+      "sha256": "0f37518ae13e6f2db2344a57a94d1a58fbcac1709d105a70c4471ad46bf643f5"
     },
     {
       "path": "start.mjs",
@@ -401,5 +401,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:32b204e1e5a12d7ef4bc529a40cb2d20cdab206b2f4ee11502918030b7e3b76f"
+  "payload_digest": "sha256:5f6ae54fb7e953bee2fd314c3f443a2ee4b6cbb23c50bd52a992a19ed187ba08"
 }

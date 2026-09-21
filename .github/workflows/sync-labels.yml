@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - .github/labels.json
-      - scripts/sync-github-labels.py
+      - scripts/sync-github-labels.mjs
 
 permissions:
   issues: write
@@ -14,8 +14,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Synchronize labels
-        run: python3 scripts/sync-github-labels.py --repo "$GITHUB_REPOSITORY"
+        run: node scripts/sync-github-labels.mjs --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ github.token }}

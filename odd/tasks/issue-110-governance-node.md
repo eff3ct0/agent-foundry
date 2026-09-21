@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for the feature-branch-chain tracker; child implementation resumes at `IMPLEMENTATION`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Child 01; tracker PR #134 remains draft/no-merge
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node`
 - Branch: `feat/issue-110-governance-node`
 - Base: fresh `origin/main` at `f0b7db1`
@@ -79,7 +79,7 @@ The issue exceeds the approximately 400 authored-line review heuristic before im
 The feature must integrate as one migration, so it uses a draft tracker rather than independently landing partial ports on `main`.
 
 1. Tracker: `feat/issue-110-governance-node` -> `main`. Records the approved chain, ownership, and review boundaries; it does not implement a Node port.
-2. Child 01: `feat/issue-110-governance-node-01` -> tracker. Port the independently executable label-synchronization command, catalog validation, dry-run/self-check behavior, documentation, and the label workflow to Node. Forecast: 300-380 authored changed lines. It deliberately excludes release-reference validation because its current consumers remain Python.
+2. Child 01: `feat/issue-110-governance-node-01` -> tracker. Ports the independently executable label-synchronization command, catalog validation, dry-run/self-check behavior, documentation, determinism consumer, and label workflow to Node. Current review budget: 297 authored changed lines. It deliberately excludes release-reference validation because its current consumers remain Python.
 3. Child 02: release-reference validation with its Node consumer boundary and fixtures. Forecast: 260-360 lines after the affected consumers can move together.
 4. Child 03: PR governance command, provider-aware contract fixtures, and workflow consumer. Forecast: 650-900 lines; split further only if one coherent command boundary fits.
 5. Child 04: delivery-contract command and protected-approval fixtures. Forecast: 1,050-1,350 lines; split further only if one coherent command boundary fits.
@@ -95,8 +95,16 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - [x] Inspected the six primary Python implementations and their consumers; recorded the concrete line forecast.
 - [x] Selected the user-authorized Feature Branch Chain and recorded the tracker plus coherent first-child boundary.
 - [ ] Commit, push, and open the draft tracker PR with its ownership classification.
-- [ ] Implement and independently verify Child 01 within the 400-line budget before opening its PR.
+- [x] Implemented and independently verified Child 01 within the 400-line budget; staged diff including this evidence update remains below the limit.
 
 ## Resume condition
 
-Create the tracker commit and draft PR, then create Child 01 from the tracker branch and implement the Node label-synchronization boundary with its tests and documentation.
+Commit and push Child 01, then open a non-draft PR to `feat/issue-110-governance-node` with tracker PR #134 in Chain Context.
+
+## Child 01 verification evidence
+
+- `pnpm typecheck` passed.
+- `node --test test/sync-github-labels.test.mjs` passed: 3 tests, 0 failures.
+- `pnpm build` passed and regenerated the checked-in payload integrity lock.
+- `python3 init.py --self-check` and `python3 scripts/check-determinism.py` passed after the determinism check switched from the removed Python module to the Node command.
+- `git diff --check` passed. `python3 init.py --check` remains intentionally inapplicable to the uninitialized template source because it reports required placeholders.

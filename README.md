@@ -154,7 +154,7 @@ label may be added by an agent only through the fail-closed delegated-approval p
 instruction naming the exact issue and action, target-host maintainer/authorized-approver evidence,
 `MAINTAIN` or `ADMIN` actor capability, one exact add attempt, and target-host readback. Otherwise the
 human applies it directly. Labels are synchronized with:
-`python3 scripts/sync-github-labels.py --repo OWNER/REPO`.
+`node scripts/sync-github-labels.mjs --repo OWNER/REPO`.
 
 The workflow only validates pull-request metadata. GitHub branch protection separately requires the stable
 `validate` check, a human review, and administrator enforcement before `main` can be updated. See
