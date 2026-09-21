@@ -73,15 +73,37 @@ const evidenceRecord = (data, recipes) => {
   };
 };
 
+const validateModel = (value) => {
+  const model = text(value);
+  if (!model || model.length > 128 || /[\x00-\x1f\x7f]/u.test(model)) fail("OPENAI_MODEL is absent or malformed");
+  return model;
+};
+
+const configuredRecipeNames = async () => {
+  let recipes;
+  try {
+    recipes = parseBoundedJson(await readFile(new URL("../ci/recipes.json", import.meta.url)), 64 * 1024, "ci/recipes.json is invalid");
+  } catch (error) {
+    if (error instanceof ReporterError) throw error;
+    fail("ci/recipes.json is invalid");
+  }
+  const names = object(recipes) ? Object.keys(recipes) : [];
+  if (!names.length || names.some((name) => !CASE.test(name))) fail("ci/recipes.json is invalid");
+  return names;
+};
+
 export const loadFailureRecords = (evidence, recipes = []) => {
   if (!Array.isArray(evidence) || evidence.length > MAX_RECORDS) fail("too many failure records");
   const records = [];
+  const evidenceModels = new Set();
   for (const data of evidence) {
     const record = evidenceRecord(data, recipes);
-    if (data.result === "failed") records.push(record);
+    evidenceModels.add(validateModel(data.openai_model));
+    if (data.result !== "passed") records.push(record);
     if ((data.cleanup_status ?? data.cleanup) === "failed") records.push({ ...record, matrix_case: "cleanup", failure_code: "cleanup_failed", check_identifier: "bootstrap-e2e/cleanup" });
   }
   if (records.length > MAX_RECORDS) fail("too many failure records");
+  if (evidenceModels.size > 1) fail("evidence OPENAI_MODEL values do not match");
   return records;
 };
 
@@ -349,8 +371,13 @@ export const parseArgs = (values) => {
 export const report = async (options, environment = process.env) => {
   const repository = validateRepository(options.repository);
   const runId = validateRunId(options.runId);
-  const evidence = options.evidenceDir ? await readEvidence(options.evidenceDir) : options.failedCase.map((matrixCase) => ({ schema_version: ENVELOPE_VERSION, matrix_case: matrixCase, release_sha: "", release_tag: "", failure_code: "unknown", check_identifier: `bootstrap-e2e/${matrixCase}`, exit_code: null, logs: [], result: "failed" }));
-  const records = loadFailureRecords(evidence);
+  const evidence = options.evidenceDir ? await readEvidence(options.evidenceDir) : [];
+  const recipes = await configuredRecipeNames();
+  const records = loadFailureRecords(evidence, recipes);
+  for (const matrixCase of options.failedCase) {
+    const normalizedCase = validateCase(matrixCase, recipes);
+    records.push({ matrix_case: normalizedCase, release_sha: "", release_tag: "", failure_code: "unknown", check_identifier: `bootstrap-e2e/${normalizedCase}`, exit_code: null, logs: [] });
+  }
   for (const [matrixCase, status] of [["prepare", options.prepareStatus], ["matrix", options.bootstrapStatus], ["cleanup", options.cleanupStatus]]) if (status !== "success" && !records.some((record) => record.matrix_case === matrixCase)) records.push({ matrix_case: matrixCase, release_sha: "", release_tag: "", failure_code: `${matrixCase}_failed`, check_identifier: `bootstrap-e2e/${matrixCase}`, exit_code: null, logs: [] });
   const cases = [...new Set(records.map((record) => validateCase(record.matrix_case)))].sort();
   if (cases.length > MAX_RECORDS) fail("too many report cases");

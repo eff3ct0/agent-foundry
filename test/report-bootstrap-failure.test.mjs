@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -39,6 +39,7 @@ const evidence = (changes = {}) => ({
   exit_code: 1,
   logs: [],
   cleanup_status: "passed",
+  openai_model: "gpt-5.6-luna",
   ...changes,
 });
 
@@ -57,7 +58,9 @@ test("loads only bounded, valid failure evidence and represents cleanup failure"
   assert.equal(loadFailureRecords([evidence({ logs: ["token=secret"] })], ["python"])[0].logs[0], "token=<redacted>");
   const cleanup = loadFailureRecords([evidence({ result: "passed", cleanup_status: "failed" })], ["python"]);
   assert.equal(cleanup[0].matrix_case, "cleanup");
+  assert.equal(loadFailureRecords([evidence({ result: "cancelled" })], ["python"])[0].matrix_case, "python");
   assert.throws(() => loadFailureRecords([evidence({ schema_version: "unknown" })], ["python"]), ReporterError);
+  assert.throws(() => loadFailureRecords([evidence(), evidence({ openai_model: "other-model" })], ["python"]), /evidence OPENAI_MODEL values do not match/u);
   assert.throws(() => parseBoundedJson("x".repeat(17), 16, "invalid evidence"), /invalid evidence/u);
 });
 
@@ -136,5 +139,15 @@ test("replays the reporter CLI offline without a GitHub mutation", async () => {
     const result = spawnSync(process.execPath, ["scripts/report-bootstrap-failure.mjs", "report", "--repository", "eff3ct0/factory-template", "--workflow-url", runUrl, "--artifact-url", runUrl, "--evidence-dir", directory, "--run-id", "123"], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, "{\"outcome\":\"no_failures\"}\n");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("accepts a configured non-passed matrix result before the GitHub boundary", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "reporter-cli-failure-test-"));
+  try {
+    await writeFile(path.join(directory, "python.json"), JSON.stringify(evidence({ result: "cancelled" })), "utf8");
+    const result = spawnSync(process.execPath, ["scripts/report-bootstrap-failure.mjs", "report", "--repository", "eff3ct0/factory-template", "--workflow-url", runUrl, "--artifact-url", runUrl, "--evidence-dir", directory, "--run-id", "123"], { encoding: "utf8", env: { PATH: process.env.PATH ?? "" } });
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "GITHUB_TOKEN is missing\n");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

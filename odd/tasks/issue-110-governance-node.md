@@ -188,4 +188,9 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 
 - `scripts/report-bootstrap-failure.mjs` now provides the bounded reporter CLI: it reads sorted, size-limited evidence; derives status failures, release identity, fingerprints, and bug-form bodies; then invokes the injected-fetch adapter and emits a stable JSON outcome. A no-failure replay exits without a GitHub request.
 - The release and template bootstrap report jobs pin Node.js 20.19.0 and invoke the Node CLI. Workflow static validation, determinism, and smoke-test documentation now consume the Node reporter; Python reporter files and compatibility tests remain intact for a later retirement slice.
-- Verification: focused reporter suite (7 tests, including an offline CLI replay), full `pnpm test` (83 tests), `pnpm typecheck`, `pnpm build`, bootstrap-workflow static checks, determinism, and initializer self-check all pass. `package/payload-manifest.json` was regenerated after the documentation and ODD changes. The work unit changes 166 authored lines, below the 400-line budget.
+- Verification: focused reporter suite (8 tests, including an offline failing-matrix CLI replay), full `pnpm test` (84 tests), `pnpm typecheck`, `pnpm build`, bootstrap-workflow static checks, determinism, and initializer self-check all pass. `package/payload-manifest.json` was regenerated after the documentation and ODD changes. The work unit changes 217 authored lines, below the 400-line budget.
+
+## Child 06c reporter corrective boundary
+
+- The active Node CLI now loads configured recipe names before validating evidence, accepts every non-passed matrix result, and rejects missing, malformed, or inconsistent evidence `OPENAI_MODEL` values, matching the retained Python reporter boundary.
+- The focused CLI fixture writes a configured `python` matrix record with a non-passed result and proves it reaches the GitHub credential boundary rather than being rejected as an invalid case. The offline replay still proves no-failure reports perform no GitHub request.
