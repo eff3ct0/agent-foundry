@@ -60,6 +60,12 @@ Slice 1 must not read or mutate GitHub, invoke workflows, or wire workflow permi
 
 This ODD tracker is archetype-governance state and is registered as a `removed` path in `archetype-ownership.json`; it must not survive template initialization.
 
+## Delivery evidence
+
+- Tracker commit: `bd6dfda708191bb4de7c8becf98fb4df372a13f1` (`chore(odd): establish issue 98 feature chain`).
+- Draft tracker PR: [#132](https://github.com/eff3ct0/factory-template/pull/132), targeting `main` with exactly `type:feature`.
+- Tracker verification: `python3 -m json.tool archetype-ownership.json` and `python3 init.py --self-check` passed; PR readback confirmed 66 additions, 0 deletions, and 2 changed files.
+
 ## Next action
 
 Create and verify the tracker commit and draft tracker PR, then implement only child slice 1 from the tracker branch. Record the child commit, tests, diff budget, and PR in this tracker before beginning slice 2.
