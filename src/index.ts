@@ -13,6 +13,13 @@ import {
   type Command,
   type CreatorOptions,
 } from "./creator";
+import {
+  ProvisioningError,
+  provisioningEnvelopeJson,
+  provisioningErrorEnvelope,
+  provisionRepositories,
+  type ProvisioningOptions,
+} from "./github-provisioning";
 
 interface ParsedArgs extends Omit<CreatorOptions, "command" | "target"> {
   command: Command;
@@ -22,7 +29,37 @@ interface ParsedArgs extends Omit<CreatorOptions, "command" | "target"> {
   json: boolean;
 }
 
-const usage = "Usage: factory-template <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--non-interactive]";
+const usage = "Usage: factory-template <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--non-interactive]\n       factory-template github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
+
+const isProvisioningCommand = (value: string | undefined): boolean => value === "github-provision" || value === "provision-github";
+
+interface ParsedProvisioningArgs extends Omit<ProvisioningOptions, "client" | "confirm"> {
+  help: boolean;
+}
+
+const parseProvisioningArgs = (): ParsedProvisioningArgs => {
+  const args = [...process.argv.slice(3)];
+  if (args.includes("--help")) return { org: "", help: true };
+  let org = "";
+  let factoryRepo: string | undefined;
+  let visibility: ProvisioningOptions["visibility"];
+  let plan = false;
+  let noCreate = false;
+  let yes = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--org") org = args[++index] ?? "";
+    else if (arg === "--factory-repo") factoryRepo = args[++index];
+    else if (arg === "--visibility") visibility = args[++index] as ProvisioningOptions["visibility"];
+    else if (arg === "--plan") plan = true;
+    else if (arg === "--no-create") noCreate = true;
+    else if (arg === "--yes") yes = true;
+    else if (arg === "--json") continue;
+    else throw new ProvisioningError("invalid_arguments", `unknown argument: ${arg}`);
+  }
+  if (!org) throw new ProvisioningError("invalid_arguments", "--org is required");
+  return { org, factoryRepo, visibility, plan, noCreate, yes, help: false };
+};
 
 const parseArgs = (): ParsedArgs => {
   const args = [...process.argv.slice(2)];
@@ -98,7 +135,55 @@ const promptFor = async (
   return new Promise((resolve, reject) => session.waiters.push({ resolve, reject }));
 };
 
+const confirmFor = async (session: PromptSession, target: string): Promise<boolean> => {
+  output.write(`Create ${target}? [y/N] `);
+  const line = session.lines.shift();
+  if (line !== undefined) return ["y", "yes"].includes(line.trim().toLowerCase());
+  if (session.closed) return false;
+  return new Promise((resolve) => session.waiters.push({
+    resolve: (value) => resolve(["y", "yes"].includes(value.trim().toLowerCase())),
+    reject: () => resolve(false),
+  }));
+};
+
+const runProvisioning = async (): Promise<void> => {
+  let parsed: ParsedProvisioningArgs;
+  try {
+    parsed = parseProvisioningArgs();
+    if (parsed.help) {
+      process.stdout.write(`${usage}\n`);
+      return;
+    }
+  } catch (error) {
+    const provisioningError = error instanceof ProvisioningError ? error : new ProvisioningError("unexpected_error", "GitHub provisioning failed");
+    process.stderr.write(`error[${provisioningError.code}]: ${provisioningError.message}\n`);
+    process.stdout.write(provisioningEnvelopeJson(provisioningErrorEnvelope(provisioningError)));
+    process.exitCode = 1;
+    return;
+  }
+  const promptSession = parsed.yes || parsed.plan || parsed.noCreate ? undefined : createPromptSession();
+  try {
+    const envelope = await provisionRepositories({
+      ...parsed,
+      confirm: promptSession ? (target) => confirmFor(promptSession, target) : undefined,
+    });
+    process.stdout.write(provisioningEnvelopeJson(envelope));
+    if (["missing", "skipped", "rejected", "indeterminate"].includes(envelope.status)) process.exitCode = 1;
+  } catch (error) {
+    const provisioningError = error instanceof ProvisioningError ? error : new ProvisioningError("unexpected_error", "GitHub provisioning failed");
+    process.stderr.write(`error[${provisioningError.code}]: ${provisioningError.message}\n`);
+    process.stdout.write(provisioningEnvelopeJson(provisioningErrorEnvelope(provisioningError)));
+    process.exitCode = 1;
+  } finally {
+    promptSession?.terminal.close();
+  }
+};
+
 const main = async (): Promise<void> => {
+  if (isProvisioningCommand(process.argv[2])) {
+    await runProvisioning();
+    return;
+  }
   const parsed = parseArgs();
   if (parsed.help) {
     process.stdout.write(`${usage}\n`);

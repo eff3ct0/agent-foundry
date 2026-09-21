@@ -129,6 +129,13 @@ archetype-only maintainer tool for organization repositories; it is not the
 project onboarding command and is removed during initialization. For the full
 initializer checklist, see [`docs/bootstrap.md`](docs/bootstrap.md).
 
+The Node package provides the equivalent explicit provisioning boundary as
+`factory-template github-provision`. It performs an authenticated preflight,
+never runs during local creation, and requires `--yes` or per-repository
+interactive consent before a create mutation. See
+[`docs/github-provisioning.md`](docs/github-provisioning.md) for the stable
+JSON and recovery contract.
+
 ## Placeholder convention
 `<UPPER_SNAKE>` = value to fill. `<!-- guide: ... -->` = instruction for the person filling it. Sections marked `OPTIONAL` are removed when they do not apply. A correctly initialized project has no unresolved required manifest `<PLACEHOLDER>` values; optional values may remain intentionally empty (see the final checklist in [`docs/bootstrap.md`](docs/bootstrap.md)).
 
