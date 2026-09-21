@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Child 02 release-reference validation; child PR #135 remains unchanged
+- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 02 release-reference validation is delivered in PR #137 at commit `9d9b3d15f874968636e3cfd7b6bd6383f539ab25`
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-02-release-reference`
 - Branch: `feat/issue-110-governance-node-02-release-reference`
 - Base: fresh `origin/main` at `f0b7db1`
@@ -100,7 +100,7 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 
 ## Resume condition
 
-Commit and push Child 01, then open a non-draft PR to `feat/issue-110-governance-node` with tracker PR #134 in Chain Context.
+Reforecast Child 03 PR-governance command, provider-aware contract fixtures, and workflow consumer against delivered Child 02 branch `feat/issue-110-governance-node-02-release-reference` at commit `9d9b3d15f874968636e3cfd7b6bd6383f539ab25` (PR #137) before creating its child PR.
 
 ## Child 01 verification evidence
 
