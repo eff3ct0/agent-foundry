@@ -70,11 +70,13 @@ readback is a failure, never a successful report.
 
 This is the parent orchestration contract for issue #87. It proves the user
 journey only when the generated repository is used by a cold real agent. The
-workflow is intentionally manual/nightly at first; it is not a release gate.
+workflow supports manual dispatch, the retained nightly schedule, and published
+releases.
 
 ## Quick path
 
-1. Dispatch **Real-agent user journey** or wait for its nightly schedule.
+1. Dispatch **Real-agent user journey**, wait for its nightly schedule, or
+   publish a release.
 2. The workflow creates a run-scoped private repository from the GitHub
    Template mechanism and passes it through the four stage interfaces below.
 3. Read the bounded artifact and GitHub/checkout readback before treating the
@@ -153,10 +155,19 @@ an unrelated repository. Human approval remains a real external gate.
 The workflow reuses the existing immutable action pins and disposable-owner
 pattern from the release/template bootstrap checks. `BOOTSTRAP_E2E_OWNER` and
 the dedicated GitHub App credentials are the lifecycle configuration.
-The scheduled caller uses the catalog default, `codex-cli`. Manual callers use
-the workflow's `runtime` choice, whose options are checked offline against the
-catalog and contain only supported entries. No caller reads a runtime Actions
-variable or accepts arbitrary free text.
+The scheduled and release callers use the catalog default, `codex-cli`. Manual
+callers use the workflow's `runtime` choice, whose options are checked offline
+against the catalog and contain only supported entries. No caller reads a
+runtime Actions variable or accepts arbitrary free text.
+
+Every launch records an immutable source SHA in its plan before provisioning.
+For a published release, the workflow resolves `github.event.release.tag_name`
+through the GitHub API and records both the tag and its full commit SHA. For
+manual and scheduled runs, it records the triggering `github.sha`. Provisioning
+fails before repository creation unless the source template's default-branch
+revision matches that SHA; this intentionally fails closed for a release tag
+that no longer matches the template's current revision rather than silently
+testing mutable `main`.
 
 ## Hosted Run Setup
 

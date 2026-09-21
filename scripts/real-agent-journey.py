@@ -801,14 +801,26 @@ def write_json(path, value):
     path.write_bytes(serialized)
 
 
-def contract_plan(run_id, template, owner="", runtime=""):
+def source_tag(value):
+    if not value:
+        return None
+    try:
+        return bootstrap.validate_git_tag(str(value))
+    except ValueError as error:
+        raise JourneyError("release tag is invalid", "source_tag_invalid") from error
+
+
+def contract_plan(run_id, template, owner="", runtime="", source_sha="", source_tag_value=""):
     run_id = validate_run_id(run_id)
     template = validate_repository(template)
     runtime = validate_runtime(runtime)
+    source_revision = sha(source_sha)
     return {
         "schema_version": ENVELOPE_VERSION,
         "run_id": run_id,
         "source_template": template,
+        "source_sha": source_revision,
+        "source_tag": source_tag(source_tag_value),
         "generated_repository": journey_repository(owner, run_id) if owner else None,
         "runtime": runtime,
         "stages": list(STAGES),
@@ -822,6 +834,7 @@ def contract_self_check():
     assert validate_run_id("123") == "123"
     assert journey_repository("acme", "123") == "acme/real-agent-journey-123"
     assert validate_runtime("codex-cli") == "codex-cli"
+    assert source_tag("v1.2.3") == "v1.2.3"
     assert supported_runtime_ids() == ["codex-cli"]
     for value, code in (("", "runtime_missing"), ("other-runtime", "runtime_unsupported"), ("codex-cli-disabled", "runtime_disabled")):
         try:
@@ -887,6 +900,8 @@ def main():
     plan.add_argument("--template", required=True)
     plan.add_argument("--owner")
     plan.add_argument("--runtime", required=True)
+    plan.add_argument("--source-sha", required=True)
+    plan.add_argument("--source-tag")
     plan.add_argument("--output", required=True)
     install = subparsers.add_parser("install")
     install.add_argument("--runtime", required=True)
@@ -939,7 +954,8 @@ def main():
             if result["status"] != "passed":
                 raise JourneyError(result["failure"]["boundary"], result["failure"]["code"], result["failure"]["message"])
         elif args.command == "plan":
-            write_json(args.output, contract_plan(args.run_id, args.template, args.owner or "", args.runtime or ""))
+            write_json(args.output, contract_plan(args.run_id, args.template, args.owner or "", args.runtime or "",
+                                                  args.source_sha or "", args.source_tag or ""))
         elif args.command == "collect":
             write_json(args.output, aggregate(args.stage_dir, args.run_id, args.repository, args.runtime, args.workflow_url))
             if read_json(args.output)["result"] != "passed":

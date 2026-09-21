@@ -1,6 +1,8 @@
 name: Real-agent user journey
 
 on:
+  release:
+    types: [published]
   schedule:
     - cron: "30 2 * * *"
   workflow_dispatch:
@@ -34,6 +36,8 @@ jobs:
       contents: read
     outputs:
       repository: ${{ steps.plan.outputs.repository }}
+      source_sha: ${{ steps.source.outputs.sha }}
+      source_tag: ${{ steps.source.outputs.tag }}
     steps:
       - name: Check out trusted journey contract
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -48,6 +52,25 @@ jobs:
           python3 scripts/real-agent-journey-agent.py --self-check
           python3 scripts/real-agent-journey-assert.py --self-check
           python3 scripts/real-agent-journey-cleanup.py --self-check
+      - name: Resolve immutable source revision
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_TAG: ${{ github.event.release.tag_name || '' }}
+          SOURCE_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            resolved="$(python3 scripts/bootstrap-e2e.py resolve-release --repository "$REPOSITORY" --tag "$SOURCE_TAG")"
+            source_sha="${resolved#sha=}"
+            source_tag="$SOURCE_TAG"
+          else
+            source_sha="$SOURCE_SHA"
+            source_tag=""
+          fi
+          python3 -c 'import re, sys; assert re.fullmatch(r"[0-9a-f]{40}", sys.argv[1]), "source SHA must be a full lowercase SHA"' "$source_sha"
+          printf 'sha=%s\ntag=%s\n' "$source_sha" "$source_tag" >> "$GITHUB_OUTPUT"
       - name: Write run plan
         id: plan
         env:
@@ -55,12 +78,14 @@ jobs:
           TEMPLATE: ${{ env.JOURNEY_TEMPLATE }}
           OWNER: ${{ env.JOURNEY_OWNER }}
           RUNTIME: ${{ env.JOURNEY_RUNTIME }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          SOURCE_TAG: ${{ steps.source.outputs.tag }}
         run: |
           test -n "$OWNER" || { printf 'BOOTSTRAP_E2E_OWNER is missing\n' >&2; exit 1; }
           mkdir -p journey
-          python3 scripts/real-agent-journey.py plan \
-            --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" \
-            --runtime "$RUNTIME" --output journey/contract.json
+          args=(plan --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" --runtime "$RUNTIME" --source-sha "$SOURCE_SHA" --output journey/contract.json)
+          if [ -n "$SOURCE_TAG" ]; then args+=(--source-tag "$SOURCE_TAG"); fi
+          python3 scripts/real-agent-journey.py "${args[@]}"
           printf 'repository=%s\n' "$JOURNEY_REPOSITORY" >> "$GITHUB_OUTPUT"
       - name: Upload run plan
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -100,7 +125,8 @@ jobs:
           mkdir -p stage
           python3 scripts/real-agent-journey-provision.py \
             --template "$JOURNEY_TEMPLATE" --owner "$JOURNEY_OWNER" \
-            --run-id "$JOURNEY_RUN_ID" --output "$JOURNEY_OUTPUT"
+            --run-id "$JOURNEY_RUN_ID" --expected-source-sha "${{ needs.prepare.outputs.source_sha }}" \
+            --output "$JOURNEY_OUTPUT"
       - name: Upload provisioning evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
