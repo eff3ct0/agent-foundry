@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 06a ports only the reporter's pure evidence, triage, form/body, and fingerprint contract while retaining Python reporting I/O and workflow consumers.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-06-reporter`
-- Branch: `feat/issue-110-governance-node-06-reporter`
-- Base: `origin/feat/issue-110-governance-node-05c-triage-cutover` at `4c65219`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 06b adds the Node reporter's bounded GitHub adapter while retaining Python reporting I/O and workflow consumers.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-06b-reporter-adapter`
+- Branch: `feat/issue-110-governance-node-06b-reporter-adapter`
+- Base: `origin/feat/issue-110-governance-node-06-reporter` at `7ee0466`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -176,3 +176,10 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - `scripts/report-bootstrap-failure.mjs` ports bounded evidence and triage loading, release identity/case validation, stable fingerprints and markers, bug-form validation, and deterministic release/template issue-body construction.
 - This child makes no GitHub request, workflow change, consumer cutover, or Python removal; reporter pagination, deduplication, mutation, readback, and CLI integration remain a later coherent boundary.
 - Offline fixtures replay invalid evidence and triage, cleanup failures, redaction, fingerprints/markers, and bug-form-compatible bodies. The Node reporter is registered as release-only ownership; the payload mirror is regenerated with its inventory change.
+
+## Child 06b reporter GitHub adapter boundary
+
+- `scripts/report-bootstrap-failure.mjs` now provides bounded GitHub HTTP, target verification, trusted Link-header pagination, run-scoped artifact links, canonical open/closed issue deduplication, and issue/comment mutation readback behind an injected-fetch adapter.
+- Offline Node fixtures exercise pagination, unsafe pagination rejection, artifact discovery, canonical comment reporting, issue creation, and mutation readback. No CLI/workflow consumer changes, Python removal, or live GitHub mutation are included.
+- The reporter remains release-only, so its changed source is excluded from the retained payload; `pnpm build` refreshes and verifies the payload mirror without adding this adapter.
+- Verification: focused reporter fixtures (6 tests), full Node suite (82 tests), `pnpm typecheck`, `pnpm build`, and `python3 scripts/check-determinism.py` pass; the 222 changed lines remain within the 400-line child review budget.
