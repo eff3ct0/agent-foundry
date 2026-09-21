@@ -73,14 +73,14 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 9982,
-      "sha256": "03260c70268bc877a2906cf83989de598e7b1d7fdf43bdf9134c8900028f1c72"
+      "size": 9981,
+      "sha256": "e4346fd2be7f9f6d7a925c2af37ec9eb0a39df75a66496238d7e645dd759feba"
     },
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7438,
-      "sha256": "98536f7c514a2ef07fd4f4ee6c7571bb4e27a5bf924ec91883534e47e54ba6cf"
+      "size": 7496,
+      "sha256": "1f89f86d805a40611d379bf9b40cda737df4e30bb28f1ec746627d227098ff19"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -395,5 +395,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:4a5f0de3b3fbcab7030d0b25a5de21225e635cebb537b373a254a2dcf24f1d26"
+  "payload_digest": "sha256:82d52a57d54c9aa0aaa4d897f013a3013ca8057b470ca2bd29acb5fcc5228852"
 }

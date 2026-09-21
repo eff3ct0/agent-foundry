@@ -52,11 +52,22 @@ the payload identity, configuration digest, and bounded output ownership
 digests. It does not copy the payload manifest or become a second payload
 source of truth.
 
+When installed from an npm package, npm may rename the packaged payload's
+`.gitignore` to `.npmignore`. The creator accepts that one exact transport alias
+only when the bytes still match the manifest; ownership and the manifest's
+target mode remain authoritative.
+
 The creator never overwrites an unknown file. An unchanged rerun is `noop`.
 Changed configuration produces an explicit update plan, while an externally
 drifted owned file is a conflict requiring recovery rather than an implicit
 overwrite. `doctor` reports interrupted staging, payload mismatch, ownership
 drift, unknown files, and incomplete configuration.
+
+The interactive presentation layer is documented in
+[`docs/installer-ux.md`](installer-ux.md). It keeps prompts, review, progress,
+confirmation, and completion summaries on stderr while retaining this JSON
+envelope on stdout. It delegates every write to the same plan/apply/verify
+engine and never launches an agent.
 
 Initialization composition is part of the same plan/apply/verify transaction.
 The payload carries the placeholder schema, provider fragments, CI recipe

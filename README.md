@@ -56,7 +56,6 @@ factory-template --version --json
 
 GitHub provisioning, npm publication, and disabling GitHub Template mode remain
 outside this package unit.
-
 ## Quickstart
 
 ### Create a repository
