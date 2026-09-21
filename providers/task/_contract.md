@@ -22,6 +22,14 @@ applicable, updating its fields or status, and adding comments.
 Define the status lifecycle, how the task is referenced in commits/PRs, and
 where durable state is left during checkpoints and closeout.
 
+## Pull-request governance
+Define the native pull-request reference syntax and the approval authority. A
+GitHub task provider may use GitHub closing references and issue labels; other
+providers must use their native task key and leave approval to an explicit
+provider-side gate. The initializer composes this policy into the retained pull
+request templates, and the retained validator must not query GitHub issues for a
+non-GitHub provider.
+
 ## Protected `status:approved` gate
 The provider MUST keep this gate fail closed. An agent may add the label only
 when a current direct human instruction explicitly names the exact target issue
