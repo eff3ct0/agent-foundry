@@ -2,6 +2,7 @@
 """Focused offline checks for the real-agent journey contract and assertions."""
 import importlib.util
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -177,7 +178,10 @@ def test_identity_and_decisions_fail_closed():
 
 def test_runtime_and_adapter_contract():
     assert journey.validate_runtime("codex-cli") == "codex-cli"
-    for runtime, code in (("", "runtime_missing"), ("mock", "runtime_unsupported")):
+    catalog = journey.runtime_catalog()
+    assert catalog["default_runtime"] == "codex-cli"
+    assert journey.supported_runtime_ids() == ["codex-cli"]
+    for runtime, code in (("", "runtime_missing"), ("mock", "runtime_unsupported"), ("codex-cli-disabled", "runtime_disabled")):
         try:
             journey.validate_runtime(runtime)
         except journey.JourneyError as error:
@@ -191,6 +195,32 @@ def test_runtime_and_adapter_contract():
                "provision_token": "provision", "cleanup_token": "cleanup"}
     assert journey.stage_environment({}, "provision", context)["JOURNEY_TOKEN"] == "provision"
     assert journey.stage_environment({}, "cleanup", context)["JOURNEY_TOKEN"] == "cleanup"
+
+
+def test_catalog_routes_install_and_adapter_without_shell_interpolation():
+    commands = []
+
+    def runner(command, **_kwargs):
+        commands.append(command)
+        return type("Result", (), {"returncode": 0})()
+
+    journey.install_runtime("codex-cli", runner=runner)
+    assert commands == [["npm", "install", "--global", "@openai/codex@0.148.0"]]
+    assert journey.invoke_runtime_adapter("codex-cli", ["--self-check"], runner=runner) == 0
+    assert commands[1] == [journey.sys.executable, str(ROOT / "scripts/real-agent-journey-agent.py"), "--self-check"]
+
+
+def test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning():
+    workflow = (ROOT / ".github/workflows/real-agent-journey.yml").read_text(encoding="utf-8")
+    choices = re.findall(r"^          - ([a-z][a-z0-9-]*)$", workflow, re.MULTILINE)
+    assert choices == journey.supported_runtime_ids()
+    assert "type: choice" in workflow
+    assert "inputs.confirm" not in workflow and "confirm:" not in workflow
+    assert "vars.REAL_AGENT_JOURNEY_RUNTIME" not in workflow
+    assert "JOURNEY_RUNTIME: ${{ inputs.runtime || 'codex-cli' }}" in workflow
+    assert "install --runtime \"$JOURNEY_RUNTIME\"" in workflow
+    assert "invoke-agent --runtime \"$JOURNEY_RUNTIME\" --" in workflow
+    assert workflow.index("plan \\") < workflow.index("\n  provision:")
 
 
 def test_stage_schema_identity_and_approval_fail_closed():
@@ -265,4 +295,6 @@ if __name__ == "__main__":
     test_identity_and_decisions_fail_closed()
     test_aggregate_rejects_mismatch_and_cleanup_failure()
     test_unsupported_runtime_keeps_cleanup_evidence()
+    test_catalog_routes_install_and_adapter_without_shell_interpolation()
+    test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning()
     print("real-agent journey offline tests OK")

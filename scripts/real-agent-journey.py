@@ -43,7 +43,13 @@ COMPONENTS = {
     "assert": "scripts/real-agent-journey-assert.py",
     "cleanup": "scripts/real-agent-journey-cleanup.py",
 }
-SUPPORTED_RUNTIMES = {"codex-cli": {"provider": "openai", "version": "0.148.0"}}
+RUNTIME_CATALOG = ROOT / "scripts" / "real-agent-runtime-catalog.json"
+RUNTIME_CATALOG_VERSION = "real-agent-runtime-catalog/v1"
+RUNTIME_STATUSES = {"supported", "disabled"}
+SAFE_RUNTIME_ID = re.compile(r"[a-z][a-z0-9-]{0,63}")
+SAFE_CREDENTIAL_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
+SAFE_PACKAGE = re.compile(r"@?[A-Za-z0-9][A-Za-z0-9._/@-]{0,127}")
+SAFE_VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
 SAFE_STAGE = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 SAFE_IDENTIFIER = re.compile(r"[A-Za-z0-9._:/-]{1,200}")
 PRIVATE_MARKER = re.compile(r"(?i)(?:token|secret|password|credential|api[_-]?key)")
@@ -96,6 +102,60 @@ class JourneyError(RuntimeError):
         self.boundary = boundary
         self.code = code
         self.failure_code = code
+
+
+def runtime_catalog():
+    """Load the canonical runtime catalog and reject malformed entries."""
+    try:
+        raw = RUNTIME_CATALOG.read_bytes()
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise JourneyError("runtime catalog is unavailable", "runtime_catalog_invalid") from error
+    if len(raw) > MAX_JSON_BYTES or not isinstance(data, dict) or set(data) != {"schema_version", "default_runtime", "runtimes"}:
+        raise JourneyError("runtime catalog is malformed", "runtime_catalog_invalid")
+    if data["schema_version"] != RUNTIME_CATALOG_VERSION or not isinstance(data["runtimes"], list) or not data["runtimes"]:
+        raise JourneyError("runtime catalog is malformed", "runtime_catalog_invalid")
+    runtimes = {}
+    required = {"id", "label", "adapter", "package", "version", "required_credentials", "status"}
+    for entry in data["runtimes"]:
+        if not isinstance(entry, dict) or set(entry) != required:
+            raise JourneyError("runtime catalog entry is malformed", "runtime_catalog_invalid")
+        runtime_id = entry["id"]
+        adapter = entry["adapter"]
+        credentials = entry["required_credentials"]
+        adapter_path = (ROOT / adapter).resolve() if isinstance(adapter, str) else ROOT
+        if (not isinstance(runtime_id, str) or not SAFE_RUNTIME_ID.fullmatch(runtime_id) or runtime_id in runtimes or
+                not isinstance(entry["label"], str) or not entry["label"].strip() or len(entry["label"]) > MAX_STRING_CHARS or
+                not isinstance(adapter, str) or not adapter_path.is_relative_to(ROOT) or not adapter_path.is_file() or
+                not isinstance(entry["package"], str) or not SAFE_PACKAGE.fullmatch(entry["package"]) or
+                not isinstance(entry["version"], str) or not SAFE_VERSION.fullmatch(entry["version"]) or
+                not isinstance(credentials, list) or not credentials or len(set(credentials)) != len(credentials) or
+                not all(isinstance(name, str) and SAFE_CREDENTIAL_NAME.fullmatch(name) for name in credentials) or
+                entry["status"] not in RUNTIME_STATUSES):
+            raise JourneyError("runtime catalog entry is malformed", "runtime_catalog_invalid")
+        runtimes[runtime_id] = entry
+    default_runtime = data["default_runtime"]
+    if default_runtime not in runtimes or runtimes[default_runtime]["status"] != "supported":
+        raise JourneyError("runtime catalog default is invalid", "runtime_catalog_invalid")
+    return {"default_runtime": default_runtime, "runtimes": runtimes}
+
+
+def supported_runtime_ids():
+    return [runtime_id for runtime_id, entry in runtime_catalog()["runtimes"].items() if entry["status"] == "supported"]
+
+
+def runtime_entry(runtime):
+    value = str(runtime or "").strip()
+    if not value:
+        raise JourneyError("real-agent runtime is missing; select a supported runtime", "runtime_missing")
+    if len(value) > 128 or any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise JourneyError("real-agent runtime is malformed; select a supported runtime", "runtime_invalid")
+    entry = runtime_catalog()["runtimes"].get(value)
+    if entry is None:
+        raise JourneyError("real-agent runtime is unsupported; select a supported runtime", "runtime_unsupported")
+    if entry["status"] != "supported":
+        raise JourneyError("real-agent runtime is disabled; select a supported runtime", "runtime_disabled")
+    return entry
 
 
 def safe_text(value, secrets=()):
@@ -539,14 +599,21 @@ def journey_repository(owner, run_id):
 
 
 def validate_runtime(runtime):
-    value = str(runtime or "").strip()
-    if not value:
-        raise JourneyError("real-agent runtime is missing", "runtime_missing")
-    if len(value) > 128 or any(ord(char) < 32 or ord(char) == 127 for char in value):
-        raise JourneyError("real-agent runtime is malformed", "runtime_invalid")
-    if value not in SUPPORTED_RUNTIMES:
-        raise JourneyError("real-agent runtime is unsupported", "runtime_unsupported")
-    return value
+    runtime_entry(runtime)
+    return str(runtime).strip()
+
+
+def install_runtime(runtime, runner=subprocess.run):
+    entry = runtime_entry(runtime)
+    result = runner(["npm", "install", "--global", "%s@%s" % (entry["package"], entry["version"])], check=False, timeout=600)
+    if result.returncode:
+        raise JourneyError("selected runtime installation failed", "runtime_install_failed")
+
+
+def invoke_runtime_adapter(runtime, adapter_args, runner=subprocess.run):
+    entry = runtime_entry(runtime)
+    result = runner([sys.executable, str(ROOT / entry["adapter"]), *adapter_args], check=False, timeout=2700)
+    return result.returncode
 
 
 def validate_decisions(decisions):
@@ -754,7 +821,8 @@ def contract_self_check():
     assert validate_run_id("123") == "123"
     assert journey_repository("acme", "123") == "acme/real-agent-journey-123"
     assert validate_runtime("codex-cli") == "codex-cli"
-    for value, code in (("", "runtime_missing"), ("other-runtime", "runtime_unsupported")):
+    assert supported_runtime_ids() == ["codex-cli"]
+    for value, code in (("", "runtime_missing"), ("other-runtime", "runtime_unsupported"), ("codex-cli-disabled", "runtime_disabled")):
         try:
             validate_runtime(value)
         except JourneyError as error:
@@ -819,6 +887,11 @@ def main():
     plan.add_argument("--owner")
     plan.add_argument("--runtime")
     plan.add_argument("--output", required=True)
+    install = subparsers.add_parser("install")
+    install.add_argument("--runtime", required=True)
+    invoke_agent = subparsers.add_parser("invoke-agent")
+    invoke_agent.add_argument("--runtime", required=True)
+    invoke_agent.add_argument("adapter_args", nargs=argparse.REMAINDER)
     collect = subparsers.add_parser("collect")
     collect.add_argument("--run-id", required=True)
     collect.add_argument("--repository", required=True)
@@ -870,6 +943,12 @@ def main():
             write_json(args.output, aggregate(args.stage_dir, args.run_id, args.repository, args.runtime, args.workflow_url))
             if read_json(args.output)["result"] != "passed":
                 raise JourneyError("real-agent journey failed", "journey_failed")
+        elif args.command == "install":
+            install_runtime(args.runtime)
+        elif args.command == "invoke-agent":
+            if not args.adapter_args:
+                parser.error("invoke-agent requires adapter arguments")
+            sys.exit(invoke_runtime_adapter(args.runtime, args.adapter_args))
         else:
             parser.error("a command or --self-check is required")
     except (JourneyError, OSError, ValueError) as error:

@@ -100,6 +100,7 @@
         {"path": "scripts/test-real-agent-e2e.py", "kind": "file"},
         {"path": ".github/workflows/real-agent-journey.yml", "kind": "file"},
         {"path": "scripts/real-agent-journey.py", "kind": "file"},
+        {"path": "scripts/real-agent-runtime-catalog.json", "kind": "file"},
         {"path": "scripts/test-real-agent-journey.py", "kind": "file"},
         {"path": "scripts/real-agent-journey-provision.py", "kind": "file"},
         {"path": "scripts/real-agent-journey-agent.py", "kind": "file"},
