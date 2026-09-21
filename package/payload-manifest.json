@@ -73,8 +73,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 9651,
-      "sha256": "fb99db9bf1ec6c844f596079d52e65e925c429eb467222c4f7aacecbdb2f9c19"
+      "size": 9602,
+      "sha256": "ec299905a7b825f78750d9dafef90c18195550cdaaa161063a992a45bad2679e"
     },
     {
       "path": "archetype-ownership.json",
@@ -257,5 +257,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:2159811cb313f047b46762405b2bcd12243d689ad8d0ca069404696c4699d424"
+  "payload_digest": "sha256:4a7098d1a32e88fe69aa885ab86650565fdc15f824f8cc8066debb5f638748e1"
 }
