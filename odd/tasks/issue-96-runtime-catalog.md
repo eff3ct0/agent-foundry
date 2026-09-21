@@ -2,7 +2,7 @@
 
 ## Status
 
-`EVIDENCE/DELIVERY` — completed; pull request pending.
+`EVIDENCE/DELIVERY` — completed; pull request #130 open.
 
 ## Scope
 
@@ -84,7 +84,10 @@ and would create a remote disposable repository, outside this task's authorized
 remote operations.
 
 Work-unit commit: `25c7057 feat(journey): add selectable runtime catalog (#96)`.
+Delivery evidence commit: `4fbe80a docs(odd): record issue 96 delivery evidence`.
+Pull request: `https://github.com/eff3ct0/factory-template/pull/130` with
+exactly one type label, `type:feature`.
 
 ## Next action
 
-Push the committed branch and open the issue-linked feature PR.
+Await review and do not merge without approval.
