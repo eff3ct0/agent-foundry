@@ -317,6 +317,95 @@ def test_reporting_contract_ignores_success_and_rejects_unsafe_evidence():
         raise AssertionError("unsafe artifact URL accepted")
 
 
+def test_reporting_github_integration_is_bounded_and_reads_back_mutations():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    calls = []
+
+    def request(method, path, _token, expected=(200,), payload=None):
+        calls.append((method, path, payload))
+        if path.startswith("search/issues?"):
+            return {"total_count": 0, "incomplete_results": False, "items": []}
+        if method == "POST":
+            assert expected == (201,) and payload["labels"] == ["type:bug"]
+            return {"number": 42}
+        if path == "repos/eff3ct0/factory-template/issues/42":
+            return {"number": 42, "repository_url": "https://api.github.com/repos/eff3ct0/factory-template",
+                    "title": report["title"], "body": report["body"], "labels": [{"name": "type:bug"}]}
+        raise AssertionError(path)
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", request) == "created canonical journey issue #42"
+    assert [method for method, _, _ in calls].count("POST") == 1
+
+
+def test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    marker = "Real-Agent-Journey-Fingerprint: " + report["fingerprint"]
+
+    def duplicate(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return []
+        if method == "POST":
+            assert payload == {"body": report["body"]}
+            return {"id": 8}
+        if path.endswith("/comments/8"):
+            return {"issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
+        raise AssertionError(path)
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", duplicate) == "commented canonical issue #7"
+    def already_commented(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return [{"issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": marker}]
+        raise AssertionError("a recorded fingerprint must not mutate")
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", already_commented) == "already reported #7"
+    def ambiguous(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 2, "incomplete_results": False, "items": [{"number": number,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]} for number in (7, 8)]}
+        raise AssertionError("ambiguous lookup must not mutate")
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", ambiguous)
+    except journey.JourneyError as error:
+        assert error.failure_code == "duplicate_lookup_ambiguous"
+    else:
+        raise AssertionError("ambiguous canonical issues accepted")
+    try:
+        journey.report_failure(report, "wrong/repository", "token", duplicate)
+    except journey.JourneyError as error:
+        assert error.failure_code == "report_target_mismatch"
+    else:
+        raise AssertionError("mismatched report target accepted")
+
+
+def test_reporting_github_integration_rejects_mutation_readback_mismatch():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+
+    def invalid_readback(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 0, "incomplete_results": False, "items": []}
+        if method == "POST":
+            return {"number": 42}
+        return {"number": 42, "repository_url": "https://api.github.com/repos/eff3ct0/factory-template",
+                "title": report["title"], "body": "mismatched", "labels": [{"name": "type:bug"}]}
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", invalid_readback)
+    except journey.JourneyError as error:
+        assert error.failure_code == "issue_readback_failed"
+    else:
+        raise AssertionError("mismatched issue readback accepted")
+
+
 if __name__ == "__main__":
     test_contract_plan_is_provider_neutral()
     test_identity_and_decisions_fail_closed()
@@ -325,4 +414,7 @@ if __name__ == "__main__":
     test_reporting_contract_builds_deterministic_bug_form_payload()
     test_reporting_contract_uses_the_earliest_non_passing_stage()
     test_reporting_contract_ignores_success_and_rejects_unsafe_evidence()
+    test_reporting_github_integration_is_bounded_and_reads_back_mutations()
+    test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity()
+    test_reporting_github_integration_rejects_mutation_readback_mismatch()
     print("real-agent journey offline tests OK")

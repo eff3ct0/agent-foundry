@@ -188,7 +188,7 @@ owner and repository readback. It never lists by a broad prefix, guesses an
 owner, or deletes a candidate from another run. If cleanup is inconclusive, the
 journey is failed and the artifact records the exact run-scoped recovery target.
 
-## Failure reporting contract (slice 1)
+## Failure reporting and GitHub integration (slices 1–2)
 
 `scripts/real-agent-journey.py` provides a pure `build_bug_report` contract for
 failed, aggregated journey evidence. It accepts the bounded aggregate plus the
@@ -202,9 +202,11 @@ fingerprint, canonical marker, title, and a body that matches
 revision, runtime, stage, failure code, and check identifier. Raw diagnostics,
 credentials, prompts, and model output are not accepted as report fields.
 
-This slice performs no GitHub API read or mutation and does not modify workflow
-permissions or invocation. The next slice owns duplicate lookup, issue/comment
-creation and readback, and workflow integration.
+The always-run report job performs one bounded duplicate lookup across open and
+closed issues. It creates a `type:bug` issue or posts one occurrence comment to
+the single canonical issue, then reads the mutation back. Passing evidence
+creates no issue. Ambiguous, incomplete, malformed, or mismatched readback
+fails closed; tests use injected offline request fixtures and never mutate GitHub.
 
 ## Scope boundary
 

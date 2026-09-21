@@ -66,6 +66,7 @@ MAX_OUTPUT_CHARS = 1200
 MAX_CHECKS = 32
 MAX_FAILURES = 8
 MAX_REPORT_BODY_CHARS = 12000
+MAX_REPORT_RESULTS = 100
 SAFE_REPOSITORY = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,99})")
 SAFE_BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}")
 SAFE_SHA = re.compile(r"[0-9a-f]{40}")
@@ -142,13 +143,17 @@ def branch(value, boundary="implementation"):
     return value
 
 
-def api_request(method, path, token, expected=(200,)):
+def api_request(method, path, token, expected=(200,), payload=None, include_headers=False):
     if not token:
         raise JourneyError("source-readback", "github_token_missing", "GitHub readback credential is missing")
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    if body is not None and len(body) > MAX_REPORT_BODY_CHARS:
+        raise JourneyError("reporting", "github_request_oversized", "GitHub report request exceeded its limit")
     request = urllib.request.Request(
-        "https://api.github.com/" + path.lstrip("/"), method=method,
+        "https://api.github.com/" + path.lstrip("/"), data=body, method=method,
         headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + token,
-                 "X-GitHub-Api-Version": "2022-11-28"},
+                 "X-GitHub-Api-Version": "2022-11-28",
+                 **({"Content-Type": "application/json"} if body is not None else {})},
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -162,9 +167,10 @@ def api_request(method, path, token, expected=(200,)):
     if status not in expected:
         raise JourneyError("source-readback", "github_response_mismatch", "GitHub returned an unexpected response")
     try:
-        return json.loads(raw.decode("utf-8")) if raw else {}
+        result = json.loads(raw.decode("utf-8")) if raw else {}
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise JourneyError("source-readback", "github_response_malformed", "GitHub readback was malformed") from error
+    return (result, response.headers) if include_headers else result
 
 
 def load_input(path):
@@ -300,6 +306,69 @@ def build_bug_report(evidence, artifact_url):
         raise JourneyError("reporting", "bug_body_oversized", "bug report body exceeds its limit")
     validate_bug_body(body)
     return {"title": "[Bug] Real-agent journey failed: %s" % report["stage"], "body": body, **report}
+
+
+def _normalized_body(value):
+    return (value or "").replace("\r\n", "\n").rstrip("\n")
+
+
+def _canonical_issue(report, target, token, request_fn):
+    marker = "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"]
+    matches = {}
+    for state in ("open", "closed"):
+        query = urllib.parse.urlencode({"q": 'repo:%s is:issue state:%s "%s"' % (target, state, marker), "per_page": 100})
+        result = request_fn("GET", "search/issues?" + query, token)
+        if (not isinstance(result, dict) or result.get("incomplete_results") or
+                not isinstance(result.get("total_count"), int) or result["total_count"] > MAX_REPORT_RESULTS or
+                not isinstance(result.get("items"), list)):
+            raise JourneyError("reporting", "duplicate_lookup_incomplete", "GitHub duplicate lookup was incomplete")
+        for issue in result["items"]:
+            labels = issue.get("labels", []) if isinstance(issue, dict) else []
+            if (isinstance(issue.get("number"), int) and issue.get("repository_url", "").lower() ==
+                    ("https://api.github.com/repos/" + target).lower() and marker in (issue.get("body") or "") and
+                    "type:bug" in {label.get("name") for label in labels if isinstance(label, dict)}):
+                matches[issue["number"]] = issue
+    if len(matches) > 1:
+        raise JourneyError("reporting", "duplicate_lookup_ambiguous", "GitHub duplicate lookup found multiple canonical issues")
+    return next(iter(matches.values()), None), marker
+
+
+def report_failure(report, target, token, request_fn=api_request):
+    """Perform one bounded duplicate lookup and, only when needed, one report mutation."""
+    if report is None:
+        return "no journey failures"
+    target = repository(target)
+    if report.get("source_repository") != target:
+        raise JourneyError("reporting", "report_target_mismatch", "report target does not match the source repository")
+    issue, marker = _canonical_issue(report, target, token, request_fn)
+    if issue:
+        comments = request_fn("GET", "repos/%s/issues/%s/comments?per_page=100" % (target, issue["number"]), token)
+        if not isinstance(comments, list) or len(comments) >= MAX_REPORT_RESULTS:
+            raise JourneyError("reporting", "comment_lookup_incomplete", "GitHub comment lookup was incomplete")
+        if any(marker in (comment.get("body") or "") and comment.get("issue_url", "").lower() ==
+               ("https://api.github.com/repos/%s/issues/%s" % (target, issue["number"])).lower()
+               for comment in comments if isinstance(comment, dict)):
+            return "already reported #%s" % issue["number"]
+        created = request_fn("POST", "repos/%s/issues/%s/comments" % (target, issue["number"]), token,
+                             expected=(201,), payload={"body": report["body"]})
+        comment_id = created.get("id") if isinstance(created, dict) else None
+        readback = request_fn("GET", "repos/%s/issues/comments/%s" % (target, comment_id), token) if type(comment_id) is int else None
+        if (not isinstance(readback, dict) or readback.get("issue_url", "").lower() !=
+                ("https://api.github.com/repos/%s/issues/%s" % (target, issue["number"])).lower() or
+                _normalized_body(readback.get("body")) != _normalized_body(report["body"])):
+            raise JourneyError("reporting", "comment_readback_failed", "GitHub comment readback did not match")
+        return "commented canonical issue #%s" % issue["number"]
+    created = request_fn("POST", "repos/%s/issues" % target, token, expected=(201,),
+                         payload={"title": report["title"], "body": report["body"], "labels": ["type:bug"]})
+    number = created.get("number") if isinstance(created, dict) else None
+    readback = request_fn("GET", "repos/%s/issues/%s" % (target, number), token) if type(number) is int else None
+    labels = readback.get("labels", []) if isinstance(readback, dict) else []
+    if (not isinstance(readback, dict) or readback.get("number") != number or readback.get("repository_url", "").lower() !=
+            ("https://api.github.com/repos/" + target).lower() or readback.get("title") != report["title"] or
+            "type:bug" not in {label.get("name") for label in labels if isinstance(label, dict)} or
+            _normalized_body(readback.get("body")) != _normalized_body(report["body"])):
+        raise JourneyError("reporting", "issue_readback_failed", "GitHub issue readback did not match")
+    return "created canonical journey issue #%s" % number
 
 
 def issue_form(path):
@@ -943,6 +1012,11 @@ def main():
     collect.add_argument("--stage-dir", required=True)
     collect.add_argument("--output", required=True)
     collect.add_argument("--workflow-url")
+    report = subparsers.add_parser("report")
+    report.add_argument("--input", required=True)
+    report.add_argument("--repository", required=True)
+    report.add_argument("--artifact-url", required=True)
+    report.add_argument("--token-env", default="GITHUB_TOKEN")
     args = parser.parse_args()
     try:
         if args.self_check:
@@ -987,6 +1061,9 @@ def main():
             write_json(args.output, aggregate(args.stage_dir, args.run_id, args.repository, args.runtime, args.workflow_url))
             if read_json(args.output)["result"] != "passed":
                 raise JourneyError("real-agent journey failed", "journey_failed")
+        elif args.command == "report":
+            print(report_failure(build_bug_report(read_json(args.input), args.artifact_url), args.repository,
+                                 os.environ.get(args.token_env, "")))
         else:
             parser.error("a command or --self-check is required")
     except (JourneyError, OSError, ValueError) as error:
