@@ -20,6 +20,9 @@ structure first and create it with:
 `gh issue create --repo <OWNER>/<REPO> --title "<title>" --label "type:product" --body-file <filled-template>`
 or `--label "type:bug"`. Do not use free-form `--body` or omit the body.
 
+**Pull-request governance:** PRs use the GitHub closing reference
+`Closes #<TICKET_ID>`. The linked GitHub issue must carry `status:approved`.
+
 **Pull requests:** every PR MUST use `.github/pull_request_template.md`. With
 `gh`, fill that structure in a file and use `gh pr create --body-file <filled-template>`.
 

@@ -45,6 +45,35 @@ When `init.py` runs, these enums select catalog fragments from [`providers/`](..
 and compose [`docs/bindings.md`](bindings.md), whose header restates the shape
 source. The agent is then **bound by that contract** and must use it exclusively. Code intelligence is
 optional: `none` uses native repository tools and does not compose a provider fragment.
+The selected task provider also composes its pull-request reference into
+`.github/pull_request_template.md` and `templates/pull-request.md`; GitHub issue
+label validation is retained only for GitHub task providers.
+
+## Step 2b - Prepare an optional agent handoff
+
+Agent runtime setup is separate from task, secrets, and code-intelligence
+bindings. The creator catalog supports `claude-code`, `opencode`, `codex`, and
+`pi`. Choose none, one, or several providers explicitly; the non-interactive
+equivalents are `--agent <id>` and `--agents <id,...>`. The default is none.
+
+The creator checks the selected executable before writing and fails closed when
+it is unavailable. It renders only the selected provider's workspace-owned
+files and writes `.factory/provider-manifest.json`; unknown or user-managed
+files are never overwritten. With no selection, no provider workspace files
+are generated.
+
+The provider manifest is the installer output contract. It contains the
+catalog version, selected provider metadata, workspace ownership, manual
+prerequisites, and the exact next-step command shape. It contains no
+credentials, API keys, or machine-specific executable paths. Install and
+authenticate the preferred runtime separately, and configure models and global
+preferences outside project creation.
+
+Launching is an explicit post-setup action, disabled by default. Add
+`--launch-agent` only when exactly one selected provider is installed. The
+creator runs the catalog's argument array without a shell after apply and
+verify, then reports the agent exit outcome separately from repository
+readiness. A non-zero agent exit is not converted into a successful handoff.
 
 ## Step 2b - Prepare an optional agent handoff
 

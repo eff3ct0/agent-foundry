@@ -16,6 +16,10 @@ the issue with the project/cycle.
 corresponding issue template for its type (`task` or `bug`); blank or free-form
 issues are prohibited.
 
+**Pull-request governance:** PRs use the native reference
+`Linear: <TICKET_ID>`. The Linear issue key provides the task link; approval
+remains an explicit Linear-side gate.
+
 **Rules and lifecycle:**
 - Linear status cycle: *Backlog/Todo* -> *In Progress* -> *Done* (use the team's actual statuses).
 - At start, move the issue to *In Progress* and comment the plan; at close, move it to *Done*.

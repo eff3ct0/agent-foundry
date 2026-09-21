@@ -82,13 +82,12 @@ test("packaging rejects missing, undeclared, and changed integrity inputs", () =
     /integrity contract/,
   );
 });
-
-test("packed package survives npm install transport and preserves startup handoff", async (context) => {
+test("packed package preserves npm transport and startup handoff", async (context) => {
   if (process.platform === "win32") {
     context.skip("the isolated agent launch fixture uses a POSIX executable");
     return;
   }
-  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-npm-install-"));
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-npm-package-"));
   try {
     const packageDirectory = path.join(parent, "package");
     const installDirectory = path.join(parent, "install");
@@ -101,7 +100,7 @@ test("packed package survives npm install transport and preserves startup handof
     const tarballName = (await readdir(packageDirectory)).find((entry) => entry.endsWith(".tgz"));
     assert.ok(tarballName, "pnpm pack did not produce a tarball");
     const tarball = path.join(packageDirectory, tarballName);
-    await execFileAsync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--prefix", installDirectory, tarball], { cwd: root });
+    await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, tarball], { cwd: root });
 
     const executable = path.join(bin, "codex");
     await writeFile(executable, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FACTORY_NPM_INSTALL_ARGS\"\nexit 0\n");
@@ -113,6 +112,7 @@ test("packed package survives npm install transport and preserves startup handof
     const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], { cwd: root, env: environment }).then((value) => ({ ...value, code: 0 })).catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code }));
     assert.equal(result.code, 0, result.stderr);
     const envelope = JSON.parse(result.stdout);
+    assert.equal(envelope.status, "applied");
     assert.equal(envelope.verification, "verified");
     assert.equal(envelope.handoff.status, "launched");
     assert.equal(await readFile(path.join(parent, "handoff-args.txt"), "utf8"), `--cd\n${target}\n`);

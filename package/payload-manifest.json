@@ -37,14 +37,14 @@
     {
       "path": ".github/pull_request_template.md",
       "mode": "100644",
-      "size": 1104,
-      "sha256": "0878c85a1df44f742123e100a7900d54a69cec1ebd30e7842d757054a703f338"
+      "size": 1102,
+      "sha256": "a9847abe541e15ba8abc08c8d69b51330ed4c3fb32093555dd34214c3f6ffec3"
     },
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 694,
-      "sha256": "a7deef5595b4aad0ac5c9f35e6f60f482ebd5a5b3c25a86f5b0cb2ad72ad4ebd"
+      "size": 727,
+      "sha256": "d00694ab54bc82c141755b5f4e2895c57d1a46a77a180de3b5070caa76e14dd3"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -73,14 +73,14 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 9559,
-      "sha256": "c1c941d6f03660b7aaf09938aea6c4ac03dc4689d14aad8573de6371f389948b"
+      "size": 10310,
+      "sha256": "2581d700aa4f3bed12a2099135cc2abe5099b501db1dd2149b53b61b1f022063"
     },
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7437,
-      "sha256": "36777376b1d1ccb17452ae979ee38b2bace57b5f4d4b24c52175be1d5d133782"
+      "size": 7560,
+      "sha256": "08fb106678c42b8f1956d3e04ef8afcc8e380aa30d0bf80c832f5035521e0ee1"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -103,8 +103,8 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 10650,
-      "sha256": "7ebd69edf55354a6b85ec5cd98c539d757b9c0e002e0bba84082b63591683fd1"
+      "size": 12316,
+      "sha256": "5607c5dcb465447496e8e3c86ed73e888a86b6ef1d6474a5ebc402215b222af6"
     },
     {
       "path": "docs/bootstrap.md",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 9929,
-      "sha256": "4e3675cc09580d3d952cafca68e95032ea835fe78d7154e2611d2fad9871c5d1"
+      "size": 10195,
+      "sha256": "a64d4a357cf2a0dd72687959ca9aeb85e8a2f95c0f1cfd872b17fb8a60c55546"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -133,8 +133,8 @@
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 1711,
-      "sha256": "17a3a5b105e4c261d264688a90f07eee20b8be9f213a0eff4566454cc4bc1b64"
+      "size": 2671,
+      "sha256": "e62854982cad8493f9b632fa2c5c5282658ef9e5670ecdc67b39f3df5a6d6fef"
     },
     {
       "path": "docs/org-factory.md",
@@ -271,38 +271,38 @@
     {
       "path": "providers/task/_contract.md",
       "mode": "100644",
-      "size": 1854,
-      "sha256": "7f784d9359016958bcae85a27ca964874823d8e20a1fd251d365be2e39d6e250"
+      "size": 2296,
+      "sha256": "c268e2eed3654e768c74647317751c9f2d26fd6feb8d176fbd553608fb23f4eb"
     },
     {
       "path": "providers/task/custom.md",
       "mode": "100644",
-      "size": 1965,
-      "sha256": "e28dd67bb5bd3a3f6391e4588846891a4546b09805c2a8e46134f8423c933778"
+      "size": 2176,
+      "sha256": "36b13256ab16c1e869b73c4a1896cbf2833be34130529b0c34abd3934a2b38b0"
     },
     {
       "path": "providers/task/github-issues.md",
       "mode": "100644",
-      "size": 3546,
-      "sha256": "0ef460f8f4a5693d944bbc5159c5c11f531f6f460fe8ea80c18e887c17bd88ca"
+      "size": 3690,
+      "sha256": "911448f80a5a610701ca326c0df4f436d40bb559c4a5fc5c6f7875024484d282"
     },
     {
       "path": "providers/task/github-projects.md",
       "mode": "100644",
-      "size": 3455,
-      "sha256": "c46d90a0eb3d17359b7fc55b61a0ff37dd1fd8ac265071191404630ed05bf560"
+      "size": 3618,
+      "sha256": "14e5af09f1c859ef1179aff3bea46a5a4b912df12156334ea8e5fadbe6547461"
     },
     {
       "path": "providers/task/jira.md",
       "mode": "100644",
-      "size": 2492,
-      "sha256": "54f8c1a76f3a187f6bd053599e367a4ad97be98c1e56963a7ed0f04d73295396"
+      "size": 2761,
+      "sha256": "a6b1ad6af24caee9cae840134702464d2951534c9224cbb8b41e76d5556256da"
     },
     {
       "path": "providers/task/linear.md",
       "mode": "100644",
-      "size": 2392,
-      "sha256": "0f6353b39eb3b3b34a6de65f4895786053dae2112d7e4bee985c19fc5faee1da"
+      "size": 2566,
+      "sha256": "1639ecf1e4f66e84405690ffe99d62104645168daa539f55c57ecdd72ed7ceda"
     },
     {
       "path": "scripts/check-delivery-contract.py",
@@ -325,8 +325,8 @@
     {
       "path": "scripts/check-pr-governance.py",
       "mode": "100644",
-      "size": 4844,
-      "sha256": "e8d4c478aac4fe5f6ab2c788a5c65e65d7a93b0168a0ece4f4d712fb5887e560"
+      "size": 8995,
+      "sha256": "bc78d02745409111ac465620aa31ff71f5454483e69b085e89c1704d01aa1307"
     },
     {
       "path": "scripts/sync-github-labels.py",
@@ -373,8 +373,8 @@
     {
       "path": "templates/pull-request.md",
       "mode": "100644",
-      "size": 839,
-      "sha256": "0c32c20a6c617a3489decf8d4e0d97a1993d2653df53ce8066bf67de005c5a9d"
+      "size": 967,
+      "sha256": "0402fa678e4122b854fe49972dd81a4cb6f9b17114be43e72dc6ea6f3b07f1c0"
     },
     {
       "path": "templates/spec.md",
@@ -401,5 +401,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:b26fd58efcd5c214897f20a97d3972a688dae5028e7bb91985cf69aeac9fc711"
+  "payload_digest": "sha256:32b204e1e5a12d7ef4bc529a40cb2d20cdab206b2f4ee11502918030b7e3b76f"
 }

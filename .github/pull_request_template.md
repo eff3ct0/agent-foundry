@@ -2,8 +2,10 @@
 <!-- guide: what changes and why, in 2-3 lines -->
 
 ## Ticket
+<!-- provider-governance:start -->
 Closes #<TICKET_ID>
-<!-- guide: use a GitHub closing reference; the linked issue must carry status:approved under its protected approval contract -->
+<!-- The linked GitHub issue must have status:approved. -->
+<!-- provider-governance:end -->
 
 ## PR type
 - Add exactly one `type:*` label to this pull request.

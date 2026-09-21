@@ -24,3 +24,7 @@ target-host readback. Any mismatch, stale/ambiguous/missing instruction,
 insufficient permission, failed/unknown mutation, or readback mismatch stops
 the operation. Without that evidence, the human applies the label directly.
 This contract change does not approve existing work.
+
+The selected task provider also controls pull-request linkage. Initialization
+composes the native reference into both PR templates; the retained governance
+validator keeps GitHub issue-label checks only for GitHub task providers.

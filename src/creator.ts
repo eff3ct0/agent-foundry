@@ -89,7 +89,6 @@ export interface OwnershipManifest {
   text_files: string[];
   categories: Record<string, OwnershipCategory>;
 }
-
 interface CreatorState {
   schema_version: number;
   payload_version: string;
@@ -126,7 +125,6 @@ export interface HandoffResult {
   signal: NodeJS.Signals | null;
   message: string;
 }
-
 export type Command = "plan" | "dry-run" | "apply" | "verify" | "doctor";
 export type OperationAction = "create" | "update" | "remove" | "noop" | "conflict";
 
@@ -646,7 +644,6 @@ const composeProviderFiles = (
   files.push({ relativePath: providerManifestPath, bytes, mode: 0o644, sha256: sha256(bytes), size: bytes.byteLength });
   return { files, summary };
 };
-
 const bindingHeader = `# Bindings - mandatory project providers
 
 These bindings are mandatory for every agent, regardless of harness.
@@ -712,18 +709,6 @@ const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buf
   return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => catalog[stack]).join("\n")}\n`, "utf8");
 };
 
-const payloadTransportPath = async (payloadRoot: string, logicalPath: string) => {
-  // npm install transports a packaged .gitignore as .npmignore; retain the
-  // logical manifest path while accepting that package-mode filename alias.
-  const candidates = logicalPath === ".gitignore" ? [logicalPath, ".npmignore"] : [logicalPath];
-  for (const candidate of candidates) {
-    const absolute = path.join(payloadRoot, candidate);
-    const entry = await lstat(absolute).catch(() => undefined);
-    if (entry) return { absolute, entry };
-  }
-  return undefined;
-};
-
 const readPayloadFiles = async (
   manifest: PayloadManifest,
   payloadRoot: string,
@@ -736,14 +721,23 @@ const readPayloadFiles = async (
   const sourceFiles = new Map<string, SourceFile>();
   for (const entry of manifest.files) {
     assertSafeRelative(entry.path);
-    const transported = await payloadTransportPath(payloadRoot, entry.path);
-    if (!transported?.entry.isFile() || transported.entry.isSymbolicLink()) throw new CreatorError("payload_invalid", `payload file is not a regular file: ${entry.path}`, { path: entry.path });
-    const sourceBytes = await readFile(transported.absolute);
-    const sourceMode = transported.entry.mode & 0o7777;
-    if (sourceBytes.byteLength !== entry.size || sha256(sourceBytes) !== entry.sha256 || sourceMode !== safeMode(entry.mode)) {
+    const source = path.join(payloadRoot, entry.path);
+    // npm renames packaged .gitignore files to .npmignore. Accept only this
+    // exact transport alias; the manifest path, bytes, and restored mode stay authoritative.
+    const npmTransport = entry.path === ".gitignore" ? path.join(payloadRoot, ".npmignore") : undefined;
+    const sourcePath = (await lstat(source).catch(() => undefined)) ? source : npmTransport ?? source;
+    const sourceStat = await lstat(sourcePath).catch(() => undefined);
+    if (!sourceStat?.isFile() || sourceStat.isSymbolicLink()) throw new CreatorError("payload_invalid", `payload file is not a regular file: ${entry.path}`, { path: entry.path });
+    const sourceBytes = await readFile(sourcePath);
+    const sourceMode = sourceStat.mode & 0o7777;
+    const expectedMode = safeMode(entry.mode);
+    // npm-compatible package stores normalize non-bin executable files to 0644.
+    // The packaged manifest remains authoritative for the mode restored in the target.
+    const packageModeNormalized = sourceMode === 0o644 && expectedMode === 0o755;
+    if (sourceBytes.byteLength !== entry.size || sha256(sourceBytes) !== entry.sha256 || (sourceMode !== expectedMode && !packageModeNormalized)) {
       throw new CreatorError("payload_mismatch", `packaged payload bytes or mode differ from the manifest: ${entry.path}`, { path: entry.path });
     }
-    sourceFiles.set(entry.path, { path: entry.path, bytes: sourceBytes, mode: safeMode(entry.mode) });
+    sourceFiles.set(entry.path, { path: entry.path, bytes: sourceBytes, mode: expectedMode });
   }
   const textFiles = new Set(ownership.text_files);
   const removedSourcePaths = new Set<string>();
