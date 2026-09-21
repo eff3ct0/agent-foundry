@@ -199,4 +199,4 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 
 - The obsolete Python triage command and its dedicated legacy test module are retired after the completed Node triage consumer cutover. The Node triage command and both reporter implementations remain unchanged; Python reporter retirement is reserved for Child 06e.
 - The `legacy_python_triage` ownership category is removed, and the payload integrity mirror is regenerated for the ownership-manifest change.
-- Accepted exception evidence: the maintainer explicitly approved `size:exception` in the 500-620 review range for the cohesive Child 06d work unit. The retirement, ownership cleanup, ODD evidence, and regenerated payload mirror must remain reviewable as one lifecycle boundary.
+- Accepted exception evidence: the maintainer explicitly regularized `size:exception` for the actual cohesive Child 06d diff: 9 additions and 879 deletions (888 changed lines). This authorization replaces the earlier 500-620 forecast. The retirement, ownership cleanup, ODD evidence, and regenerated payload mirror must remain reviewable as one lifecycle boundary.
