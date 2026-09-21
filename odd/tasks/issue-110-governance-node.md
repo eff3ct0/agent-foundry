@@ -102,7 +102,7 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 
 - `scripts/check-pr-governance.mjs` is the authoritative Node validator for the GitHub and provider-native PR contract; the replaced Python command is removed with this complete consumer migration.
 - The provider fixtures cover GitHub close references and approval readback, plus Jira/Linear native references that must not query GitHub.
-- The trusted `pull_request_target` workflow pins Node.js 20.19.0 and validates the merge candidate without write permissions or persisted checkout credentials.
+- The trusted `pull_request_target` workflow pins Node.js 20.19.0 and checks out the trusted PR base SHA before loading the validator or bindings. PR event metadata is validation data only; untrusted PR files cannot replace the required `validate` check's code or provider binding. The job has no write permissions or persisted checkout credentials.
 - Accepted exception: the coherent command, fixtures, workflow, local consumers, ownership registration, and payload mirror are reviewed together at 430-520 authored changed lines; breaking this boundary would make the fixtures or workflow unverified in isolation.
 
 ## Child 01 verification evidence
@@ -132,3 +132,9 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - `python3 scripts/test-bootstrap-e2e.py`, `python3 scripts/test-bootstrap-triage.py`, and `python3 scripts/check-bootstrap-workflow.py` passed.
 - `python3 scripts/bootstrap-e2e.py --self-check`, `python3 scripts/report-bootstrap-failure.py --self-check`, `python3 init.py --self-check`, and `python3 scripts/check-determinism.py` passed.
 - `pnpm typecheck`, `node scripts/build-payload.mjs --write-lock`, `pnpm build`, and `git diff --check` passed. The generated payload lock changes only because `archetype-ownership.json` is itself a payload input; the release-only script remains absent from the payload declaration.
+
+## Child 03 corrective trust-boundary verification evidence
+
+- `node --test test/check-pr-governance.test.mjs` passed: 7 tests, including the dedicated Linear binding fixture and a regression that supplies altered PR-side validator and bindings while asserting the required workflow checks out only `github.event.pull_request.base.sha`.
+- `node scripts/check-pr-governance.mjs --self-check`, `pnpm typecheck`, and `git diff --check` passed.
+- `node scripts/build-payload.mjs --write-lock`, `pnpm build`, and `python3 scripts/check-determinism.py` passed; the payload mirror was regenerated before the determinism check.

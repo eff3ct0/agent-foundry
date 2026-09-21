@@ -43,8 +43,8 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 854,
-      "sha256": "e87635df858dceb52c6c4298d75a7103bdc10dd74ff33a902a7a6e0b68cea108"
+      "size": 922,
+      "sha256": "22858bd646b6225fd5e5ad585eeee34dfeada0f2fa8ecacad3441fd7eb9bd912"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -133,8 +133,8 @@
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 2671,
-      "sha256": "e62854982cad8493f9b632fa2c5c5282658ef9e5670ecdc67b39f3df5a6d6fef"
+      "size": 2600,
+      "sha256": "05b3936d529125484423daf3ac481bb94c2e71034694bbe9134ec3f8b079a6f0"
     },
     {
       "path": "docs/org-factory.md",
@@ -325,8 +325,8 @@
     {
       "path": "scripts/check-pr-governance.mjs",
       "mode": "100644",
-      "size": 7510,
-      "sha256": "05d1334e47f8d1fb65c0002b82427f6609aa0c45492545d9aced0b42f86a36c8"
+      "size": 7461,
+      "sha256": "2ecb665cd645d151af476e70d7b7363738c533ee124773facfe043c82480d29b"
     },
     {
       "path": "scripts/sync-github-labels.mjs",
@@ -401,5 +401,5 @@
       "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
     }
   ],
-  "payload_digest": "sha256:555880cdb23bcc19747acacf946b2e04047971987a3a9a0650aa356bf10ae8cb"
+  "payload_digest": "sha256:144cc91cfc1735626699f9786254be3de6ec399f81f311fc0bdb3a2787ba45c7"
 }

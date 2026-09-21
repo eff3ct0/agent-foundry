@@ -85,8 +85,8 @@ const selfCheck = async () => {
   assert.match(workflow, /^  validate:$/mu);
   assert.match(workflow, /^    name: validate$/mu);
   assert.match(workflow, /pull_request_target:/u);
-  assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}/u);
-  assert.doesNotMatch(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/u);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/u);
+  assert.doesNotMatch(workflow, /merge_commit_sha/u);
   assert.match(workflow, /persist-credentials: false/u);
   assert.doesNotMatch(workflow, /(?:contents|issues|pull-requests): write/u);
   assert.match(workflow, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/u);

@@ -15,10 +15,11 @@ jobs:
     name: validate
     runs-on: ubuntu-latest
     steps:
-      # Keep the workflow definition trusted while validating the merge candidate.
+      # The PR event supplies metadata only. Run the validator and bindings from
+      # the trusted base revision so a PR cannot replace required-check code.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

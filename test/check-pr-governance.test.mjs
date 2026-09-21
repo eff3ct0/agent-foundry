@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,7 @@ import { boundTaskProvider, githubIssueLabels, issueNumbers, validateEvent, vali
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(root, "scripts", "check-pr-governance.mjs");
+const linearFixture = path.join(root, "test", "fixtures", "pr-governance", "linear.json");
 const approved = { 42: ["status:approved"] };
 const githubPr = { body: "Summary\n\nCloses #42 and fixes acme/example#42.", labels: [{ name: "type:product" }] };
 
@@ -24,15 +25,28 @@ test("GitHub governance requires one type label, a local close reference, and ap
   assert.match(validatePr({ ...githubPr, body: "Closes other/repo#42" }, approved, "acme/example", "github-issues").join("\n"), /closing reference/u);
 });
 
-test("non-GitHub providers require their native reference without issue lookups", async () => {
+test("a Linear fixture requires its native reference without issue lookups", async () => {
+  const fixture = JSON.parse(await readFile(linearFixture, "utf8"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "governance-linear-"));
+  try {
+    await mkdir(path.join(directory, "docs"));
+    await writeFile(path.join(directory, "docs", "bindings.md"), fixture.bindings, "utf8");
+    const provider = await boundTaskProvider(directory);
+    assert.equal(provider, fixture.provider);
+    const errors = await validateEvent(fixture.event, fixture.repository, "token", {
+      provider,
+      fetchImpl: () => { throw new Error("Linear validation must not query GitHub"); },
+    });
+    assert.deepEqual(errors, fixture.expectedErrors);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("non-GitHub providers reject missing native references without issue lookups", async () => {
   const jira = { body: "Summary\n\nJira: FEX-1", labels: [{ name: "type:product" }] };
   assert.deepEqual(validatePr(jira, {}, undefined, "jira"), []);
   assert.match(validatePr({ ...jira, body: "Closes #42" }, {}, undefined, "jira").join("\n"), /native Jira reference/u);
-  const errors = await validateEvent({ pull_request: jira }, "acme/example", "token", {
-    provider: "jira",
-    fetchImpl: () => { throw new Error("Jira validation must not query GitHub"); },
-  });
-  assert.deepEqual(errors, []);
 });
 
 test("event validation reads each linked GitHub issue and rejects malformed responses", async () => {
@@ -56,6 +70,26 @@ test("provider fixture reads generated bindings and falls back when absent", asy
     assert.equal(await boundTaskProvider(directory), "linear");
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("required validate runs trusted validator and bindings despite PR replacements", async () => {
+  const workflow = await readFile(path.join(root, ".github", "workflows", "governance.yml"), "utf8");
+  const untrusted = await mkdtemp(path.join(os.tmpdir(), "governance-pr-"));
+  try {
+    await mkdir(path.join(untrusted, "docs"));
+    await mkdir(path.join(untrusted, "scripts"));
+    await writeFile(path.join(untrusted, "docs", "bindings.md"), "> **Capability:** `task`\n> **Provider:** `linear`\n", "utf8");
+    await writeFile(path.join(untrusted, "scripts", "check-pr-governance.mjs"), "process.exit(0);\n", "utf8");
+
+    assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/u);
+    assert.doesNotMatch(workflow, /merge_commit_sha/u);
+    assert.equal((workflow.match(/uses: actions\/checkout@/gu) ?? []).length, 1);
+    assert.match(workflow, /run: node scripts\/check-pr-governance\.mjs/u);
+    assert.equal(await boundTaskProvider(root), "github-issues");
+    assert.equal(await boundTaskProvider(untrusted), "linear");
+  } finally {
+    await rm(untrusted, { recursive: true, force: true });
   }
 });
 
