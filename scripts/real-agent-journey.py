@@ -86,7 +86,7 @@ BUG_FORM_HEADINGS = ("Steps to reproduce", "Expected behavior", "Actual behavior
 CHECK_COMMANDS = {
     "init-check": ["init.py", "--check"],
     "determinism": ["scripts/check-determinism.py"],
-    "delivery-contract": ["scripts/check-delivery-contract.py"],
+    "delivery-contract": ["scripts/check-delivery-contract.mjs", "--self-check"],
     "governance": ["scripts/check-pr-governance.mjs", "--self-check"],
 }
 REQUIRED_INPUT = {

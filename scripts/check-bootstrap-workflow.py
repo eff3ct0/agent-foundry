@@ -52,11 +52,18 @@ def check():
     if "actions/checkout@" in cleanup:
         raise AssertionError("cleanup must not depend on repository checkout")
     bootstrap = text.split("\n  bootstrap:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
+    triage = text.split("\n  triage:\n", 1)[1].split("\n  report:\n", 1)[0]
     report = text.split("\n  report:\n", 1)[1]
     if "OPENAI_API_KEY" in bootstrap or "OPENAI_API_KEY" in cleanup or "OPENAI_API_KEY" in report:
         raise AssertionError("OPENAI_API_KEY must be isolated to triage")
     if "BOOTSTRAP_E2E_TOKEN: ${{ secrets." in bootstrap or "BOOTSTRAP_E2E_TOKEN: ${{ secrets." in cleanup:
         raise AssertionError("lifecycle token must be short-lived App output")
+    if "actions/setup-node@%s" % BOOTSTRAP_PINNED_ACTIONS["actions/setup-node"] not in triage:
+        raise AssertionError("triage must pin the Node runtime")
+    if 'env -i "PATH=$PATH" "OPENAI_API_KEY=$OPENAI_API_KEY" "OPENAI_MODEL=$OPENAI_MODEL" node scripts/triage-bootstrap-failure.mjs' not in triage:
+        raise AssertionError("triage must invoke the Node CLI with a clean environment")
+    if any(value in triage for value in ("GITHUB_TOKEN", "GH_TOKEN", "BOOTSTRAP_E2E_TOKEN")):
+        raise AssertionError("triage must not receive lifecycle or GitHub credentials")
     print("bootstrap workflow static check OK")
     template = TEMPLATE_WORKFLOW.read_text(encoding="utf-8")
     template_uses = USE.findall(template)
@@ -64,7 +71,9 @@ def check():
         raise AssertionError("template bootstrap action is not pinned to a full commit SHA")
     for required in ("workflow_dispatch:", "permissions: {}", "fail-fast: false", "--template", "--stack",
                      "if: always()", "issues: write", "--run-id", "cleanup-template",
-                     "actions/download-artifact@%s" % PINNED_ACTIONS["actions/download-artifact"]):
+                     "actions/download-artifact@%s" % PINNED_ACTIONS["actions/download-artifact"],
+                     "actions/setup-node@%s" % BOOTSTRAP_PINNED_ACTIONS["actions/setup-node"],
+                     "node-version: 20.19.0", "node scripts/report-bootstrap-failure.mjs"):
         if required not in template:
             raise AssertionError("template workflow is missing %s" % required)
     if "OPENAI_API_KEY" in template:
@@ -73,6 +82,8 @@ def check():
     report = template.split("\n  report:\n", 1)[1]
     if "GITHUB_TOKEN" in bootstrap or "BOOTSTRAP_E2E_TOKEN" in report:
         raise AssertionError("lifecycle and reporting credentials must remain separate")
+    if "python3 scripts/report-bootstrap-failure.py" in text or "python3 scripts/report-bootstrap-failure.py" in template:
+        raise AssertionError("active reporter workflow consumers must invoke Node")
     print("template bootstrap workflow static check OK")
     journey = JOURNEY_WORKFLOW.read_text(encoding="utf-8")
     journey_uses = USE.findall(journey)

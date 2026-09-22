@@ -53,6 +53,7 @@
     "providers/task/github-projects.md",
     "providers/task/jira.md",
     "providers/task/linear.md",
+    "scripts/check-delivery-contract.mjs",
     "scripts/check-delivery-contract.py",
     "scripts/check-factory-layout.py",
     "scripts/check-pr-governance.mjs",
