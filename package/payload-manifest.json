@@ -43,8 +43,8 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 727,
-      "sha256": "d00694ab54bc82c141755b5f4e2895c57d1a46a77a180de3b5070caa76e14dd3"
+      "size": 1146,
+      "sha256": "dd2b9e37374d07715aa94baa5bc7782945f7cba9a84a7d3ffa5205172d54aace"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -79,8 +79,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7560,
-      "sha256": "08fb106678c42b8f1956d3e04ef8afcc8e380aa30d0bf80c832f5035521e0ee1"
+      "size": 7905,
+      "sha256": "921a1a658aca63d07fbcf6a52762f8a0c0464a43d47062a9c5060a3e0af941c7"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -325,8 +325,8 @@
     {
       "path": "scripts/check-pr-governance.py",
       "mode": "100644",
-      "size": 8995,
-      "sha256": "bc78d02745409111ac465620aa31ff71f5454483e69b085e89c1704d01aa1307"
+      "size": 9455,
+      "sha256": "d78199d04bd4ce2ca2fccbfce053244c0e9cfb8690ba63e46a72552cf35d5354"
     },
     {
       "path": "scripts/sync-github-labels.py",
@@ -401,5 +401,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:32b204e1e5a12d7ef4bc529a40cb2d20cdab206b2f4ee11502918030b7e3b76f"
+  "payload_digest": "sha256:aae0efb1f6f7a27d5b154f7ba5b02fa9d30c5f69c4c7fc2709f7513a109efec3"
 }
