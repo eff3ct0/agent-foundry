@@ -432,10 +432,10 @@ def check_scripts(factory_layout, release_scripts=(), real_agent=()):
     assert_repeatable_command([sys.executable, approval_script, "--approval-self-check"])
     assert_same_output(factory_layout.self_check)
     if release_scripts:
-        bootstrap, reporter, triage, workflow = release_scripts
+        bootstrap, workflow = release_scripts
         assert_same_output(bootstrap.self_check)
-        assert_same_output(reporter.self_check)
-        assert_same_output(triage.self_check)
+        assert_repeatable_command(["node", "scripts/report-bootstrap-failure.mjs", "--self-check"])
+        assert_repeatable_command(["node", "scripts/triage-bootstrap-failure.mjs", "--self-check"])
         assert_same_output(workflow.check)
     if real_agent:
         checker, focused = real_agent
@@ -470,16 +470,13 @@ def self_check():
     factory_layout = load_module("check_factory_layout", script_dir + "/check-factory-layout.py")
     release_paths = (
         "scripts/bootstrap-e2e.py",
-        "scripts/report-bootstrap-failure.py",
-        "scripts/triage-bootstrap-failure.py",
+        "scripts/report-bootstrap-failure.mjs",
         "scripts/check-bootstrap-workflow.py",
     )
     release_scripts = ()
     if all(os.path.isfile(os.path.join(ROOT, path)) for path in release_paths):
         release_scripts = (
             load_module("bootstrap_e2e", "scripts/bootstrap-e2e.py"),
-            load_module("report_bootstrap_failure", "scripts/report-bootstrap-failure.py"),
-            load_module("triage_bootstrap_failure", "scripts/triage-bootstrap-failure.py"),
             load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
         )
     real_agent = ()

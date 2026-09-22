@@ -101,9 +101,7 @@ ARCHETYPE_ONLY_PATHS = (
     "scripts/bootstrap-e2e.py",
     "scripts/check-bootstrap-workflow.py",
     "scripts/release_ref.py",
-    "scripts/report-bootstrap-failure.py",
-    "scripts/triage-bootstrap-failure.py",
-    "scripts/test-bootstrap-triage.py",
+    "scripts/triage-bootstrap-failure.mjs",
 )
 
 TRACKER_DISPLAY = {
