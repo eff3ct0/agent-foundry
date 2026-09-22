@@ -6,7 +6,7 @@
 
 ## Status
 
-`ACTIVE` — feature branch chain selected. The tracker is a no-merge integration branch; child slice 1 is the active delivery work unit.
+`ACTIVE` — feature branch chain selected. The tracker is a no-merge integration branch; child slice 2 is the active delivery work unit.
 
 ## Scope
 
@@ -51,8 +51,8 @@ Strategy: `feature-branch-chain` (user-authorized). The tracker branch `feat/iss
 | Slice | Branch | Boundary | Forecast | Status |
 |---|---|---|---:|---|
 | Tracker | `feat/issue-98-journey-reporting` | ODD plan and ownership classification only | <100 | Active |
-| 1 | `feat/issue-98-journey-reporting-01-contract` | Side-effect-free bounded evidence, fingerprint, and bug-body contract with offline tests and documentation | 260–340 | Active |
-| 2 | TBD | GitHub duplicate lookup/mutation/readback, workflow wiring, and operational documentation | 180–260 | Deferred |
+| 1 | `feat/issue-98-journey-reporting-01-contract` | Side-effect-free bounded evidence, fingerprint, and bug-body contract with offline tests and documentation | 260–340 | Independently validated (PR #133) |
+| 2 | `feat/issue-98-journey-reporting-02-github` | GitHub duplicate lookup/mutation/readback, workflow wiring, operational documentation, and offline tests | 180–260 | Active |
 
 Slice 1 must not read or mutate GitHub, invoke workflows, or wire workflow permissions. Slice 2 owns all report-side GitHub interaction and workflow changes.
 
@@ -82,6 +82,23 @@ This ODD tracker is archetype-governance state and is registered as a `removed` 
 - Rollback boundary: remove the reporting-contract functions, focused tests, and documentation section without changing journey aggregation or any workflow.
 - Next action: commit, push, and open the non-draft slice 1 PR to tracker PR #132; slice 2 retains all GitHub interaction and workflow work.
 
+## Slice 2 execution
+
+- Worktree and branch: `issue-98-journey-reporting-02-github` on `feat/issue-98-journey-reporting-02-github`, based on slice-1 commit `58cdc979` (PR #133).
+- Boundary: use the preserved pure contract for bounded open/closed duplicate lookup, exactly one create-or-comment mutation with target-host readback, always-run workflow wiring, documentation, and offline request-fixture tests.
+- Explicit exclusion: no hosted workflow dispatch and no live issue/comment mutation in tests.
+
+### Corrective validation for child PR #136
+
+- The `report` subcommand now dispatches before assertion-mode argument validation, so the workflow invocation needs no `--checkout` or `--workflow-url`.
+- Public bug-form bodies exclude `generated_repository`; focused coverage asserts the identifier is absent.
+- Comment readback now requires the returned comment `id` to equal the created `comment_id`; a mismatched identity fails closed.
+- Each open/closed duplicate-lookup response now requires `total_count == len(items)` before classification; inconsistent counts fail closed before any write.
+- Added an injected `{total_count: 1, items: []}` regression that proves the reporter does not create or comment on an issue.
+- Passed: `python3 scripts/test-real-agent-journey.py`; `python3 scripts/real-agent-journey.py --self-check`; `python3 scripts/check-real-agent-workflow.py`; `python3 scripts/check-bootstrap-workflow.py`; and `python3 scripts/check-determinism.py`.
+- Runtime harness: N/A — this correction validates CLI dispatch and injected offline GitHub request fixtures only; no hosted workflow or live mutation is authorized.
+- Rollback boundary: remove the report-route dispatch guard, public-body redaction, strict comment identity check, their focused regressions, and matching documentation without altering aggregation or workflow execution.
+
 ## Next action
 
-Create and verify the tracker commit and draft tracker PR, then implement only child slice 1 from the tracker branch. Record the child commit, tests, diff budget, and PR in this tracker before beginning slice 2.
+Complete and deliver only child slice 2 to the immediate slice-1 parent branch. Record its commit, focused offline checks, 400-line budget, and child PR here; defer advisory triage and hosted validation to later approved work.
