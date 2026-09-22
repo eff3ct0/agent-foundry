@@ -40,7 +40,7 @@ jobs:
         run: |
           node scripts/release-ref.mjs --self-check
           python3 scripts/bootstrap-e2e.py --self-check
-          python3 scripts/report-bootstrap-failure.py --self-check
+          node scripts/report-bootstrap-failure.mjs --self-check
       - name: Resolve published release commit
         id: release
         env:
@@ -331,7 +331,7 @@ jobs:
           BOOTSTRAP_STATUS: ${{ needs.bootstrap.result }}
           CLEANUP_STATUS: ${{ needs.cleanup.result }}
         run: |
-          python3 scripts/report-bootstrap-failure.py report \
+          node scripts/report-bootstrap-failure.mjs report \
             --repository "$REPOSITORY" \
             --workflow-url "$WORKFLOW_URL" \
             --artifact-url "$ARTIFACT_URL" \

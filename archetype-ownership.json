@@ -99,7 +99,6 @@
         {"path": "scripts/release_ref.py", "kind": "file"},
         {"path": "scripts/triage-bootstrap-failure.mjs", "kind": "file"},
         {"path": "scripts/report-bootstrap-failure.mjs", "kind": "file"},
-        {"path": "scripts/report-bootstrap-failure.py", "kind": "file"},
         {"path": "scripts/test-bootstrap-e2e.py", "kind": "file"},
         {"path": ".github/workflows/real-agent-journey-assertions.yml", "kind": "file"},
         {"path": ".github/workflows/real-agent-e2e.yml", "kind": "file"},
@@ -115,13 +114,6 @@
         {"path": "scripts/real-agent-journey-agent.py", "kind": "file"},
         {"path": "scripts/real-agent-journey-assert.py", "kind": "file"},
         {"path": "scripts/real-agent-journey-cleanup.py", "kind": "file"}
-      ]
-    },
-    "legacy_python_triage": {
-      "disposition": "removed",
-      "paths": [
-        {"path": "scripts/triage-bootstrap-failure.py", "kind": "file"},
-        {"path": "scripts/test-bootstrap-triage.py", "kind": "file"}
       ]
     },
     "initializer_inputs": {

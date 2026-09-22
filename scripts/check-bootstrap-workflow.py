@@ -71,7 +71,9 @@ def check():
         raise AssertionError("template bootstrap action is not pinned to a full commit SHA")
     for required in ("workflow_dispatch:", "permissions: {}", "fail-fast: false", "--template", "--stack",
                      "if: always()", "issues: write", "--run-id", "cleanup-template",
-                     "actions/download-artifact@%s" % PINNED_ACTIONS["actions/download-artifact"]):
+                     "actions/download-artifact@%s" % PINNED_ACTIONS["actions/download-artifact"],
+                     "actions/setup-node@%s" % BOOTSTRAP_PINNED_ACTIONS["actions/setup-node"],
+                     "node-version: 20.19.0", "node scripts/report-bootstrap-failure.mjs"):
         if required not in template:
             raise AssertionError("template workflow is missing %s" % required)
     if "OPENAI_API_KEY" in template:
@@ -80,6 +82,8 @@ def check():
     report = template.split("\n  report:\n", 1)[1]
     if "GITHUB_TOKEN" in bootstrap or "BOOTSTRAP_E2E_TOKEN" in report:
         raise AssertionError("lifecycle and reporting credentials must remain separate")
+    if "python3 scripts/report-bootstrap-failure.py" in text or "python3 scripts/report-bootstrap-failure.py" in template:
+        raise AssertionError("active reporter workflow consumers must invoke Node")
     print("template bootstrap workflow static check OK")
     journey = JOURNEY_WORKFLOW.read_text(encoding="utf-8")
     journey_uses = USE.findall(journey)
