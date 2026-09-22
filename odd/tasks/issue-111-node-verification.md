@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `IMPLEMENTATION` for Slice F2 published-release readback.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-f2-release-readback`
-- Branch: `feat/issue-111-f2-release-readback`
-- Base: `origin/feat/issue-111-f1-read-client` at `3519fcb`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for I legacy Python retirement.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-python-retirement`
+- Branch: `feat/issue-111-python-retirement`
+- Base: `origin/feat/issue-111-h3-template-docs` at `2fd9672`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -68,7 +68,19 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                              └── 📍 Slice E3: feat/issue-111-e3-orchestration
                                                     └── Slice F1: feat/issue-111-f1-read-client
                                                          └── Slice F2: feat/issue-111-f2-release-readback
-                                                              └── later: hosted execution, then legacy cleanup
+                                                                └── Slice F3: feat/issue-111-f3-resource-proof
+                                                                     └── Slice F4: feat/issue-111-f4-cleanup-recovery
+                                                                           └── 📍 G0: feat/issue-111-g0-lifecycle-repair
+                                                                                └── 📍 G1: feat/issue-111-g1-mutation-client
+                                                                                        └── G2: feat/issue-111-g2-release-prepare
+                                                                                             └── 📍 G3: feat/issue-111-g3-provision-proof
+                                                                                                   └── 📍 G4: feat/issue-111-g4-release-runner
+                                                                                                        └── 📍 G5: feat/issue-111-g5-cleanup
+                                                                                                               └── G6: feat/issue-111-g6-release-workflow
+                                                                                                                     └── 📍 H1: feat/issue-111-h1-template-package
+                                                                                                                          └── 📍 H2: feat/issue-111-h2-template-contract
+                                                                                                                                └── H3: feat/issue-111-h3-template-docs
+                                                                                                                                     └── 📍 I: feat/issue-111-python-retirement
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -127,6 +139,85 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Ownership and payload: classify the resolver as `archetype_only_release_e2e`; it remains excluded from the payload, while the payload manifest is regenerated for the retained ownership input.
 - Verification: offline injected-transport tests cover lightweight and annotated tags, draft/unpublished releases, mismatches, malformed payloads, depth exhaustion, and indeterminate reads. No live GitHub request, mutation, workflow change, provisioning, or cleanup is in scope.
 
+## Slice F3: run-scoped resource provisioning proof
+
+- Boundary: `scripts/resource-provisioning-proof.mjs` uses only an injected GET client to produce a versioned proof for one canonical `bootstrap-e2e-<numeric-run-id>-<resource>` repository.
+- Safety: it validates the requested owner, canonical name, visibility, template, release SHA, exact owner readback, and a positive immutable repository ID. It never infers ownership from a name or prefix.
+- Failure contract: cross-run, cross-owner, visibility, template, repository-ID, and release-SHA mismatches reject with stable codes before a proof is emitted; indeterminate reads stop the proof.
+- Ownership and payload: classify the helper as `archetype_only_release_e2e`; regenerate the payload manifest because its ownership inventory is a retained payload input.
+- Verification: offline injected-client tests cover invalid names, mismatches, no further read after repository mismatch, and deterministic serialization. No live GitHub request, mutation, workflow, provisioning, or cleanup is in scope.
+
+## G0: lifecycle 404 prerequisite repair
+
+- Boundary: normalize the F1 read client's exact repository `404` response to `missing`, so F4 can return `already-absent` without treating the absence as an indeterminate recovery condition.
+- Verification: add one offline F1-to-F4 integration test using the guarded injected transport; it proves the sole request is `GET /repos/<exact-target>` and a `404` produces `already-absent`.
+- Ownership and payload mirror: register `scripts/resource-cleanup-eligibility.mjs` as `archetype_only_release_e2e` and regenerate `package/payload-manifest.json` because the retained ownership inventory is a payload input.
+- Evidence: the focused F1/F4 suite passed 11/11; `pnpm typecheck`, `pnpm test` (132/132), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. All transport use was injected and offline.
+- Explicitly deferred: client transport changes beyond `404` semantics, workflow changes, hosted resources, provisioning, mutations, cleanup execution, and legacy cleanup.
+
+## G1: bounded hosted-lifecycle mutation client
+
+- Boundary: `scripts/hosted-lifecycle-mutation-client.mjs` exposes only two injected-transport operations: create one repository from one exact template, and delete one exact owner/name repository. It has no default transport and cannot make a live request by itself.
+- Safety: creation sends only the fixed GitHub template payload (`owner`, `name`, `private: true`, and `include_all_branches: false`); deletion sends no body. Both operations validate ownership identifiers before transport, use a 30-second abort signal, cap serialized requests at 16 KiB and responses at 64 KiB, and contain no retry path.
+- Failure contract: network, timeout, and 5xx outcomes return only `indeterminate/mutation_indeterminate`; malformed successful responses and all other unexpected statuses reject with stable, token-free codes. Creation accepts only a JSON-object `201`; deletion accepts only an empty `204`.
+- Ownership and payload: classify the helper as `archetype_only_release_e2e`, keep it out of the creator payload, and regenerate the payload manifest because the retained ownership inventory is a payload input.
+- Verification: offline injected-transport fixtures cover exact routes and payload, ownership validation before transport, both byte caps, malformed success responses, normalized failures, no retries, and token redaction. No live GitHub request, workflow execution, provisioning, or repository deletion is performed by this slice.
+- Evidence: `pnpm typecheck`, focused mutation-client tests (5/5), `pnpm test` (137/137), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. All transport use was injected and offline.
+
+## G2: offline release-prepare CLI
+
+- Boundary: `scripts/release-prepare.mjs` accepts one repository, tag, expected immutable SHA, and offline readback fixture. It resolves the release only through the F2 resolver and emits the sorted CI recipe matrix from `ci/recipes.json`.
+- Safety: the fixture client has no transport, credential, mutation, provisioning, cleanup, workflow, or hosted execution path. The command verifies the resolved SHA before matrix output and exposes no create or delete operation.
+- Failure contract: every CLI outcome is one versioned JSON envelope. Readback rejections and indeterminate results preserve their F2 status and stable code; malformed arguments, fixtures, and recipe input return stable rejected codes with a non-zero exit.
+- Ownership and payload: classify the command as `archetype_only_release_e2e`, exclude it from the generated payload, and regenerate `package/payload-manifest.json` because the retained ownership inventory is a payload input.
+- Verification: offline fixtures cover a published release, deterministic recipe ordering, F2 indeterminacy, malformed arguments, and malformed fixtures. No live GitHub request, hosted resource, mutation, provisioning, cleanup, workflow cutover, or deletion is performed by this slice.
+
+## G3: provision-and-proof composition
+
+- Boundary: `scripts/resource-provision-and-proof.mjs` creates only the canonical private `bootstrap-e2e-<run-id>-<resource>` repository through the injected G1 mutation client, then proves it through the injected F3 exact readback client.
+- Safety: all client, owner, template, run, resource, and SHA inputs are validated before mutation. There is no default transport, retry, repository listing, workflow, cleanup, or live fixture path.
+- Proof ordering: the versioned F3 proof is serialized, stored, and read back before its schema, canonical serialization, scope, immutable ID, and branch are validated; a storage or validation failure returns `recovery-required`.
+- Ownership and payload: classify this helper as `archetype_only_release_e2e`, exclude it from the creator payload, and regenerate the payload manifest because the ownership inventory is a retained payload input.
+- Verification: offline injected-client and in-memory-store tests cover one exact creation, F3 routes, proof-before-validation ordering, readback rejection, tampered proof recovery, and pre-mutation boundary validation. No live repository is created.
+
+- [x] Implemented the G3 canonical provision-and-proof composition with offline verification only.
+
+## G4: released-validation runner
+
+- Boundary: `scripts/released-validation-runner.mjs` defines the future Actions handoff without changing a workflow. It verifies a clean checkout at the resolved full release SHA, performs fixed `pnpm install --frozen-lockfile`, `build`, and `pack --ignore-scripts` commands, then runs one installed creator only with the existing allowlisted environment.
+- Evidence: every validated matrix case writes a versioned, redacted `release-evidence.json` containing the immutable release SHA, case ID, installed package/tree/payload identity, and bounded command result. Failed cases write redacted evidence before returning a stable failure.
+- Compatibility: tests inject command and creator seams only; no live resource, workflow cutover, or Python retirement is included.
+
+## G5: proof-driven cleanup
+
+- Boundary: `scripts/resource-proof-cleanup.mjs` downloads one canonical G3 proof, invokes F4's one exact pre-delete readback, and sends only the proof's exact owner/name pair to the injected G1 deletion client.
+- Evidence: it writes one bounded cleanup artifact for deletion, exact already-absent success, or recovery-required proof/readback/deletion outcomes. Missing or non-canonical proof and every F4 mismatch stop before mutation.
+- Compatibility: all tests use injected evidence, read, mutation, and artifact seams. No live deletion, workflow change, or Python retirement is included.
+
+## G6: release workflow cutover
+
+- Boundary: cut over only `.github/workflows/bootstrap-e2e.yml` to the G2–G5 Node path. The release/manual tag resolves to an immutable SHA, which Actions checks out separately and builds/packs with the pinned Corepack/pnpm toolchain before the installed creator runs.
+- Safety: matrix fail-fast stays false; bootstrap and cleanup retain separate App tokens. Each disposable repository has a persisted G3 proof, and cleanup checks out only the trusted workflow SHA, downloads that proof, performs F4 readback, and deletes only its exact pair.
+- Compatibility: the Python template workflow and `scripts/bootstrap-e2e.py` harness remain retained. No hosted workflow execution, repository mutation, or deletion is authorized by this delivery.
+- Verification: offline Node and Python workflow checks, Python bootstrap/determinism/initializer self-checks, typecheck, and the full Node suite pass. The payload mirror was regenerated because the retained determinism checker changed.
+- Review budget: 321 authored additions plus deletions. Hosted workflow execution is explicitly not run.
+
+## H1: template package workflow cutover
+
+- Boundary: cut over only `.github/workflows/template-bootstrap-e2e.yml` from Python template-API execution to one package packed from the trusted `github.workflow_sha` checkout. The prepare job activates Node 20 Corepack with pnpm 12.4.2, builds the package, and uploads the exact tarball for every matrix job.
+- Safety: each matrix job installs and invokes only that artifact through the existing installed runner, records its bounded evidence, and removes the generated project locally in the same runner. No lifecycle token, template API call, hosted resource, or cleanup job remains.
+- Compatibility: manual dispatch, recipe matrix, evidence artifacts, and the reporter stay in place. H2/H3 own the static-contract, test, and documentation updates; this slice intentionally does not change them.
+- Verification: YAML parsing, whitespace validation, and one local packed-package installed-runner case pass. The current static workflow checker and its suite fail on the removed legacy `--stack`/cleanup contract, as expected until H2 updates that contract. No hosted workflow was run.
+
+## H2: template workflow static contracts
+
+- Boundary: update only the retained Node/Python static checkers and their focused offline tests for H1's package workflow.
+- Contract: require the trusted `github.workflow_sha` checkout and packaged tarball handoff, pinned Node 20.19.0/Corepack/pnpm 12.4.2 build path, local `finally` project cleanup, and an always-run reporter with the workflow token isolated from bootstrap.
+- Negative fixtures: reject Template API/lifecycle-token regressions, floating workflow source, unpinned package tooling, missing package identity, weak local cleanup, and a reporter that is not always-run.
+- Compatibility: retain the Python checker and harness; do not run hosted workflows, modify documentation, or retire Python in this slice.
+- Payload mirror: workflows, checkers, tests, and ODD are removed initialization assets; no retained creator-payload entry changes.
+- Verification: Node checker tests (16/16), retained Python bootstrap E2E offline tests, both static checker CLIs, `pnpm typecheck`, full Node tests (156/156), determinism, and initializer self-check pass. No hosted workflow was run.
+
 ## Slice C: Node workflow static-checker parity
 
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-workflow-contract`
@@ -137,6 +228,20 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Ownership: classify the Node checker as `archetype_only_release_e2e` so initialization removes it and the generated payload remains unchanged. Classify the existing Slice B `scripts/local-matrix.mjs` in the same category to restore the ownership-boundary check.
 - Verification: `pnpm typecheck`; `pnpm test:workflow-contract` (14/14); `pnpm test` (104/104); Node and Python workflow checkers; `python3 scripts/test-bootstrap-e2e.py`; `python3 scripts/check-determinism.py`; `python3 init.py --self-check`; and `git diff --check` passed. `python3 init.py --check` is intentionally inapplicable in this placeholder source repository.
 - Review budget: the maintainer explicitly approved `size:exception` for the cohesive 450-600-line static checker and parity-test work unit.
+
+## H3: template workflow documentation
+
+- Boundary: document the H1 package-based template workflow and H2's static contract without changing workflow behavior or retiring Python.
+- Compatibility: the complete Python-stack recipe matrix remains a generated-project fixture dimension.
+
+## I: legacy Python retirement
+
+- Boundary: remove only the superseded Python release bootstrap harness, its dedicated offline test, and the Python workflow checker. Remove their ownership and compatibility-cleanup registrations, and update the retained determinism and real-agent paths to use Node workflow checks or local validation without importing the retired harness.
+- Compatibility: keep the Node release, workflow, triage, and reporter replacements; retain `ci/recipes.json` and all generated Python-stack fixture support. The real-agent journey remains Python and continues to validate bounded repository, owner, SHA, and diagnostic values locally.
+- Ownership and payload: remove the retired release-only ownership entries and regenerate `package/payload-manifest.json` and `package/payload-files.json`, because `archetype-ownership.json` is a retained payload input.
+- Verification: run the focused real-agent regression, Node workflow-contract suite, the full Node suite, retained Python function tests, initializer self-check, and whitespace validation. Do not publish a package or run hosted workflows.
+- Review budget: the maintainer explicitly regularized `size:exception` for the actual cohesive final-child diff: 48 additions and 1,651 deletions (1,699 changed lines). This authorization replaces the earlier 1,250-1,500 forecast. The final child above H3 cannot be split without leaving an invalid retained Python execution path.
+- Delivery commit: `82cef8d` (`feat(verification): retire legacy Python bootstrap`). `pnpm typecheck`, workflow-contract tests (16/16), `pnpm test` (156/156), retained Python function tests (11/11 plus the real-agent journey suite), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. No package publication or hosted workflow execution occurred.
 
 ## Slice D: Node protected-approval self-check
 
