@@ -25,13 +25,19 @@ tests. The existing consent behavior and every other adapter remain unchanged.
    message hooks.
 4. The focused test controls completion order for two sessions and proves the
    isolation and exactly-once contract.
+5. A rejected startup is handled before a message hook runs and is reported as
+   that hook's controlled failure without an unhandled Node rejection.
+6. Duplicate `session.created` events for one session invoke startup once.
 
 ## Plan
 
 1. Replace the shared pending state with session-scoped startup state.
 2. Claim and remove a session's startup state before awaiting it.
-3. Add a deterministic concurrency regression test.
-4. Run focused tests, typecheck, and applicable repository checks before
+3. Contain startup rejection in the session state and rethrow it only from the
+   claimed message hook.
+4. Add deterministic concurrency, rejected-startup, and duplicate-session
+   regression tests.
+5. Run focused tests, typecheck, and applicable repository checks before
    delivery.
 
 ## Evidence to resume
@@ -48,12 +54,14 @@ hook input as carrying `sessionID`.
   hooks cannot append the same output twice.
 - Added a controlled two-session regression test with reversed completion order
   and a duplicate message hook for the first session.
-- Passed `pnpm test` (49 tests), `pnpm typecheck`, `python3 init.py
-  --self-check`, `python3 start.py --self-check`, `node start.mjs --self-check`,
-  `python3 scripts/check-factory-layout.py`, `python3
-  scripts/check-determinism.py`, `python3 scripts/check-delivery-contract.py`,
-  `python3 test_init.py`, `python3 test_factory_bootstrap.py`, and `git diff
-  --check`.
+- Stored a settled startup result so a rejected startup is handled immediately,
+  then rethrown only by the matching message hook after it claims the entry.
+- Added regressions for rejected startup under strict Node rejection handling
+  and duplicate `session.created` events invoking startup exactly once.
+- Passed `node --unhandled-rejections=strict --test
+  test/opencode-startup.test.mjs` (3 tests), `NODE_OPTIONS=--unhandled-rejections=strict
+  pnpm test` (51 tests), `pnpm typecheck`, `python3
+  scripts/check-determinism.py`, and `git diff --check`.
 
 ## Next action
 

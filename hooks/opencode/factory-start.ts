@@ -19,19 +19,24 @@ export const createFactoryStartPlugin = ({ worktree, runStart = async () =>
     maxBuffer: 16 * 1024,
   })).stdout }) => {
   const startups = new Map();
+  const start = () => Promise.resolve()
+    .then(runStart)
+    .then((content) => ({ content }), (error) => ({ error }));
 
   return {
     event: async ({ event }) => {
       if (event.type !== "session.created") return;
       const id = sessionId(event);
       if (!id || startups.has(id)) return;
-      startups.set(id, runStart());
+      startups.set(id, start());
     },
     "chat.message": async ({ sessionID }, output) => {
       const startup = startups.get(sessionID);
       if (!startup) return;
       startups.delete(sessionID);
-      const content = await startup;
+      const result = await startup;
+      if ("error" in result) throw result.error;
+      const { content } = result;
       if (content.trim()) output.parts.push({ type: "text", text: content });
     },
   };

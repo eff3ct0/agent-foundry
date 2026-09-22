@@ -163,8 +163,8 @@
     {
       "path": "hooks/opencode/factory-start.ts",
       "mode": "100644",
-      "size": 1246,
-      "sha256": "8b7a36e0d8026cabd65f219826d020812a9fb76309e2163657405d2d188e9bf1"
+      "size": 1448,
+      "sha256": "cbbd859fc91eb20ea6140341f40e780f6be5e5ba31b45d4384b2d4b54cd6ead1"
     },
     {
       "path": "hooks/pi/factory-start.ts",
@@ -401,5 +401,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:c491e9b3020c1c8b344bd1918d44ea44ebaabc047627c3034f7731e91ef71c71"
+  "payload_digest": "sha256:37a7f03c5492f94b9bceb22c9deb1b2329b2d20c6b12127daedaf1bcd4ff1139"
 }

@@ -58,3 +58,48 @@ test("isolates concurrent OpenCode startup output and delivers it once", async (
   await plugin["chat.message"]({ sessionID: "second" }, secondOutput);
   assert.equal(secondOutput.parts.length, 1);
 });
+
+test("contains rejected startup until chat delivery reports it", async () => {
+  const failure = new Error("startup failed");
+  const { createFactoryStartPlugin } = await loadPlugin();
+  const plugin = createFactoryStartPlugin({
+    worktree: root,
+    runStart: () => Promise.reject(failure),
+  });
+
+  await plugin.event({ event: { type: "session.created", properties: { sessionID: "failed" } } });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const output = { parts: [] };
+  await assert.rejects(
+    plugin["chat.message"]({ sessionID: "failed" }, output),
+    (error) => error === failure,
+  );
+  assert.deepEqual(output.parts, []);
+  await plugin["chat.message"]({ sessionID: "failed" }, output);
+});
+
+test("runs startup once for duplicate session.created events", async () => {
+  const startup = deferred();
+  let calls = 0;
+  const { createFactoryStartPlugin } = await loadPlugin();
+  const plugin = createFactoryStartPlugin({
+    worktree: root,
+    runStart: () => {
+      calls += 1;
+      return startup.promise;
+    },
+  });
+
+  await Promise.all([
+    plugin.event({ event: { type: "session.created", properties: { sessionID: "duplicate" } } }),
+    plugin.event({ event: { type: "session.created", properties: { sessionID: "duplicate" } } }),
+  ]);
+  assert.equal(calls, 1);
+
+  const output = { parts: [] };
+  const delivery = plugin["chat.message"]({ sessionID: "duplicate" }, output);
+  startup.resolve("startup output\n");
+  await delivery;
+  assert.deepEqual(output.parts, [{ type: "text", text: "startup output\n" }]);
+});
