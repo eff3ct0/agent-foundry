@@ -38,6 +38,10 @@ def check():
             raise AssertionError("required action pin is missing: %s" % action)
     if "permissions: {}" not in text:
         raise AssertionError("workflow must default to no permissions")
+    if "python3 scripts/bootstrap-e2e.py" in text:
+        raise AssertionError("release bootstrap workflow must be Node-only")
+    if "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2" not in text:
+        raise AssertionError("release package build must activate pinned Corepack pnpm")
     if ("permission-administration: write" not in text or
             "permission-contents: write" not in text or
             text.count("permission-workflows: write") != 1):
@@ -46,11 +50,15 @@ def check():
         raise AssertionError("bootstrap and cleanup must mint separate lifecycle tokens")
     if "group: bootstrap-e2e-report-${{ github.repository }}-${{ needs.prepare.outputs.sha ||" not in text:
         raise AssertionError("report must serialize by resolved SHA")
-    if "- name: Delete this run's disposable repositories\n        if: always()" not in text:
+    if "- name: Delete this run's proof-bound disposable repository\n        if: always()" not in text:
         raise AssertionError("cleanup deletion must run always")
     cleanup = text.split("\n  cleanup:\n", 1)[1].split("\n  triage:\n", 1)[0]
-    if "actions/checkout@" in cleanup:
-        raise AssertionError("cleanup must not depend on repository checkout")
+    for required in ("actions/checkout@%s" % BOOTSTRAP_PINNED_ACTIONS["actions/checkout"],
+                     "ref: ${{ github.workflow_sha }}", "persist-credentials: false",
+                     "scripts/resource-proof-cleanup.mjs",
+                     "bootstrap-e2e-proof-${{ github.run_id }}-${{ matrix.stack }}"):
+        if required not in cleanup:
+            raise AssertionError("cleanup must use the trusted proof-based policy")
     bootstrap = text.split("\n  bootstrap:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
     triage = text.split("\n  triage:\n", 1)[1].split("\n  report:\n", 1)[0]
     report = text.split("\n  report:\n", 1)[1]

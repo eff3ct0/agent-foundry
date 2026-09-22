@@ -319,8 +319,8 @@
     {
       "path": "scripts/check-determinism.py",
       "mode": "100644",
-      "size": 22155,
-      "sha256": "ea3548b93fd12c1f8d4115f43b37e296327fe9961807d3368af965ba080125ca"
+      "size": 22287,
+      "sha256": "12cfec58d59e37ce29874162589ca79aef83d2deb1027cd27165074be45ea8c1"
     },
     {
       "path": "scripts/check-factory-layout.py",
@@ -407,5 +407,5 @@
       "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
     }
   ],
-  "payload_digest": "sha256:5ae483f699cfcbe894a0267de0e324192ce902ba5cc0fe95b9c2130ce866c889"
+  "payload_digest": "sha256:48d01621cc5c73f17063fa26bef8c76d1074e70318444aaf1b1185eed338cafc"
 }

@@ -432,6 +432,7 @@ def check_scripts(factory_layout, release_scripts=(), real_agent=()):
     if release_scripts:
         bootstrap, workflow = release_scripts
         assert_same_output(bootstrap.self_check)
+        assert_repeatable_command(["node", "scripts/check-bootstrap-workflow.mjs"])
         assert_repeatable_command(["node", "scripts/report-bootstrap-failure.mjs", "--self-check"])
         assert_repeatable_command(["node", "scripts/triage-bootstrap-failure.mjs", "--self-check"])
         assert_same_output(workflow.check)
@@ -470,6 +471,7 @@ def self_check():
         "scripts/bootstrap-e2e.py",
         "scripts/report-bootstrap-failure.mjs",
         "scripts/check-bootstrap-workflow.py",
+        "scripts/check-bootstrap-workflow.mjs",
     )
     release_scripts = ()
     if all(os.path.isfile(os.path.join(ROOT, path)) for path in release_paths):

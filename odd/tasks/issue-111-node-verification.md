@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for G3 provision-and-proof.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g3-provision-proof`
-- Branch: `feat/issue-111-g3-provision-proof`
-- Base: `origin/feat/issue-111-g2-release-prepare` at `3651b38`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for G6 release workflow cutover.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g6-release-workflow`
+- Branch: `feat/issue-111-g6-release-workflow`
+- Base: `origin/feat/issue-111-g5-cleanup` at `a6befb1`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -76,7 +76,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                                                              └── 📍 G3: feat/issue-111-g3-provision-proof
                                                                                                    └── 📍 G4: feat/issue-111-g4-release-runner
                                                                                                         └── 📍 G5: feat/issue-111-g5-cleanup
-                                                                                                             └── later: hosted execution, then legacy cleanup
+                                                                                                              └── 📍 G6: feat/issue-111-g6-release-workflow
+                                                                                                                   └── later: legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -189,6 +190,14 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Boundary: `scripts/resource-proof-cleanup.mjs` downloads one canonical G3 proof, invokes F4's one exact pre-delete readback, and sends only the proof's exact owner/name pair to the injected G1 deletion client.
 - Evidence: it writes one bounded cleanup artifact for deletion, exact already-absent success, or recovery-required proof/readback/deletion outcomes. Missing or non-canonical proof and every F4 mismatch stop before mutation.
 - Compatibility: all tests use injected evidence, read, mutation, and artifact seams. No live deletion, workflow change, or Python retirement is included.
+
+## G6: release workflow cutover
+
+- Boundary: cut over only `.github/workflows/bootstrap-e2e.yml` to the G2–G5 Node path. The release/manual tag resolves to an immutable SHA, which Actions checks out separately and builds/packs with the pinned Corepack/pnpm toolchain before the installed creator runs.
+- Safety: matrix fail-fast stays false; bootstrap and cleanup retain separate App tokens. Each disposable repository has a persisted G3 proof, and cleanup checks out only the trusted workflow SHA, downloads that proof, performs F4 readback, and deletes only its exact pair.
+- Compatibility: the Python template workflow and `scripts/bootstrap-e2e.py` harness remain retained. No hosted workflow execution, repository mutation, or deletion is authorized by this delivery.
+- Verification: offline Node and Python workflow checks, Python bootstrap/determinism/initializer self-checks, typecheck, and the full Node suite pass. The payload mirror was regenerated because the retained determinism checker changed.
+- Review budget: 321 authored additions plus deletions. Hosted workflow execution is explicitly not run.
 
 ## Slice C: Node workflow static-checker parity
 

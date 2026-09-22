@@ -38,10 +38,11 @@ leaving provider/runtime selection and the child adapters to issues #88-#90.
 
 - The matrix reads every key in `ci/recipes.json` and runs all cases with
   `fail-fast: false` (currently `rust`, `typescript`, `python`, and `go`).
-- Each case creates a private, empty (`auto_init: false`) repository named
-  `bootstrap-e2e-<run-id>-<case>` in `BOOTSTRAP_E2E_OWNER`, pushes only the
-  released commit to `main`, verifies clone `HEAD`, and cleans up in an
-  `if: always()` job by exact run-prefix matching.
+- Each case resolves the published tag to a full SHA, checks out that SHA into
+  a separate release source directory, and uses pinned Corepack/pnpm to build
+  and pack that exact source before running the installed creator. It creates
+  one private `bootstrap-e2e-<run-id>-<case>` repository with a persisted,
+  exact readback proof; `fail-fast: false` preserves every case result.
 - `BOOTSTRAP_E2E_APP_ID` and `BOOTSTRAP_E2E_PRIVATE_KEY` are dedicated Actions
   secrets for a GitHub App. The workflow mints a short-lived installation token
   separately in bootstrap and cleanup, restricts it to the disposable owner,
@@ -81,14 +82,14 @@ leaving provider/runtime selection and the child adapters to issues #88-#90.
   preparation cannot resolve one) and does not cancel an active run. Evidence,
   API responses, issue/comment results, generated issue bodies, and model output
   are bounded and oversized input fails closed.
-- The workflow does not mutate the source release and deletes disposable
-  repositories only after released validation completes. The harness handles
-  ordinary cancellation with `finally` cleanup; GitHub force-cancellation,
-  runner loss, API failure, or missing credentials can still prevent it. For
-  recovery, restore the credential, inspect the configured owner, then rerun
-  the trusted harness cleanup with the exact numeric run ID:
-  `python3 scripts/bootstrap-e2e.py cleanup --owner "$BOOTSTRAP_E2E_OWNER" --run-id "$GITHUB_RUN_ID"`.
-  Never broaden the prefix or delete unrelated repositories.
+- The workflow does not mutate the source release and deletes only the exact
+  owner/name bound to each persisted provisioning proof after validation. The
+  cleanup job checks out the trusted `github.workflow_sha` harness, never the
+  released source, then performs F4 readback before deletion. For recovery,
+  download the matching `bootstrap-e2e-proof-<run-id>-<case>` artifact, restore
+  the cleanup App credential, and rerun the proof-bound cleanup job for that
+  exact run and case. Never replace the proof with a prefix scan or delete an
+  unrelated repository.
 - Third-party actions are pinned to verified immutable SHAs: checkout v4.2.2
   (`11bd71901bbe5b1630ceea73d27597364c9af683`), upload-artifact v4.6.2
   (`ea165f8d65b6e75b540449e92b4886f43607fa02`), download-artifact v4.3.0
@@ -99,7 +100,7 @@ leaving provider/runtime selection and the child adapters to issues #88-#90.
 Run the local trusted checks with:
 
 ```
-python3 scripts/bootstrap-e2e.py --self-check
+node scripts/check-bootstrap-workflow.mjs
 node scripts/report-bootstrap-failure.mjs --self-check
 node scripts/triage-bootstrap-failure.mjs --self-check
 node --test test/triage-bootstrap-failure.test.mjs test/triage-bootstrap-failure-cli.test.mjs

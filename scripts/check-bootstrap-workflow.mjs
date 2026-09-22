@@ -54,12 +54,14 @@ const checkPins = (text, requiredPins, missingMessage) => {
 const checkBootstrap = (text) => {
   const uses = checkPins(text, bootstrapPinnedActions, "required action pin is missing");
   if (!text.includes("permissions: {}")) fail("workflow must default to no permissions");
+  if (text.includes("python3 scripts/bootstrap-e2e.py")) fail("release bootstrap workflow must be Node-only");
+  if (!bootstrapPinnedActions["actions/setup-node"] || !text.includes("COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2")) fail("release package build must activate pinned Corepack pnpm");
   if (!text.includes("permission-administration: write") || !text.includes("permission-contents: write") || (text.match(/permission-workflows: write/gu) ?? []).length !== 1) fail("bootstrap App token must request administration, contents, and workflows write");
   if (uses.filter((reference) => reference.startsWith("actions/create-github-app-token@")).length !== 2) fail("bootstrap and cleanup must mint separate lifecycle tokens");
   if (!text.includes("group: bootstrap-e2e-report-${{ github.repository }}-${{ needs.prepare.outputs.sha ||")) fail("report must serialize by resolved SHA");
-  if (!text.includes("- name: Delete this run's disposable repositories\n        if: always()")) fail("cleanup deletion must run always");
+  if (!text.includes("- name: Delete this run's proof-bound disposable repository\n        if: always()")) fail("cleanup deletion must run always");
   const cleanup = section(text, "\n  cleanup:\n", "\n  triage:\n");
-  if (cleanup.includes("actions/checkout@")) fail("cleanup must not depend on repository checkout");
+  requireText(cleanup, [`actions/checkout@${bootstrapPinnedActions["actions/checkout"]}`, "ref: ${{ github.workflow_sha }}", "persist-credentials: false", "scripts/resource-proof-cleanup.mjs", "bootstrap-e2e-proof-${{ github.run_id }}-${{ matrix.stack }}"], "cleanup must use the trusted proof-based policy");
   const bootstrap = section(text, "\n  bootstrap:\n", "\n  cleanup:\n");
   const triage = section(text, "\n  triage:\n", "\n  report:\n");
   const report = section(text, "\n  report:\n");

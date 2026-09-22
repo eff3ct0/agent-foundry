@@ -885,9 +885,9 @@ def self_check():
         os.environ.pop("UNEXPECTED_SECRET", None)
     workflow = WORKFLOW.read_text(encoding="utf-8")
     for text in ("published", "workflow_dispatch", "tag_name", "github.workflow_sha", "fail-fast: false",
-                 "if: always()", "permissions: {}", "persist-credentials: false", "retention-days: 7",
-                 "EXPECTED_SHA", "RELEASE_SHA", "--run-id \"$RUN_ID\"", "OPENAI_MODEL", "OPENAI_API_KEY",
-                 "env -i", "bootstrap-e2e-triage-"):
+                  "if: always()", "permissions: {}", "persist-credentials: false", "retention-days: 7",
+                  "EXPECTED_SHA", "RELEASE_SHA", "process.env.RUN_ID", "OPENAI_MODEL", "OPENAI_API_KEY",
+                  "env -i", "bootstrap-e2e-triage-"):
         assert text in workflow, text
     assert "needs.prepare.outputs.prefix" not in workflow
     error = HarnessError("secret=bad /home/private", "initializer_failed", 7,

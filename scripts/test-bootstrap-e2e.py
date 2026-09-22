@@ -171,7 +171,9 @@ def test_workflow_contract():
     assert "cancel-in-progress: false" in text
     assert "fetch-depth: 0" in bootstrap_job
     assert "/repos?type=all" not in cleanup_job
-    assert 'path = "repos/%s/%s"' in cleanup_job
+    assert "scripts/resource-proof-cleanup.mjs" in cleanup_job
+    assert "bootstrap-e2e-proof-${{ github.run_id }}-${{ matrix.stack }}" in cleanup_job
+    assert "ref: ${{ github.workflow_sha }}" in cleanup_job
 
 
 def test_cleanup_probes_only_run_scoped_repositories():

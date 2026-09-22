@@ -105,16 +105,27 @@ test("bootstrap rejects weak cleanup, report, and credential isolation", async (
     await reject(directory, "report must serialize by resolved SHA");
   });
   await fixture(async (directory) => {
-    await replace(directory, "bootstrap", "- name: Delete this run's disposable repositories\n        if: always()", "- name: Delete this run's disposable repositories");
+    await replace(directory, "bootstrap", "- name: Delete this run's proof-bound disposable repository\n        if: always()", "- name: Delete this run's proof-bound disposable repository");
     await reject(directory, "cleanup deletion must run always");
   });
   await fixture(async (directory) => {
-    await replace(directory, "bootstrap", "  cleanup:\n", "  cleanup:\n    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n");
-    await reject(directory, "cleanup must not depend on repository checkout");
+    await replace(directory, "bootstrap", "ref: ${{ github.workflow_sha }}", "ref: ${{ needs.prepare.outputs.sha }}");
+    await reject(directory, "cleanup must use the trusted proof-based policy ref: ${{ github.workflow_sha }}");
   });
   await fixture(async (directory) => {
     await replace(directory, "bootstrap", "  bootstrap:\n", "  bootstrap:\n    env:\n      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n");
     await reject(directory, "OPENAI_API_KEY must be isolated to triage");
+  });
+});
+
+test("bootstrap rejects Python release execution and an unpinned package toolchain", async () => {
+  await fixture(async (directory) => {
+    await append(directory, "bootstrap", "\n# python3 scripts/bootstrap-e2e.py\n");
+    await reject(directory, "release bootstrap workflow must be Node-only");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", "corepack install --global pnpm@latest");
+    await reject(directory, "release package build must activate pinned Corepack pnpm");
   });
 });
 
