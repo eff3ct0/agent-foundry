@@ -79,8 +79,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8132,
-      "sha256": "569249a00613495b334a1335a58b037c57f2339e605e4c79d30d136c43edccfc"
+      "size": 8184,
+      "sha256": "5d6394d79a474702a16c4e9af91355194eeb24b0d24c96f6ee243b12a82dcde7"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -163,8 +163,8 @@
     {
       "path": "hooks/opencode/factory-start.ts",
       "mode": "100644",
-      "size": 813,
-      "sha256": "448482fc9cbdb9dafbf87c1a7295fb6f8cd8696f68f02273a6c9a083c12597db"
+      "size": 1448,
+      "sha256": "cbbd859fc91eb20ea6140341f40e780f6be5e5ba31b45d4384b2d4b54cd6ead1"
     },
     {
       "path": "hooks/pi/factory-start.ts",
@@ -395,5 +395,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:3ffad5e0aad696ce0253ecb8eb1b34a59288e10d18cbda318950cccc61dc518e"
+  "payload_digest": "sha256:9d65be13a3f4d84a1ef8481337e5a878ef3f7d73b04546b9cdfdf34b1e0ce25b"
 }

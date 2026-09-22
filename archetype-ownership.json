@@ -57,6 +57,7 @@
     "scripts/sync-github-labels.py",
     "start.mjs",
     "start.py",
+    "odd/tasks/issue-124-opencode-startup-race.md",
     "templates/adr.md",
     "templates/agent-runbook.md",
     "templates/definition-of-done.md",
