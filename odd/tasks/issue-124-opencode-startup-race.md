@@ -57,5 +57,11 @@ hook input as carrying `sessionID`.
 
 ## Next action
 
-Review the bounded diff, create the conventional work-unit commit, push this
-branch, and open the issue-linked bug-fix pull request.
+Review pull request #154 and close #124 after the required review gates pass.
+
+## Delivery record
+
+- Work-unit commit: `2060516 fix(opencode): isolate concurrent startup sessions`.
+- Pull request: https://github.com/eff3ct0/factory-template/pull/154.
+- Review workload: 166 authored additions and deletions across the complete
+  work unit, below the 400-line limit.
