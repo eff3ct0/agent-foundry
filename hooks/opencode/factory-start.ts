@@ -4,26 +4,42 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
-export const FactoryStartPlugin = async ({ worktree }) => {
-  let startup = Promise.resolve("");
-  let pending = false;
+const sessionId = (event) => {
+  const value = event.properties?.sessionID
+    ?? event.properties?.info?.id
+    ?? event.sessionID
+    ?? event.payload?.sessionID
+    ?? event.payload?.info?.id;
+  return typeof value === "string" ? value : undefined;
+};
 
-  const runStart = async () => (await run(process.execPath, [path.join(worktree, "start.mjs")], {
+export const createFactoryStartPlugin = ({ worktree, runStart = async () =>
+  (await run(process.execPath, [path.join(worktree, "start.mjs")], {
     cwd: worktree,
     maxBuffer: 16 * 1024,
-  })).stdout;
+  })).stdout }) => {
+  const startups = new Map();
+  const start = () => Promise.resolve()
+    .then(runStart)
+    .then((content) => ({ content }), (error) => ({ error }));
 
   return {
     event: async ({ event }) => {
       if (event.type !== "session.created") return;
-      startup = runStart();
-      pending = true;
+      const id = sessionId(event);
+      if (!id || startups.has(id)) return;
+      startups.set(id, start());
     },
-    "chat.message": async (_input, output) => {
-      if (!pending) return;
-      const content = await startup;
-      pending = false;
+    "chat.message": async ({ sessionID }, output) => {
+      const startup = startups.get(sessionID);
+      if (!startup) return;
+      startups.delete(sessionID);
+      const result = await startup;
+      if ("error" in result) throw result.error;
+      const { content } = result;
       if (content.trim()) output.parts.push({ type: "text", text: content });
     },
   };
 };
+
+export const FactoryStartPlugin = async (input) => createFactoryStartPlugin(input);
