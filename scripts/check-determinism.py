@@ -109,6 +109,7 @@ def check_initializer_lifecycle(init):
                     if os.path.exists(os.path.join(root, path))
                 ]
                 assert all(os.path.exists(os.path.join(root, path)) for path in expected), expected
+                assert os.path.isfile(os.path.join(root, "scripts", "check-determinism.py"))
                 check = subprocess.run(
                     [sys.executable, "init.py", "--check"],
                     cwd=root,
@@ -155,6 +156,7 @@ def check_initializer_lifecycle(init):
                 assert contract.returncode == 0, (contract.stdout, contract.stderr)
             else:
                 assert all(not os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
+                assert not os.path.exists(os.path.join(root, "scripts", "check-determinism.py"))
         finally:
             shutil.rmtree(root)
 
