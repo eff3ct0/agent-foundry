@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for the G1 hosted lifecycle mutation client.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g1-mutation-client`
-- Branch: `feat/issue-111-g1-mutation-client`
-- Base: `origin/feat/issue-111-g0-lifecycle-repair` at `9651ceb`
+- State: `ACTIVE` in `IMPLEMENTATION` for the G2 offline release-prepare CLI.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g2-release-prepare`
+- Branch: `feat/issue-111-g2-release-prepare`
+- Base: `origin/feat/issue-111-g1-mutation-client` at `4b04a9f`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -72,7 +72,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                                      └── Slice F4: feat/issue-111-f4-cleanup-recovery
                                                                            └── 📍 G0: feat/issue-111-g0-lifecycle-repair
                                                                                 └── 📍 G1: feat/issue-111-g1-mutation-client
-                                                                                     └── later: hosted execution, then legacy cleanup
+                                                                                      └── 📍 G2: feat/issue-111-g2-release-prepare
+                                                                                           └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -155,6 +156,14 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Ownership and payload: classify the helper as `archetype_only_release_e2e`, keep it out of the creator payload, and regenerate the payload manifest because the retained ownership inventory is a payload input.
 - Verification: offline injected-transport fixtures cover exact routes and payload, ownership validation before transport, both byte caps, malformed success responses, normalized failures, no retries, and token redaction. No live GitHub request, workflow execution, provisioning, or repository deletion is performed by this slice.
 - Evidence: `pnpm typecheck`, focused mutation-client tests (5/5), `pnpm test` (137/137), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. All transport use was injected and offline.
+
+## G2: offline release-prepare CLI
+
+- Boundary: `scripts/release-prepare.mjs` accepts one repository, tag, expected immutable SHA, and offline readback fixture. It resolves the release only through the F2 resolver and emits the sorted CI recipe matrix from `ci/recipes.json`.
+- Safety: the fixture client has no transport, credential, mutation, provisioning, cleanup, workflow, or hosted execution path. The command verifies the resolved SHA before matrix output and exposes no create or delete operation.
+- Failure contract: every CLI outcome is one versioned JSON envelope. Readback rejections and indeterminate results preserve their F2 status and stable code; malformed arguments, fixtures, and recipe input return stable rejected codes with a non-zero exit.
+- Ownership and payload: classify the command as `archetype_only_release_e2e`, exclude it from the generated payload, and regenerate `package/payload-manifest.json` because the retained ownership inventory is a payload input.
+- Verification: offline fixtures cover a published release, deterministic recipe ordering, F2 indeterminacy, malformed arguments, and malformed fixtures. No live GitHub request, hosted resource, mutation, provisioning, cleanup, workflow cutover, or deletion is performed by this slice.
 
 ## Slice C: Node workflow static-checker parity
 
