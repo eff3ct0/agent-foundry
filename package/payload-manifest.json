@@ -43,8 +43,8 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 727,
-      "sha256": "d00694ab54bc82c141755b5f4e2895c57d1a46a77a180de3b5070caa76e14dd3"
+      "size": 1146,
+      "sha256": "dd2b9e37374d07715aa94baa5bc7782945f7cba9a84a7d3ffa5205172d54aace"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -79,8 +79,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 7560,
-      "sha256": "08fb106678c42b8f1956d3e04ef8afcc8e380aa30d0bf80c832f5035521e0ee1"
+      "size": 7982,
+      "sha256": "10a5f0eb1e2bf3d12486d5c822f3482109e5bd600d34de4e32b2b04065b98f24"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -109,8 +109,8 @@
     {
       "path": "docs/bootstrap.md",
       "mode": "100644",
-      "size": 6531,
-      "sha256": "bc5d84395371775dad99263f74aa80951de9dabfc50e91f448a46ad97545ba50"
+      "size": 6605,
+      "sha256": "b40effedff21aaf7ddd32f3c8f0229308991b9a02711aa0d6a885768a07e5119"
     },
     {
       "path": "docs/determinism.md",
@@ -311,12 +311,6 @@
       "sha256": "42c89303d9f0e228bf86a75e2431a810697460cb3353c00e0fd5308152e7d3b7"
     },
     {
-      "path": "scripts/check-determinism.py",
-      "mode": "100644",
-      "size": 20994,
-      "sha256": "858773be4397bd1d8fc94404add30d98d4e17ff3a01d11488ef090e20227515e"
-    },
-    {
       "path": "scripts/check-factory-layout.py",
       "mode": "100644",
       "size": 5480,
@@ -325,8 +319,8 @@
     {
       "path": "scripts/check-pr-governance.py",
       "mode": "100644",
-      "size": 8995,
-      "sha256": "bc78d02745409111ac465620aa31ff71f5454483e69b085e89c1704d01aa1307"
+      "size": 9455,
+      "sha256": "d78199d04bd4ce2ca2fccbfce053244c0e9cfb8690ba63e46a72552cf35d5354"
     },
     {
       "path": "scripts/sync-github-labels.py",
@@ -401,5 +395,5 @@
       "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
     }
   ],
-  "payload_digest": "sha256:32b204e1e5a12d7ef4bc529a40cb2d20cdab206b2f4ee11502918030b7e3b76f"
+  "payload_digest": "sha256:48727f31add99573f0a464661892eda4fe69612d55031bc58cbec333cfa789de"
 }
