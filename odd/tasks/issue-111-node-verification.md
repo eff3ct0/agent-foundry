@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice C workflow static-checker parity.
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice D protected-approval self-check parity.
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-node-verification`
 - Branch: `feat/issue-111-node-verification`
 - Base: `origin/feat/issue-110-governance-node-06e-reporter-cleanup` at `f3f6d2b`
@@ -62,14 +62,16 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
        └── Slice A: feat/issue-111-artifact-identity
              └── Slice B: feat/issue-111-local-matrix (PR #150)
                   └── Slice C: feat/issue-111-workflow-contract
-                       └── later: hosted execution, then legacy cleanup
+                        └── 📍 Slice D: feat/issue-111-delivery-approval
+                              └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
 2. Slice A: adds packed-artifact identity contract and two-tarball tests only.
 3. Slice B: execute the complete local matrix through an injected local creator runner and prove corruption, partial-write, unknown-file, and malformed-evidence failures fail closed.
 4. Slice C: port the workflow static checker and focused test suite to Node while retaining the Python checker and its existing consumers.
-5. Later slices: add hosted resource coordination and legacy cleanup only after separately scoped review and authorization.
+5. Slice D: port only the protected-approval self-check into the existing Node delivery-contract command with fixtures; retain Python and every workflow consumer.
+6. Later slices: add hosted resource coordination and legacy cleanup only after separately scoped review and authorization.
 
 ## Delivery forecast
 
@@ -94,6 +96,16 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Ownership: classify the Node checker as `archetype_only_release_e2e` so initialization removes it and the generated payload remains unchanged. Classify the existing Slice B `scripts/local-matrix.mjs` in the same category to restore the ownership-boundary check.
 - Verification: `pnpm typecheck`; `pnpm test:workflow-contract` (14/14); `pnpm test` (104/104); Node and Python workflow checkers; `python3 scripts/test-bootstrap-e2e.py`; `python3 scripts/check-determinism.py`; `python3 init.py --self-check`; and `git diff --check` passed. `python3 init.py --check` is intentionally inapplicable in this placeholder source repository.
 - Review budget: the maintainer explicitly approved `size:exception` for the cohesive 450-600-line static checker and parity-test work unit.
+
+## Slice D: Node protected-approval self-check
+
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-delivery-approval`
+- Branch: `feat/issue-111-delivery-approval`
+- Base: `origin/feat/issue-111-workflow-contract` (PR #151)
+- Boundary: add `--approval-self-check` and target-bound approval fixtures to `scripts/check-delivery-contract.mjs` only.
+- Compatibility: retain `scripts/check-delivery-contract.py --approval-self-check`, all Python consumers, and all workflow behavior. Hosted work, E2E, workflow cutover, and Python retirement remain out of scope.
+- Verification: focused Node delivery-contract tests, both Node CLI modes, the retained Python approval fixture, typecheck, repository tests, initializer self-check, and whitespace validation.
+- Review budget: keep this cohesive command, fixtures, documentation, and payload-mirror work unit within 400 changed lines.
 
 ## Route evidence
 

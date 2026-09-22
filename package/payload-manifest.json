@@ -73,8 +73,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 10382,
-      "sha256": "6ef1389277414ab36f37fdecb834a6aa5003ede1689008552d9a20b7271b9361"
+      "size": 10413,
+      "sha256": "3f8206132580026d0a71c86cc57510f705e3972ef85ac1c265e9454820a4651f"
     },
     {
       "path": "archetype-ownership.json",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 10526,
-      "sha256": "9784b46a7d01d6ed2daa8f7ca57b0d531e0e6b821a8231ad480d1720026438c2"
+      "size": 10663,
+      "sha256": "6c8280a005433f9038a847342f98f195ed46190660b398998adad11fae2a5154"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -307,8 +307,8 @@
     {
       "path": "scripts/check-delivery-contract.mjs",
       "mode": "100644",
-      "size": 12829,
-      "sha256": "da9ff1d90618b0d9dfde58952ef8ebac8e6d034f924767ee9d2573b52464ad7e"
+      "size": 16356,
+      "sha256": "a83a5bdd8dd16b6c8bd837c0be542015e33c5770009c9a8ea6c9228fb443c7e1"
     },
     {
       "path": "scripts/check-delivery-contract.py",
@@ -407,5 +407,5 @@
       "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
     }
   ],
-  "payload_digest": "sha256:d1b15ab07737060a69410a4e1390e99965aa89a29d7a659e777441fd14c1bc95"
+  "payload_digest": "sha256:455d87b381026613ffb79d49af25f422c955b1c5b3ffe4be51ab4ef2b201520d"
 }
