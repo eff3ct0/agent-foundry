@@ -90,10 +90,11 @@ const checkJourney = (text, projectRoot) => {
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("real-agent journey action is not pinned to a full commit SHA");
   for (const [action, sha] of Object.entries(pinnedActions)) if (!uses.includes(`${action}@${sha}`)) fail(`real-agent journey is missing required action pin: ${action}`);
   requireText(text, [
-    "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.py collect", "retention-days: 7",
+    "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.py collect", "retention-days: 7",
     "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY",
+    "resolve-release --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"",
   ], "real-agent journey is missing");
-  if (text.includes("release:")) fail("real-agent journey must not be a release gate");
+  if (text.indexOf("Resolve immutable source revision") > text.indexOf("\n  provision:\n")) fail("real-agent journey must resolve its source before provisioning");
   for (const adapter of ["provision", "agent", "assert", "cleanup"]) {
     if (!existsSync(path.join(projectRoot, "scripts", `real-agent-journey-${adapter}.py`)) || !text.includes(`scripts/real-agent-journey-${adapter}.py`)) fail(`real-agent journey ${adapter} adapter is missing`);
   }

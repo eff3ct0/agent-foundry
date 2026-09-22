@@ -204,14 +204,14 @@ test("real-agent journey rejects weak pins, missing adapters, and crossed stages
   });
 });
 
-test("real-agent journey rejects missing contract markers and release triggers", async () => {
+test("real-agent journey rejects missing contract markers and source resolution", async () => {
   await fixture(async (directory) => {
     await replace(directory, "journey", "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "JOURNEY_CONTRACT_VERSION: unknown");
     await reject(directory, "real-agent journey is missing JOURNEY_CONTRACT_VERSION: real-agent-journey/v1");
   });
   await fixture(async (directory) => {
-    await append(directory, "journey", "\nrelease:\n  types: [published]\n");
-    await reject(directory, "real-agent journey must not be a release gate");
+    await replace(directory, "journey", "release:\n    types: [published]", "release:\n    types: [replaced]");
+    await reject(directory, "real-agent journey is missing release:\n    types: [published]");
   });
   await fixture(async (directory) => {
     await append(directory, "journey", "\n    uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349\n");
