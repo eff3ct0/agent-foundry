@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice E3 full local release-E2E orchestration.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-node-verification`
-- Branch: `feat/issue-111-node-verification`
-- Base: `origin/feat/issue-110-governance-node-06e-reporter-cleanup` at `f3f6d2b`
+- State: `ACTIVE` in `IMPLEMENTATION` for Slice F1 bounded hosted-lifecycle read client.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-f1-read-client`
+- Branch: `feat/issue-111-f1-read-client`
+- Base: `origin/feat/issue-111-e3-orchestration` at `efc6f03`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -66,7 +66,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                └── 📍 Slice E1: feat/issue-111-e1-evidence
                                        └── 📍 Slice E2: feat/issue-111-e2-installed-runner
                                              └── 📍 Slice E3: feat/issue-111-e3-orchestration
-                                                  └── later: hosted execution, then legacy cleanup
+                                                   └── Slice F1: feat/issue-111-f1-read-client
+                                                        └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -108,6 +109,14 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Boundary: `pnpm release-e2e:local -- --output <evidence-directory>` packs one local artifact, executes exactly 1,200 real installed-creator cases through the E2 runner, and writes `matrix-evidence.json`; the first result is reused during matrix iteration rather than rerun.
 - Failure contract: every case runs after a case failure; bounded E1 command evidence and failure text are redacted and validated for all 1,200 records before the evidence file is written and the command exits non-zero.
 - Compatibility: the full real-install command is explicit and excluded from the default unit suite. It does not change workflows, provision hosted resources, or retire Python.
+
+## Slice F1: bounded hosted-lifecycle read client
+
+- Boundary: `scripts/hosted-lifecycle-read-client.mjs` is an injected-transport-only, GET-only client for guarded relative GitHub API endpoints. It has no default transport and therefore cannot make a live request by itself.
+- Safety: every request has a 30-second abort signal; serialized requests are capped at 16 KiB and streamed responses at 64 KiB. Only successful JSON objects are accepted.
+- Failure contract: timeout, network, and 5xx responses normalize once to `indeterminate/read_indeterminate`; no retry path exists. Rejected and malformed responses expose stable codes only, never a token or transport diagnostic.
+- Ownership and payload: classify the helper as `archetype_only_release_e2e` so initialization removes it. It is not a payload entry; regenerate the manifest because the ownership inventory is a retained payload input.
+- Verification: offline injected-transport tests cover endpoint guarding, GET ownership, abort configuration, both byte caps, JSON validation, normalized failures, no retries, and token redaction. No live GitHub request, hosted mutation, workflow change, provisioning, or cleanup is in scope.
 
 ## Slice C: Node workflow static-checker parity
 
