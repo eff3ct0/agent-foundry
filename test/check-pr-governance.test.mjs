@@ -86,6 +86,7 @@ test("required validate runs trusted validator and bindings despite PR replaceme
     assert.doesNotMatch(workflow, /merge_commit_sha/u);
     assert.equal((workflow.match(/uses: actions\/checkout@/gu) ?? []).length, 1);
     assert.match(workflow, /run: node scripts\/check-pr-governance\.mjs/u);
+    assert.doesNotMatch(workflow, /check-pr-governance\.py/u);
     assert.equal(await boundTaskProvider(root), "github-issues");
     assert.equal(await boundTaskProvider(untrusted), "linear");
   } finally {

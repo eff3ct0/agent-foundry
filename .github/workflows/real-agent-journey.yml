@@ -1,14 +1,18 @@
 name: Real-agent user journey
 
 on:
+  release:
+    types: [published]
   schedule:
     - cron: "30 2 * * *"
   workflow_dispatch:
     inputs:
-      confirm:
-        description: Type RUN to start a real-agent journey
+      runtime:
+        description: Select the supported runtime to execute
         required: true
-        type: string
+        type: choice
+        options:
+          - codex-cli
 
 permissions: {}
 
@@ -20,7 +24,7 @@ env:
   JOURNEY_RUN_ID: ${{ github.run_id }}
   JOURNEY_TEMPLATE: eff3ct0/factory-template
   JOURNEY_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
-  JOURNEY_RUNTIME: ${{ vars.REAL_AGENT_JOURNEY_RUNTIME }}
+  JOURNEY_RUNTIME: ${{ inputs.runtime || 'codex-cli' }}
   JOURNEY_CONTRACT_VERSION: real-agent-journey/v1
   JOURNEY_REPOSITORY: ${{ vars.BOOTSTRAP_E2E_OWNER && format('{0}/real-agent-journey-{1}', vars.BOOTSTRAP_E2E_OWNER, github.run_id) || '' }}
 
@@ -32,6 +36,8 @@ jobs:
       contents: read
     outputs:
       repository: ${{ steps.plan.outputs.repository }}
+      source_sha: ${{ steps.source.outputs.sha }}
+      source_tag: ${{ steps.source.outputs.tag }}
     steps:
       - name: Check out trusted journey contract
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -46,6 +52,27 @@ jobs:
           python3 scripts/real-agent-journey-agent.py --self-check
           python3 scripts/real-agent-journey-assert.py --self-check
           python3 scripts/real-agent-journey-cleanup.py --self-check
+      - name: Resolve immutable source revision
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_TAG: ${{ github.event.release.tag_name || '' }}
+          SOURCE_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            resolved="$(python3 scripts/bootstrap-e2e.py resolve-release --repository "$REPOSITORY" --tag "$SOURCE_TAG")"
+            source_sha="${resolved#sha=}"
+            source_tag="$SOURCE_TAG"
+          else
+            source_sha="$SOURCE_SHA"
+            source_tag=""
+          fi
+          python3 -c 'import re, sys; assert re.fullmatch(r"[0-9a-f]{40}", sys.argv[1]), "source SHA must be a full lowercase SHA"' "$source_sha"
+          printf 'sha=%s\ntag=%s\n' "$source_sha" "$source_tag" >> "$GITHUB_OUTPUT"
       - name: Write run plan
         id: plan
         env:
@@ -53,19 +80,14 @@ jobs:
           TEMPLATE: ${{ env.JOURNEY_TEMPLATE }}
           OWNER: ${{ env.JOURNEY_OWNER }}
           RUNTIME: ${{ env.JOURNEY_RUNTIME }}
-          EVENT_NAME: ${{ github.event_name }}
-          CONFIRM: ${{ inputs.confirm }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          SOURCE_TAG: ${{ steps.source.outputs.tag }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$CONFIRM" != "RUN" ]; then
-            printf 'manual dispatch requires confirmation\n' >&2
-            exit 1
-          fi
           test -n "$OWNER" || { printf 'BOOTSTRAP_E2E_OWNER is missing\n' >&2; exit 1; }
-          test -n "$RUNTIME" || { printf 'REAL_AGENT_JOURNEY_RUNTIME is missing\n' >&2; exit 1; }
           mkdir -p journey
-          python3 scripts/real-agent-journey.py plan \
-            --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" \
-            --runtime "$RUNTIME" --output journey/contract.json
+          args=(plan --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" --runtime "$RUNTIME" --source-sha "$SOURCE_SHA" --output journey/contract.json)
+          if [ -n "$SOURCE_TAG" ]; then args+=(--source-tag "$SOURCE_TAG"); fi
+          python3 scripts/real-agent-journey.py "${args[@]}"
           printf 'repository=%s\n' "$JOURNEY_REPOSITORY" >> "$GITHUB_OUTPUT"
       - name: Upload run plan
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -105,7 +127,8 @@ jobs:
           mkdir -p stage
           python3 scripts/real-agent-journey-provision.py \
             --template "$JOURNEY_TEMPLATE" --owner "$JOURNEY_OWNER" \
-            --run-id "$JOURNEY_RUN_ID" --output "$JOURNEY_OUTPUT"
+            --run-id "$JOURNEY_RUN_ID" --expected-source-sha "${{ needs.prepare.outputs.source_sha }}" \
+            --output "$JOURNEY_OUTPUT"
       - name: Upload provisioning evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -161,7 +184,7 @@ jobs:
           persist-credentials: false
           path: generated
       - name: Install selected runtime
-        run: npm install --global @openai/codex@0.148.0
+        run: python3 scripts/real-agent-journey.py install --runtime "$JOURNEY_RUNTIME"
       - name: Run cold-agent adapter
         env:
           JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -174,7 +197,7 @@ jobs:
             JOURNEY_RUN_ID="$JOURNEY_RUN_ID" JOURNEY_REPOSITORY="${{ needs.prepare.outputs.repository }}" \
             JOURNEY_RUNTIME="$JOURNEY_RUNTIME" JOURNEY_TOKEN="$JOURNEY_TOKEN" \
             OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" \
-            python3 scripts/real-agent-journey-agent.py \
+            python3 scripts/real-agent-journey.py invoke-agent --runtime "$JOURNEY_RUNTIME" -- \
               --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
               --runtime "$JOURNEY_RUNTIME" --provision stage-input/provision.json \
               --workspace generated --decisions scripts/real-agent-decisions.json --output "$JOURNEY_OUTPUT"
@@ -309,6 +332,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      issues: write
     steps:
       - name: Check out trusted journey contract
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -341,3 +365,12 @@ jobs:
           path: evidence/journey.json
           if-no-files-found: error
           retention-days: 7
+      - name: Report canonical journey failure
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 scripts/real-agent-journey.py report \
+            --input evidence/journey.json --repository "$JOURNEY_TEMPLATE" \
+            --artifact-url "$WORKFLOW_URL"
