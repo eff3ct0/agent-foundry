@@ -76,6 +76,7 @@
         {"path": "archetype-ownership.json", "kind": "file"},
         {"path": "factory_bootstrap.py", "kind": "file"},
         {"path": "MAINTAINERS.md", "kind": "file"},
+        {"path": "scripts/check-determinism.py", "kind": "file"},
         {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
         {"path": "odd", "kind": "directory"}
       ]
@@ -102,6 +103,7 @@
         {"path": "scripts/test-real-agent-e2e.py", "kind": "file"},
         {"path": ".github/workflows/real-agent-journey.yml", "kind": "file"},
         {"path": "scripts/real-agent-journey.py", "kind": "file"},
+        {"path": "scripts/real-agent-runtime-catalog.json", "kind": "file"},
         {"path": "scripts/test-real-agent-journey.py", "kind": "file"},
         {"path": "scripts/real-agent-journey-provision.py", "kind": "file"},
         {"path": "scripts/real-agent-journey-agent.py", "kind": "file"},
@@ -166,7 +168,6 @@
         {"path": "hooks", "kind": "directory"},
         {"path": "openspec/config.yaml", "kind": "file"},
         {"path": "scripts/check-delivery-contract.py", "kind": "file"},
-        {"path": "scripts/check-determinism.py", "kind": "file"},
         {"path": "scripts/check-factory-layout.py", "kind": "file"},
         {"path": "scripts/check-pr-governance.py", "kind": "file"},
         {"path": "scripts/sync-github-labels.py", "kind": "file"},

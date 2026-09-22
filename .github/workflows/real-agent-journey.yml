@@ -5,10 +5,12 @@ on:
     - cron: "30 2 * * *"
   workflow_dispatch:
     inputs:
-      confirm:
-        description: Type RUN to start a real-agent journey
+      runtime:
+        description: Select the supported runtime to execute
         required: true
-        type: string
+        type: choice
+        options:
+          - codex-cli
 
 permissions: {}
 
@@ -20,7 +22,7 @@ env:
   JOURNEY_RUN_ID: ${{ github.run_id }}
   JOURNEY_TEMPLATE: eff3ct0/factory-template
   JOURNEY_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
-  JOURNEY_RUNTIME: ${{ vars.REAL_AGENT_JOURNEY_RUNTIME }}
+  JOURNEY_RUNTIME: ${{ inputs.runtime || 'codex-cli' }}
   JOURNEY_CONTRACT_VERSION: real-agent-journey/v1
   JOURNEY_REPOSITORY: ${{ vars.BOOTSTRAP_E2E_OWNER && format('{0}/real-agent-journey-{1}', vars.BOOTSTRAP_E2E_OWNER, github.run_id) || '' }}
 
@@ -53,15 +55,8 @@ jobs:
           TEMPLATE: ${{ env.JOURNEY_TEMPLATE }}
           OWNER: ${{ env.JOURNEY_OWNER }}
           RUNTIME: ${{ env.JOURNEY_RUNTIME }}
-          EVENT_NAME: ${{ github.event_name }}
-          CONFIRM: ${{ inputs.confirm }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$CONFIRM" != "RUN" ]; then
-            printf 'manual dispatch requires confirmation\n' >&2
-            exit 1
-          fi
           test -n "$OWNER" || { printf 'BOOTSTRAP_E2E_OWNER is missing\n' >&2; exit 1; }
-          test -n "$RUNTIME" || { printf 'REAL_AGENT_JOURNEY_RUNTIME is missing\n' >&2; exit 1; }
           mkdir -p journey
           python3 scripts/real-agent-journey.py plan \
             --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" \
@@ -161,7 +156,7 @@ jobs:
           persist-credentials: false
           path: generated
       - name: Install selected runtime
-        run: npm install --global @openai/codex@0.148.0
+        run: python3 scripts/real-agent-journey.py install --runtime "$JOURNEY_RUNTIME"
       - name: Run cold-agent adapter
         env:
           JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -174,7 +169,7 @@ jobs:
             JOURNEY_RUN_ID="$JOURNEY_RUN_ID" JOURNEY_REPOSITORY="${{ needs.prepare.outputs.repository }}" \
             JOURNEY_RUNTIME="$JOURNEY_RUNTIME" JOURNEY_TOKEN="$JOURNEY_TOKEN" \
             OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" \
-            python3 scripts/real-agent-journey-agent.py \
+            python3 scripts/real-agent-journey.py invoke-agent --runtime "$JOURNEY_RUNTIME" -- \
               --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
               --runtime "$JOURNEY_RUNTIME" --provision stage-input/provision.json \
               --workspace generated --decisions scripts/real-agent-decisions.json --output "$JOURNEY_OUTPUT"
