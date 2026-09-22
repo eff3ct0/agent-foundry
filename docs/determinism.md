@@ -80,7 +80,8 @@ part of dry-run mode.
   after validation and independently by the always-on cleanup job; forced
   cancellation, runner loss, credential failure, and API failure require the
   documented exact-run-ID recovery command. Third-party workflow actions are
-  pinned to verified full SHAs and checked by `scripts/check-bootstrap-workflow.py`.
+   pinned to verified full SHAs and checked by `scripts/check-bootstrap-workflow.mjs`.
+   The Python checker remains a required parity signal until its planned removal.
 - Failure envelopes and advisory results are versioned and bounded. Fingerprints
   are derived from the release SHA when available, matrix case, normalized
   failure code, and check identifier. Only deterministic reporter code searches

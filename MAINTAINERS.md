@@ -160,8 +160,10 @@ The workflow pins every third-party action to a verified full commit SHA:
 - `actions/create-github-app-token` v2.2.2: `fee1f7d63c2ff003460e3d139729b119787bc349`
 - `actions/setup-node` v4.4.0: `49933ea5288caeca8642d1e84afbd3f7d6820020`
 
-Run `python3 scripts/check-bootstrap-workflow.py` to reject floating, branch,
-tag, or non-40-hex action references.
+Run `node scripts/check-bootstrap-workflow.mjs` to reject floating, branch,
+tag, or non-40-hex action references. Keep running
+`python3 scripts/check-bootstrap-workflow.py` until Node parity is confirmed
+across the planned migration slices.
 
 Before closing changes to this workflow, use the Definition of Done and retain
 evidence for every matrix case, cleanup success/failure, reporting outcome,

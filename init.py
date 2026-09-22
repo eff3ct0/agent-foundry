@@ -100,6 +100,7 @@ ARCHETYPE_ONLY_PATHS = (
     ".github/workflows/bootstrap-e2e.yml",
     "scripts/bootstrap-e2e.py",
     "scripts/check-bootstrap-workflow.py",
+    "scripts/check-bootstrap-workflow.mjs",
     "scripts/release_ref.py",
     "scripts/triage-bootstrap-failure.mjs",
 )

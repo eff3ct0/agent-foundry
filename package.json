@@ -20,6 +20,7 @@
     "test": "pnpm build && node --test test/*.test.mjs",
     "test:creator": "pnpm build && node --test test/creator.test.mjs",
     "test:local-matrix": "pnpm build && node --test test/local-matrix.test.mjs",
+    "test:workflow-contract": "pnpm build && node --test test/check-bootstrap-workflow.test.mjs",
     "test:installer-ux": "pnpm build && node --test test/installer-ui.test.mjs test/installer-pty.test.mjs test/creator.test.mjs",
     "test:provisioning": "pnpm build && node --test test/github-provisioning.test.mjs",
     "prepack": "pnpm build"
