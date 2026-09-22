@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for the G0 lifecycle 404 prerequisite repair.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g0-lifecycle-repair`
-- Branch: `feat/issue-111-g0-lifecycle-repair`
-- Base: `origin/feat/issue-111-f4-cleanup-recovery` at `88880b2`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for the G1 hosted lifecycle mutation client.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g1-mutation-client`
+- Branch: `feat/issue-111-g1-mutation-client`
+- Base: `origin/feat/issue-111-g0-lifecycle-repair` at `9651ceb`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -70,8 +70,9 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                          └── Slice F2: feat/issue-111-f2-release-readback
                                                                 └── Slice F3: feat/issue-111-f3-resource-proof
                                                                      └── Slice F4: feat/issue-111-f4-cleanup-recovery
-                                                                          └── 📍 G0: feat/issue-111-g0-lifecycle-repair
-                                                                               └── later: hosted execution, then legacy cleanup
+                                                                           └── 📍 G0: feat/issue-111-g0-lifecycle-repair
+                                                                                └── 📍 G1: feat/issue-111-g1-mutation-client
+                                                                                     └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -145,6 +146,15 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Ownership and payload mirror: register `scripts/resource-cleanup-eligibility.mjs` as `archetype_only_release_e2e` and regenerate `package/payload-manifest.json` because the retained ownership inventory is a payload input.
 - Evidence: the focused F1/F4 suite passed 11/11; `pnpm typecheck`, `pnpm test` (132/132), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. All transport use was injected and offline.
 - Explicitly deferred: client transport changes beyond `404` semantics, workflow changes, hosted resources, provisioning, mutations, cleanup execution, and legacy cleanup.
+
+## G1: bounded hosted-lifecycle mutation client
+
+- Boundary: `scripts/hosted-lifecycle-mutation-client.mjs` exposes only two injected-transport operations: create one repository from one exact template, and delete one exact owner/name repository. It has no default transport and cannot make a live request by itself.
+- Safety: creation sends only the fixed GitHub template payload (`owner`, `name`, `private: true`, and `include_all_branches: false`); deletion sends no body. Both operations validate ownership identifiers before transport, use a 30-second abort signal, cap serialized requests at 16 KiB and responses at 64 KiB, and contain no retry path.
+- Failure contract: network, timeout, and 5xx outcomes return only `indeterminate/mutation_indeterminate`; malformed successful responses and all other unexpected statuses reject with stable, token-free codes. Creation accepts only a JSON-object `201`; deletion accepts only an empty `204`.
+- Ownership and payload: classify the helper as `archetype_only_release_e2e`, keep it out of the creator payload, and regenerate the payload manifest because the retained ownership inventory is a payload input.
+- Verification: offline injected-transport fixtures cover exact routes and payload, ownership validation before transport, both byte caps, malformed success responses, normalized failures, no retries, and token redaction. No live GitHub request, workflow execution, provisioning, or repository deletion is performed by this slice.
+- Evidence: `pnpm typecheck`, focused mutation-client tests (5/5), `pnpm test` (137/137), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. All transport use was injected and offline.
 
 ## Slice C: Node workflow static-checker parity
 

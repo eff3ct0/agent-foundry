@@ -93,6 +93,7 @@
         {"path": "scripts/installed-runner.mjs", "kind": "file"},
         {"path": "scripts/local-release-e2e.mjs", "kind": "file"},
         {"path": "scripts/hosted-lifecycle-read-client.mjs", "kind": "file"},
+        {"path": "scripts/hosted-lifecycle-mutation-client.mjs", "kind": "file"},
         {"path": "scripts/release-readback.mjs", "kind": "file"},
         {"path": "scripts/resource-provisioning-proof.mjs", "kind": "file"},
         {"path": "scripts/resource-cleanup-eligibility.mjs", "kind": "file"},
