@@ -2,6 +2,7 @@
 """Focused offline checks for the real-agent journey contract and assertions."""
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("real_agent_journey", ROOT / "scripts" / "real-agent-journey.py")
 journey = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(journey)
+PROVISION_SPEC = importlib.util.spec_from_file_location("real_agent_journey_provision", ROOT / "scripts" / "real-agent-journey-provision.py")
+provision = importlib.util.module_from_spec(PROVISION_SPEC)
+PROVISION_SPEC.loader.exec_module(provision)
 
 
 SHA = "a" * 40
@@ -155,11 +159,32 @@ if __name__ == "__main__":
     test_timeout_fails_closed()
     test_assert_stage_can_finish_before_cleanup()
 def test_contract_plan_is_provider_neutral():
-    plan = journey.contract_plan("123", "eff3ct0/factory-template")
-    assert plan["runtime"] is None
+    plan = journey.contract_plan("123", "eff3ct0/factory-template", runtime="codex-cli", source_sha=SHA,
+                                 source_tag_value="v1.2.3")
+    assert plan["runtime"] == "codex-cli"
+    assert plan["source_sha"] == SHA and plan["source_tag"] == "v1.2.3"
     assert plan["stages"] == ["provision", "agent", "assert", "cleanup"]
     assert plan["explicit_decisions"] == list(journey.DECISIONS)
     assert "status:approved" in plan["approval_boundary"]
+
+
+def test_plan_route_requires_runtime_before_writing_output():
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "plan.json"
+        command = [
+            journey.sys.executable, str(ROOT / "scripts" / "real-agent-journey.py"),
+            "plan", "--run-id", "123", "--template", "eff3ct0/factory-template",
+            "--source-sha", SHA, "--output", str(output),
+        ]
+        missing = subprocess.run(command, capture_output=True, text=True)
+        assert missing.returncode != 0
+        assert "the following arguments are required: --runtime" in missing.stderr
+        assert not output.exists()
+
+        accepted = subprocess.run(command + ["--runtime", "codex-cli"], capture_output=True, text=True)
+        assert accepted.returncode == 0, accepted.stderr
+        plan = json.loads(output.read_text(encoding="utf-8"))
+        assert plan["runtime"] == "codex-cli" and plan["source_sha"] == SHA
 
 
 def test_identity_and_decisions_fail_closed():
@@ -179,7 +204,10 @@ def test_identity_and_decisions_fail_closed():
 
 def test_runtime_and_adapter_contract():
     assert journey.validate_runtime("codex-cli") == "codex-cli"
-    for runtime, code in (("", "runtime_missing"), ("mock", "runtime_unsupported")):
+    catalog = journey.runtime_catalog()
+    assert catalog["default_runtime"] == "codex-cli"
+    assert journey.supported_runtime_ids() == ["codex-cli"]
+    for runtime, code in (("", "runtime_missing"), ("mock", "runtime_unsupported"), ("codex-cli-disabled", "runtime_disabled")):
         try:
             journey.validate_runtime(runtime)
         except journey.JourneyError as error:
@@ -193,6 +221,64 @@ def test_runtime_and_adapter_contract():
                "provision_token": "provision", "cleanup_token": "cleanup"}
     assert journey.stage_environment({}, "provision", context)["JOURNEY_TOKEN"] == "provision"
     assert journey.stage_environment({}, "cleanup", context)["JOURNEY_TOKEN"] == "cleanup"
+
+
+def test_catalog_routes_install_and_adapter_without_shell_interpolation():
+    commands = []
+
+    def runner(command, **_kwargs):
+        commands.append(command)
+        return type("Result", (), {"returncode": 0})()
+
+    journey.install_runtime("codex-cli", runner=runner)
+    assert commands == [["npm", "install", "--global", "@openai/codex@0.148.0"]]
+    assert journey.invoke_runtime_adapter("codex-cli", ["--self-check"], runner=runner) == 0
+    assert commands[1] == [journey.sys.executable, str(ROOT / "scripts/real-agent-journey-agent.py"), "--self-check"]
+
+
+def test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning():
+    workflow = (ROOT / ".github/workflows/real-agent-journey.yml").read_text(encoding="utf-8")
+    choices = re.findall(r"^          - ([a-z][a-z0-9-]*)$", workflow, re.MULTILINE)
+    assert choices == journey.supported_runtime_ids()
+    assert "type: choice" in workflow
+    assert "inputs.confirm" not in workflow and "confirm:" not in workflow
+    assert "vars.REAL_AGENT_JOURNEY_RUNTIME" not in workflow
+    assert "JOURNEY_RUNTIME: ${{ inputs.runtime || 'codex-cli' }}" in workflow
+    assert "release:\n    types: [published]" in workflow
+    assert "schedule:" in workflow and "workflow_dispatch:" in workflow
+    assert "resolve-release --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"" in workflow
+    assert "SOURCE_SHA: ${{ github.sha }}" in workflow
+    assert "EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}" in workflow
+    assert "GITHUB_EVENT_NAME: ${{ github.event_name }}" in workflow
+    assert "--source-sha \"$SOURCE_SHA\"" in workflow
+    assert "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"" in workflow
+    assert "install --runtime \"$JOURNEY_RUNTIME\"" in workflow
+    assert "invoke-agent --runtime \"$JOURNEY_RUNTIME\" --" in workflow
+    assert workflow.index("args=(plan ") < workflow.index("\n  provision:")
+
+
+def test_provisioning_rejects_a_mismatched_source_before_repository_creation():
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "provision.json"
+        original = provision.BOOTSTRAP.template_details, provision.BOOTSTRAP.owner_identity, provision.BOOTSTRAP.template_repository
+        calls = []
+        try:
+            provision.BOOTSTRAP.template_details = lambda *_: {"initial_revision": SHA}
+            provision.BOOTSTRAP.owner_identity = lambda *_: None
+            provision.BOOTSTRAP.template_repository = lambda *_: calls.append("created")
+            args = type("Args", (), {"run_id": "123", "owner": "acme", "template": "eff3ct0/factory-template",
+                                      "expected_source_sha": "c" * 40, "output": output})()
+            try:
+                provision.run(args)
+            except SystemExit as error:
+                assert error.code == 1
+            else:
+                raise AssertionError("mismatched source revision was accepted")
+            evidence = json.loads(output.read_text(encoding="utf-8"))
+            assert evidence["failure_code"] == "source_revision_mismatch" and not calls
+        finally:
+            (provision.BOOTSTRAP.template_details, provision.BOOTSTRAP.owner_identity,
+             provision.BOOTSTRAP.template_repository) = original
 
 
 def test_stage_schema_identity_and_approval_fail_closed():
@@ -469,6 +555,7 @@ def test_report_cli_dispatch_does_not_require_assertion_arguments():
 
 if __name__ == "__main__":
     test_contract_plan_is_provider_neutral()
+    test_plan_route_requires_runtime_before_writing_output()
     test_identity_and_decisions_fail_closed()
     test_aggregate_rejects_mismatch_and_cleanup_failure()
     test_unsupported_runtime_keeps_cleanup_evidence()
@@ -481,4 +568,7 @@ if __name__ == "__main__":
     test_reporting_github_integration_rejects_comment_readback_identity_mismatch()
     test_reporting_github_integration_rejects_mutation_readback_mismatch()
     test_report_cli_dispatch_does_not_require_assertion_arguments()
+    test_catalog_routes_install_and_adapter_without_shell_interpolation()
+    test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning()
+    test_provisioning_rejects_a_mismatched_source_before_repository_creation()
     print("real-agent journey offline tests OK")
