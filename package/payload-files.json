@@ -53,7 +53,6 @@
     "providers/task/jira.md",
     "providers/task/linear.md",
     "scripts/check-delivery-contract.py",
-    "scripts/check-determinism.py",
     "scripts/check-factory-layout.py",
     "scripts/check-pr-governance.py",
     "scripts/sync-github-labels.py",

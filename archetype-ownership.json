@@ -77,7 +77,9 @@
         {"path": "MAINTAINERS.md", "kind": "file"},
         {"path": "odd/tasks/issue-96-runtime-catalog.md", "kind": "file"},
         {"path": "odd/tasks/issue-97-release-trigger.md", "kind": "file"},
-        {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"}
+        {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
+        {"path": "scripts/check-determinism.py", "kind": "file"},
+        {"path": "odd", "kind": "directory"}
       ]
     },
     "archetype_only_release_e2e": {
@@ -167,7 +169,6 @@
         {"path": "hooks", "kind": "directory"},
         {"path": "openspec/config.yaml", "kind": "file"},
         {"path": "scripts/check-delivery-contract.py", "kind": "file"},
-        {"path": "scripts/check-determinism.py", "kind": "file"},
         {"path": "scripts/check-factory-layout.py", "kind": "file"},
         {"path": "scripts/check-pr-governance.py", "kind": "file"},
         {"path": "scripts/sync-github-labels.py", "kind": "file"},
