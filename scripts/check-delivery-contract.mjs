@@ -30,6 +30,9 @@ const sectionAliases = {
   prohibitions: ["prohibition"],
   "protected `status:approved` gate": ["protected approval"],
 };
+const approvalAction = "add status:approved";
+const allowedPrincipalRoles = ["MAINTAINER", "AUTHORIZED_APPROVER"];
+const allowedActorCapabilities = ["MAINTAIN", "ADMIN"];
 
 const display = (target, projectRoot) => {
   const relative = path.relative(projectRoot, target);
@@ -174,6 +177,54 @@ export const check = async (paths, projectRoot = root) => {
   return errors;
 };
 
+export const delegatedApprovalErrors = (evidence, targetIssue) => {
+  const instruction = evidence.instruction ?? {};
+  const principal = evidence.principal ?? {};
+  const actor = evidence.actor ?? {};
+  const operation = evidence.operation ?? {};
+  const readback = evidence.readback ?? {};
+  const errors = [];
+  if (instruction.source !== "direct-human") errors.push("instruction must be direct human input");
+  if (instruction.current !== true) errors.push("instruction must be current");
+  if (instruction.issue !== targetIssue) errors.push("instruction must name the exact target issue");
+  if (instruction.action !== approvalAction) errors.push("instruction must name the exact approval action");
+  if (principal.evidence_source !== "target-host") errors.push("principal authority must come from the target host");
+  if (!allowedPrincipalRoles.includes(principal.role)) errors.push("principal lacks target-host maintainer authority");
+  if (instruction.principal !== principal.subject) errors.push("instruction principal is not bound to target-host evidence");
+  if (actor.subject !== principal.subject) errors.push("authenticated actor is not the authorized principal");
+  if (!allowedActorCapabilities.includes(actor.capability)) errors.push("actor lacks MAINTAIN or ADMIN capability");
+  if (operation.issue !== targetIssue || operation.label !== "status:approved") errors.push("operation is not scoped to the exact issue and label");
+  if (operation.attempts !== 1) errors.push("operation must have exactly one add attempt");
+  if (JSON.stringify(operation.sequence) !== JSON.stringify(["add", "readback"])) errors.push("readback must immediately follow the one add attempt");
+  if (operation.result !== "added") errors.push("mutation must succeed with a known added result");
+  if (readback.issue !== targetIssue || !readback.labels?.includes("status:approved")) errors.push("target-host readback does not confirm the approval");
+  return errors;
+};
+
+export const delegatedApprovalAllowed = (evidence, targetIssue) => delegatedApprovalErrors(evidence, targetIssue).length === 0;
+
+const approvalSelfCheck = () => {
+  const valid = {
+    instruction: { source: "direct-human", current: true, issue: 32, action: approvalAction, principal: "human-1" },
+    principal: { evidence_source: "target-host", subject: "human-1", role: "MAINTAINER" },
+    actor: { subject: "human-1", capability: "ADMIN" },
+    operation: { issue: 32, label: "status:approved", attempts: 1, result: "added", sequence: ["add", "readback"] },
+    readback: { issue: 32, labels: ["status:approved"] },
+  };
+  assert.equal(delegatedApprovalAllowed(valid, 32), true);
+  for (const [field, value] of [
+    [["instruction", "issue"], 31], [["instruction", "current"], false], [["instruction"], {}],
+    [["principal", "role"], "CONTRIBUTOR"], [["actor", "capability"], "TRIAGE"],
+    [["operation", "result"], "unknown"], [["readback", "labels"], []],
+  ]) {
+    const rejected = structuredClone(valid);
+    if (field.length === 2) rejected[field[0]][field[1]] = value;
+    else rejected[field[0]] = value;
+    assert.equal(delegatedApprovalAllowed(rejected, 32), false, field.join("."));
+  }
+  process.stdout.write("approval self-check OK\n");
+};
+
 const selfCheck = async () => {
   assert.deepEqual(await check(), []);
   const directory = await mkdtemp(path.join(os.tmpdir(), "delivery-contract-"));
@@ -200,7 +251,8 @@ const selfCheck = async () => {
 
 const main = async () => {
   if (process.argv.length === 3 && process.argv[2] === "--self-check") return selfCheck();
-  throw new Error("usage: check-delivery-contract.mjs --self-check");
+  if (process.argv.length === 3 && process.argv[2] === "--approval-self-check") return approvalSelfCheck();
+  throw new Error("usage: check-delivery-contract.mjs --self-check|--approval-self-check");
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

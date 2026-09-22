@@ -10,7 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("real_agent_journey", ROOT / "scripts" / "real-agent-journey.py")
 journey = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(journey)
-BOOTSTRAP = journey.bootstrap
+BOOTSTRAP_SPEC = importlib.util.spec_from_file_location("bootstrap_e2e", ROOT / "scripts" / "bootstrap-e2e.py")
+BOOTSTRAP = importlib.util.module_from_spec(BOOTSTRAP_SPEC)
+BOOTSTRAP_SPEC.loader.exec_module(BOOTSTRAP)
 
 
 def run(args):

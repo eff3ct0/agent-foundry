@@ -98,8 +98,6 @@ ARCHETYPE_ONLY_PATHS = (
     # Release E2E and triage paths are added by the archetype repository and
     # are intentionally absent from older template revisions.
     ".github/workflows/bootstrap-e2e.yml",
-    "scripts/bootstrap-e2e.py",
-    "scripts/check-bootstrap-workflow.py",
     "scripts/check-bootstrap-workflow.mjs",
     "scripts/release_ref.py",
     "scripts/triage-bootstrap-failure.mjs",
