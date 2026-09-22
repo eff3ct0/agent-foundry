@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for H1 template package workflow cutover.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-h1-template-package`
-- Branch: `feat/issue-111-h1-template-package`
-- Base: `origin/feat/issue-111-g6-release-workflow` at `1d87df4`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for H2 template workflow static contracts.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-h2-template-contract`
+- Branch: `feat/issue-111-h2-template-contract`
+- Base: `origin/feat/issue-111-h1-template-package` at `50f2d39`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -77,8 +77,9 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                                                                    └── 📍 G4: feat/issue-111-g4-release-runner
                                                                                                         └── 📍 G5: feat/issue-111-g5-cleanup
                                                                                                                └── G6: feat/issue-111-g6-release-workflow
-                                                                                                                    └── 📍 H1: feat/issue-111-h1-template-package
-                                                                                                                         └── later: static contract, tests, docs, and legacy cleanup
+                                                                                                                     └── 📍 H1: feat/issue-111-h1-template-package
+                                                                                                                          └── 📍 H2: feat/issue-111-h2-template-contract
+                                                                                                                               └── later: documentation and legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -206,6 +207,15 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Safety: each matrix job installs and invokes only that artifact through the existing installed runner, records its bounded evidence, and removes the generated project locally in the same runner. No lifecycle token, template API call, hosted resource, or cleanup job remains.
 - Compatibility: manual dispatch, recipe matrix, evidence artifacts, and the reporter stay in place. H2/H3 own the static-contract, test, and documentation updates; this slice intentionally does not change them.
 - Verification: YAML parsing, whitespace validation, and one local packed-package installed-runner case pass. The current static workflow checker and its suite fail on the removed legacy `--stack`/cleanup contract, as expected until H2 updates that contract. No hosted workflow was run.
+
+## H2: template workflow static contracts
+
+- Boundary: update only the retained Node/Python static checkers and their focused offline tests for H1's package workflow.
+- Contract: require the trusted `github.workflow_sha` checkout and packaged tarball handoff, pinned Node 20.19.0/Corepack/pnpm 12.4.2 build path, local `finally` project cleanup, and an always-run reporter with the workflow token isolated from bootstrap.
+- Negative fixtures: reject Template API/lifecycle-token regressions, floating workflow source, unpinned package tooling, missing package identity, weak local cleanup, and a reporter that is not always-run.
+- Compatibility: retain the Python checker and harness; do not run hosted workflows, modify documentation, or retire Python in this slice.
+- Payload mirror: workflows, checkers, tests, and ODD are removed initialization assets; no retained creator-payload entry changes.
+- Verification: Node checker tests (16/16), retained Python bootstrap E2E offline tests, both static checker CLIs, `pnpm typecheck`, full Node tests (156/156), determinism, and initializer self-check pass. No hosted workflow was run.
 
 ## Slice C: Node workflow static-checker parity
 

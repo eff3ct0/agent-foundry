@@ -166,7 +166,7 @@ test("template workflow rejects absent contract inputs, pins, and crossed creden
   });
   await fixture(async (directory) => {
     await replace(directory, "template", "  report:\n", "  report:\n    env:\n      BOOTSTRAP_E2E_TOKEN: ${{ secrets.BOOTSTRAP_E2E_TOKEN }}\n");
-    await reject(directory, "lifecycle and reporting credentials must remain separate");
+    await reject(directory, "template bootstrap must not use Template API or lifecycle credentials");
   });
 });
 
@@ -181,18 +181,37 @@ test("active workflow consumers reject the retired Python reporter", async () =>
   });
 });
 
-test("template workflow requires the Node report runtime contract", async () => {
+test("template workflow requires immutable package and pinned toolchain contracts", async () => {
   await fixture(async (directory) => {
     await replace(directory, "template", "node-version: 20.19.0", "node-version: 22");
     await reject(directory, "template workflow is missing node-version: 20.19.0");
   });
   await fixture(async (directory) => {
-    await replace(directory, "template", "node scripts/report-bootstrap-failure.mjs", "node scripts/retired-reporter.mjs");
-    await reject(directory, "template workflow is missing node scripts/report-bootstrap-failure.mjs");
+    await replace(directory, "template", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", "corepack install --global pnpm@latest");
+    await reject(directory, "template workflow is missing COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2");
   });
   await fixture(async (directory) => {
-    await replace(directory, "template", "cleanup-template", "cleanup-prefix");
-    await reject(directory, "template workflow is missing cleanup-template");
+    await replace(directory, "template", "ref: ${{ github.workflow_sha }}", "ref: main");
+    await reject(directory, "template workflow is missing ref: ${{ github.workflow_sha }}");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "template", "release_sha: process.env.WORKFLOW_SHA", "release_sha: process.env.GITHUB_SHA");
+    await reject(directory, "template workflow is missing release_sha: process.env.WORKFLOW_SHA");
+  });
+});
+
+test("template workflow rejects Template API, weak cleanup, and reporter boundary regressions", async () => {
+  await fixture(async (directory) => {
+    await append(directory, "template", "\n# scripts/bootstrap-e2e.py template\n");
+    await reject(directory, "template bootstrap must not use Template API or lifecycle credentials");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "template", "finally {", "catch {");
+    await reject(directory, "template bootstrap cleanup must run in the validation finally block");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "template", "  report:\n    if: always()", "  report:\n");
+    await reject(directory, "template reporter must be always-run and credential-separated");
   });
 });
 

@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -236,10 +237,14 @@ def test_template_bootstrap_contract():
 
     text = (ROOT / ".github" / "workflows" / "template-bootstrap-e2e.yml").read_text(encoding="utf-8")
     for marker in (
-        "workflow_dispatch:", "scripts/bootstrap-e2e.py template",
-        "template-bootstrap-e2e-", "if: always()", "issues: write",
+        "workflow_dispatch:", "ref: ${{ github.workflow_sha }}",
+        "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2",
+        "release_sha: process.env.WORKFLOW_SHA", "finally {", "if: always()",
     ):
         assert marker in text, marker
+    for retired in ("scripts/bootstrap-e2e.py template", "cleanup-template",
+                    "actions/create-github-app-token@", "BOOTSTRAP_E2E_TOKEN"):
+        assert retired not in text, retired
 
     with tempfile.TemporaryDirectory() as directory:
         bindings = Path(directory) / "docs"
@@ -257,6 +262,30 @@ def test_template_bootstrap_contract():
             Path(directory), ["python"], "github-issues", "none", "codegraph"
         )
         assert all(check["status"] == "passed" for check in checks), checks
+
+
+def test_template_workflow_static_contract_negative_fixtures():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        shutil.copytree(ROOT / ".github", root / ".github")
+
+        template = root / ".github" / "workflows" / "template-bootstrap-e2e.yml"
+        text = template.read_text(encoding="utf-8")
+        template.write_text(text.replace("finally {", "catch {"), encoding="utf-8")
+        try:
+            workflow.check(root)
+        except AssertionError as error:
+            assert str(error) == "template bootstrap cleanup must run in the validation finally block"
+        else:
+            raise AssertionError("template cleanup regression must fail")
+
+        template.write_text(text + "\n# scripts/bootstrap-e2e.py template\n", encoding="utf-8")
+        try:
+            workflow.check(root)
+        except AssertionError as error:
+            assert str(error) == "template bootstrap must not use Template API or lifecycle credentials"
+        else:
+            raise AssertionError("Template API regression must fail")
 
 
 def test_template_provisioning_readback_and_fresh_checkout_boundary():
@@ -425,6 +454,7 @@ if __name__ == "__main__":
     test_workflow_contract()
     test_cleanup_probes_only_run_scoped_repositories()
     test_template_bootstrap_contract()
+    test_template_workflow_static_contract_negative_fixtures()
     test_template_provisioning_readback_and_fresh_checkout_boundary()
     test_template_readback_mismatch_and_exact_cleanup_fail_closed()
     test_template_cleanup_records_agent_failure_and_api_failure()

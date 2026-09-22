@@ -22,8 +22,9 @@ BOOTSTRAP_PINNED_ACTIONS = {
 USE = re.compile(r"^\s*uses:\s*([^\s#]+)", re.MULTILINE)
 
 
-def check():
-    text = WORKFLOW.read_text(encoding="utf-8")
+def check(root=None):
+    root = Path(root) if root is not None else ROOT
+    text = (root / ".github" / "workflows" / "bootstrap-e2e.yml").read_text(encoding="utf-8")
     uses = USE.findall(text)
     if not uses:
         raise AssertionError("workflow has no actions")
@@ -73,23 +74,33 @@ def check():
     if any(value in triage for value in ("GITHUB_TOKEN", "GH_TOKEN", "BOOTSTRAP_E2E_TOKEN")):
         raise AssertionError("triage must not receive lifecycle or GitHub credentials")
     print("bootstrap workflow static check OK")
-    template = TEMPLATE_WORKFLOW.read_text(encoding="utf-8")
+    template = (root / ".github" / "workflows" / "template-bootstrap-e2e.yml").read_text(encoding="utf-8")
     template_uses = USE.findall(template)
     if not template_uses or any(not re.fullmatch(r"[^@]+@[0-9a-f]{40}", reference) for reference in template_uses):
         raise AssertionError("template bootstrap action is not pinned to a full commit SHA")
-    for required in ("workflow_dispatch:", "permissions: {}", "fail-fast: false", "--template", "--stack",
-                     "if: always()", "issues: write", "--run-id", "cleanup-template",
+    for required in ("workflow_dispatch:", "permissions: {}", "fail-fast: false", "ref: ${{ github.workflow_sha }}",
+                     "WORKFLOW_SHA: ${{ github.workflow_sha }}",
                      "actions/download-artifact@%s" % PINNED_ACTIONS["actions/download-artifact"],
                      "actions/setup-node@%s" % BOOTSTRAP_PINNED_ACTIONS["actions/setup-node"],
-                     "node-version: 20.19.0", "node scripts/report-bootstrap-failure.mjs"):
+                     "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2",
+                     'test "$(pnpm --version)" = "12.4.2"', "pnpm install --frozen-lockfile",
+                     "pnpm pack --ignore-scripts --pack-destination package", "template-bootstrap-package-${{ github.run_id }}",
+                     "release_sha: process.env.WORKFLOW_SHA", 'tarball_path: path.join("package", tarballs[0])',
+                     "node scripts/report-bootstrap-failure.mjs"):
         if required not in template:
             raise AssertionError("template workflow is missing %s" % required)
     if "OPENAI_API_KEY" in template:
         raise AssertionError("template bootstrap must not receive OpenAI credentials")
-    bootstrap = template.split("\n  bootstrap:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
+    bootstrap = template.split("\n  bootstrap:\n", 1)[1].split("\n  report:\n", 1)[0]
     report = template.split("\n  report:\n", 1)[1]
-    if "GITHUB_TOKEN" in bootstrap or "BOOTSTRAP_E2E_TOKEN" in report:
-        raise AssertionError("lifecycle and reporting credentials must remain separate")
+    if any(value in template for value in ("scripts/bootstrap-e2e.py template", "cleanup-template",
+                                            "actions/create-github-app-token@", "BOOTSTRAP_E2E_TOKEN", "/generate")):
+        raise AssertionError("template bootstrap must not use Template API or lifecycle credentials")
+    if "finally {" not in bootstrap or 'await rm("template-output", { recursive: true, force: true });' not in bootstrap:
+        raise AssertionError("template bootstrap cleanup must run in the validation finally block")
+    if ("GITHUB_TOKEN" in bootstrap or "if: always()" not in report or
+            "needs: [prepare, bootstrap]" not in report or "GITHUB_TOKEN: ${{ github.token }}" not in report):
+        raise AssertionError("template reporter must be always-run and credential-separated")
     if "python3 scripts/report-bootstrap-failure.py" in text or "python3 scripts/report-bootstrap-failure.py" in template:
         raise AssertionError("active reporter workflow consumers must invoke Node")
     print("template bootstrap workflow static check OK")
