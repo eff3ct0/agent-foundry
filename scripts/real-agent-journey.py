@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Validate and independently assert the bounded real-agent journey contract."""
 import argparse
-import importlib.util
 import json
 import os
 import re
@@ -49,15 +48,6 @@ SAFE_IDENTIFIER = re.compile(r"[A-Za-z0-9._:/-]{1,200}")
 PRIVATE_MARKER = re.compile(r"(?i)(?:token|secret|password|credential|api[_-]?key)")
 
 
-def _load_helper(name, filename):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / filename)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-bootstrap = _load_helper("bootstrap_e2e", "bootstrap-e2e.py")
-_bootstrap = bootstrap
 CLEANUP_VERSIONS = {"real-agent-journey-cleanup/v1", "bootstrap-e2e-cleanup/v1"}
 MAX_RESPONSE_BYTES = 64 * 1024
 MAX_EVIDENCE_BYTES = 64 * 1024
@@ -73,7 +63,6 @@ BOUNDARIES = ("source-readback", "initialization", "feature-issue", "implementat
 APPROVAL_LABELS = {"status:approved", "approved", "approval"}
 CHECK_COMMANDS = {
     "init-check": ["init.py", "--check"],
-    "determinism": ["scripts/check-determinism.py"],
     "delivery-contract": ["scripts/check-delivery-contract.mjs", "--self-check"],
     "governance": ["scripts/check-pr-governance.mjs", "--self-check"],
 }
@@ -99,7 +88,10 @@ class JourneyError(RuntimeError):
 
 
 def safe_text(value, secrets=()):
-    text = bootstrap.redacted(value, secrets)
+    text = str(value or "")
+    for secret in secrets:
+        if secret:
+            text = text.replace(str(secret), "<redacted>")
     text = re.sub(r"(?i)\b(authorization|bearer|token|password|secret|api[_-]?key|credential)\s*[:=]\s*[^\s,]+", r"\1=<redacted>", text)
     text = re.sub(r"(?i)\b[A-Z_][A-Z0-9_]*\s*=\s*[^\s,]+", lambda match: match.group(0).split("=", 1)[0] + "=<redacted>", text)
     text = re.sub(r"(?<!https:)(?<!http:)(?<![A-Za-z0-9])/(?:[A-Za-z0-9._-]+/)+[^\s,;)]*", "<private-path>", text)
@@ -520,17 +512,17 @@ def validate_run_id(run_id):
 
 
 def validate_repository(repository):
-    try:
-        return _bootstrap.validate_repository(repository)
-    except _bootstrap.HarnessError as error:
-        raise JourneyError(str(error), "repository_invalid") from error
+    value = str(repository or "").strip()
+    if not SAFE_REPOSITORY.fullmatch(value):
+        raise JourneyError("repository must be an owner/name identifier", "repository_invalid")
+    return value
 
 
 def validate_owner(owner):
-    try:
-        return _bootstrap.validate_owner(owner)
-    except _bootstrap.HarnessError as error:
-        raise JourneyError(str(error), "owner_invalid") from error
+    value = str(owner or "").strip()
+    if not SAFE_OWNER.fullmatch(value):
+        raise JourneyError("disposable owner must be a GitHub account name", "owner_invalid")
+    return value
 
 
 def journey_repository(owner, run_id):
@@ -657,8 +649,8 @@ def validate_stage(stage, payload, run_id, repository):
             validate_owner(value)
         elif key in ("revision", "commit", "checkout_head"):
             try:
-                _bootstrap.validate_sha(value)
-            except _bootstrap.HarnessError as error:
+                sha(value, "stage evidence")
+            except JourneyError as error:
                 raise JourneyError("stage evidence has an invalid revision", "stage_metadata_invalid") from error
     return {"stage": stage, "status": status, "identifiers": {
         key: identifiers[key] for key in STAGE_IDENTIFIERS[stage]

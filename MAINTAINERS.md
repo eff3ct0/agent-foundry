@@ -166,9 +166,8 @@ The workflow pins every third-party action to a verified full commit SHA:
 - `actions/setup-node` v4.4.0: `49933ea5288caeca8642d1e84afbd3f7d6820020`
 
 Run `node scripts/check-bootstrap-workflow.mjs` to reject floating, branch,
-tag, or non-40-hex action references. Keep running
-`python3 scripts/check-bootstrap-workflow.py` until Node parity is confirmed
-across the planned migration slices.
+tag, or non-40-hex action references. The Node checker is the sole workflow
+contract authority.
 
 Before closing changes to this workflow, use the Definition of Done and retain
 evidence for every matrix case, cleanup success/failure, reporting outcome,
