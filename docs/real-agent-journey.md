@@ -6,11 +6,17 @@ invocation remain upstream responsibilities.
 
 ## Runtime Adapter Contract
 
-`REAL_AGENT_JOURNEY_RUNTIME` must be the identifier `codex-cli`. It selects the
-pinned `@openai/codex@0.148.0` executable used by
-`scripts/real-agent-journey-agent.py`; it is not a secret, model name, or
-credential selector. Missing, malformed, and unsupported values fail in
-`prepare` before repository provisioning.
+[`scripts/real-agent-runtime-catalog.json`](../scripts/real-agent-runtime-catalog.json)
+is the canonical runtime catalog. Each entry has a stable machine identifier,
+display label, executable adapter path, pinned package/version, required
+credential names, and support status. The current supported choice is
+`codex-cli` (OpenAI Codex CLI), which installs `@openai/codex@0.148.0` and uses
+`scripts/real-agent-journey-agent.py`. Disabled entries remain documented in
+the catalog but cannot be selected or run.
+
+Missing, malformed, unsupported, or disabled identifiers fail in `prepare`
+before repository provisioning. The catalog is metadata only: it never stores
+credential values and a runtime does not select a credential.
 
 The four adapters are executable entry points, not placeholders:
 
@@ -22,9 +28,9 @@ The four adapters are executable entry points, not placeholders:
 - `scripts/real-agent-journey-cleanup.py` verifies and deletes only the exact
   run-scoped repository.
 
-Every adapter emits one bounded `real-agent-journey/v1` envelope. Set
-`REAL_AGENT_JOURNEY_RUNTIME=codex-cli` only after the required hosted settings
-are available.
+Every adapter emits one bounded `real-agent-journey/v1` envelope. The parent
+installs and invokes the selected supported entry through the catalog, without
+constructing a shell command from the dispatch input.
 
 ## Inputs from the journey
 
@@ -147,8 +153,10 @@ an unrelated repository. Human approval remains a real external gate.
 The workflow reuses the existing immutable action pins and disposable-owner
 pattern from the release/template bootstrap checks. `BOOTSTRAP_E2E_OWNER` and
 the dedicated GitHub App credentials are the lifecycle configuration.
-`REAL_AGENT_JOURNEY_RUNTIME=codex-cli` is required for a hosted run and selects
-the reviewed pinned adapter. The runtime value never selects a credential.
+The scheduled caller uses the catalog default, `codex-cli`. Manual callers use
+the workflow's `runtime` choice, whose options are checked offline against the
+catalog and contain only supported entries. No caller reads a runtime Actions
+variable or accepts arbitrary free text.
 
 ## Hosted Run Setup
 
@@ -156,7 +164,6 @@ Configure these repository settings:
 
 - Actions variable `BOOTSTRAP_E2E_OWNER`: disposable owner for the private
   generated repository.
-- Actions variable `REAL_AGENT_JOURNEY_RUNTIME`: exactly `codex-cli`.
 - Actions variable `OPENAI_MODEL`: an available bounded model identifier.
 - Actions secret `BOOTSTRAP_E2E_APP_ID` and
   `BOOTSTRAP_E2E_PRIVATE_KEY`: dedicated GitHub App credentials used to mint
@@ -164,10 +171,15 @@ Configure these repository settings:
 - Actions secret `REAL_AGENT_JOURNEY_API_KEY`: OpenAI credential passed only to
   the agent adapter.
 
-Dispatch **Real-agent user journey** with `confirm=RUN`. The workflow checks
-out the trusted workflow revision, provisions the exact generated repository,
-runs the cold agent on `main`, checks out its implementation branch for
-independent readback, aggregates bounded evidence, and always attempts cleanup.
+To dispatch **Real-agent user journey**, select **OpenAI Codex CLI** in the
+`runtime` choice and press GitHub's **Run workflow** button. The selected
+identifier is validated in `prepare`, then the workflow checks out the trusted
+revision, provisions the exact generated repository, runs the cold agent on
+`main`, checks out its implementation branch for independent readback,
+aggregates bounded evidence, and always attempts cleanup. The Codex entry
+requires `AGENT_GITHUB_TOKEN`, `OPENAI_API_KEY`, and `OPENAI_MODEL`; the parent
+maps those names to its dedicated GitHub App token, repository secret, and
+Actions variable respectively.
 
 If a run stops before cleanup, restore the dedicated App credentials and rerun
 the cleanup adapter for the exact numeric run ID and configured owner. Never
