@@ -404,7 +404,7 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(factory_layout, release_scripts=(), real_agent=()):
+def check_scripts(factory_layout, release_scripts=False, real_agent=()):
     labels_script = (
         ".factory/scripts/sync-github-labels.mjs"
         if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.mjs"))
@@ -432,11 +432,9 @@ def check_scripts(factory_layout, release_scripts=(), real_agent=()):
     assert_repeatable_command([sys.executable, approval_script, "--approval-self-check"])
     assert_same_output(factory_layout.self_check)
     if release_scripts:
-        bootstrap, workflow = release_scripts
-        assert_same_output(bootstrap.self_check)
+        assert_repeatable_command(["node", "scripts/check-bootstrap-workflow.mjs"])
         assert_repeatable_command(["node", "scripts/report-bootstrap-failure.mjs", "--self-check"])
         assert_repeatable_command(["node", "scripts/triage-bootstrap-failure.mjs", "--self-check"])
-        assert_same_output(workflow.check)
     if real_agent:
         checker, focused = real_agent
         assert_same_output(checker.check)
@@ -469,16 +467,11 @@ def self_check():
     script_dir = ".factory/scripts" if not source_mode else "scripts"
     factory_layout = load_module("check_factory_layout", script_dir + "/check-factory-layout.py")
     release_paths = (
-        "scripts/bootstrap-e2e.py",
         "scripts/report-bootstrap-failure.mjs",
-        "scripts/check-bootstrap-workflow.py",
+        "scripts/check-bootstrap-workflow.mjs",
+        "scripts/triage-bootstrap-failure.mjs",
     )
-    release_scripts = ()
-    if all(os.path.isfile(os.path.join(ROOT, path)) for path in release_paths):
-        release_scripts = (
-            load_module("bootstrap_e2e", "scripts/bootstrap-e2e.py"),
-            load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
-        )
+    release_scripts = all(os.path.isfile(os.path.join(ROOT, path)) for path in release_paths)
     real_agent = ()
     real_agent_paths = ("scripts/check-real-agent-workflow.py", "scripts/test-real-agent-e2e.py")
     if all(os.path.isfile(os.path.join(ROOT, path)) for path in real_agent_paths):
