@@ -74,8 +74,9 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                                                 └── 📍 G1: feat/issue-111-g1-mutation-client
                                                                                         └── G2: feat/issue-111-g2-release-prepare
                                                                                              └── 📍 G3: feat/issue-111-g3-provision-proof
-                                                                                                  └── 📍 G4: feat/issue-111-g4-release-runner
-                                                                                                       └── later: hosted execution, then legacy cleanup
+                                                                                                   └── 📍 G4: feat/issue-111-g4-release-runner
+                                                                                                        └── 📍 G5: feat/issue-111-g5-cleanup
+                                                                                                             └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -182,6 +183,12 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Boundary: `scripts/released-validation-runner.mjs` defines the future Actions handoff without changing a workflow. It verifies a clean checkout at the resolved full release SHA, performs fixed `pnpm install --frozen-lockfile`, `build`, and `pack --ignore-scripts` commands, then runs one installed creator only with the existing allowlisted environment.
 - Evidence: every validated matrix case writes a versioned, redacted `release-evidence.json` containing the immutable release SHA, case ID, installed package/tree/payload identity, and bounded command result. Failed cases write redacted evidence before returning a stable failure.
 - Compatibility: tests inject command and creator seams only; no live resource, workflow cutover, or Python retirement is included.
+
+## G5: proof-driven cleanup
+
+- Boundary: `scripts/resource-proof-cleanup.mjs` downloads one canonical G3 proof, invokes F4's one exact pre-delete readback, and sends only the proof's exact owner/name pair to the injected G1 deletion client.
+- Evidence: it writes one bounded cleanup artifact for deletion, exact already-absent success, or recovery-required proof/readback/deletion outcomes. Missing or non-canonical proof and every F4 mismatch stop before mutation.
+- Compatibility: all tests use injected evidence, read, mutation, and artifact seams. No live deletion, workflow change, or Python retirement is included.
 
 ## Slice C: Node workflow static-checker parity
 
