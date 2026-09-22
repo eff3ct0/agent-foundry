@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `IMPLEMENTATION` for Slice F1 bounded hosted-lifecycle read client.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-f1-read-client`
-- Branch: `feat/issue-111-f1-read-client`
-- Base: `origin/feat/issue-111-e3-orchestration` at `efc6f03`
+- State: `ACTIVE` in `IMPLEMENTATION` for Slice F2 published-release readback.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-f2-release-readback`
+- Branch: `feat/issue-111-f2-release-readback`
+- Base: `origin/feat/issue-111-f1-read-client` at `3519fcb`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -66,8 +66,9 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                └── 📍 Slice E1: feat/issue-111-e1-evidence
                                        └── 📍 Slice E2: feat/issue-111-e2-installed-runner
                                              └── 📍 Slice E3: feat/issue-111-e3-orchestration
-                                                   └── Slice F1: feat/issue-111-f1-read-client
-                                                        └── later: hosted execution, then legacy cleanup
+                                                    └── Slice F1: feat/issue-111-f1-read-client
+                                                         └── Slice F2: feat/issue-111-f2-release-readback
+                                                              └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -117,6 +118,14 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Failure contract: timeout, network, and 5xx responses normalize once to `indeterminate/read_indeterminate`; no retry path exists. Rejected and malformed responses expose stable codes only, never a token or transport diagnostic.
 - Ownership and payload: classify the helper as `archetype_only_release_e2e` so initialization removes it. It is not a payload entry; regenerate the manifest because the ownership inventory is a retained payload input.
 - Verification: offline injected-transport tests cover endpoint guarding, GET ownership, abort configuration, both byte caps, JSON validation, normalized failures, no retries, and token redaction. No live GitHub request, hosted mutation, workflow change, provisioning, or cleanup is in scope.
+
+## Slice F2: published-release readback
+
+- Boundary: `scripts/release-readback.mjs` consumes only the F1 injected GET client to resolve a requested published release tag to a full immutable commit SHA.
+- Safety: it verifies the release tag exactly, rejects draft or unpublished releases, reads only the tag reference endpoints, and dereferences at most five annotated tags before requiring a commit object.
+- Failure contract: malformed payloads, tag/expected-SHA mismatches, and excessive nesting reject with stable codes; F1 indeterminate results remain `indeterminate/read_indeterminate` and stop further reads.
+- Ownership and payload: classify the resolver as `archetype_only_release_e2e`; it remains excluded from the payload, while the payload manifest is regenerated for the retained ownership input.
+- Verification: offline injected-transport tests cover lightweight and annotated tags, draft/unpublished releases, mismatches, malformed payloads, depth exhaustion, and indeterminate reads. No live GitHub request, mutation, workflow change, provisioning, or cleanup is in scope.
 
 ## Slice C: Node workflow static-checker parity
 
