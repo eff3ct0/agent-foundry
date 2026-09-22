@@ -57,6 +57,7 @@
     "scripts/sync-github-labels.py",
     "start.mjs",
     "start.py",
+    "odd/tasks/issue-124-opencode-startup-race.md",
     "templates/adr.md",
     "templates/agent-runbook.md",
     "templates/definition-of-done.md",
@@ -75,7 +76,8 @@
         {"path": "archetype-ownership.json", "kind": "file"},
         {"path": "factory_bootstrap.py", "kind": "file"},
         {"path": "MAINTAINERS.md", "kind": "file"},
-        {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"}
+        {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
+        {"path": "odd", "kind": "directory"}
       ]
     },
     "archetype_only_release_e2e": {
