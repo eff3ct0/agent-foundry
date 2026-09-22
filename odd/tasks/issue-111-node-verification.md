@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `IMPLEMENTATION` for Slice F2 published-release readback.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-f2-release-readback`
-- Branch: `feat/issue-111-f2-release-readback`
-- Base: `origin/feat/issue-111-f1-read-client` at `3519fcb`
+- State: `ACTIVE` in `IMPLEMENTATION` for Slice F3 run-scoped resource proof.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-f3-resource-proof`
+- Branch: `feat/issue-111-f3-resource-proof`
+- Base: `origin/feat/issue-111-f2-release-readback` at `16d4bb5`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -68,7 +68,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                              └── 📍 Slice E3: feat/issue-111-e3-orchestration
                                                     └── Slice F1: feat/issue-111-f1-read-client
                                                          └── Slice F2: feat/issue-111-f2-release-readback
-                                                              └── later: hosted execution, then legacy cleanup
+                                                               └── 📍 Slice F3: feat/issue-111-f3-resource-proof
+                                                                    └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -126,6 +127,14 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Failure contract: malformed payloads, tag/expected-SHA mismatches, and excessive nesting reject with stable codes; F1 indeterminate results remain `indeterminate/read_indeterminate` and stop further reads.
 - Ownership and payload: classify the resolver as `archetype_only_release_e2e`; it remains excluded from the payload, while the payload manifest is regenerated for the retained ownership input.
 - Verification: offline injected-transport tests cover lightweight and annotated tags, draft/unpublished releases, mismatches, malformed payloads, depth exhaustion, and indeterminate reads. No live GitHub request, mutation, workflow change, provisioning, or cleanup is in scope.
+
+## Slice F3: run-scoped resource provisioning proof
+
+- Boundary: `scripts/resource-provisioning-proof.mjs` uses only an injected GET client to produce a versioned proof for one canonical `bootstrap-e2e-<numeric-run-id>-<resource>` repository.
+- Safety: it validates the requested owner, canonical name, visibility, template, release SHA, exact owner readback, and a positive immutable repository ID. It never infers ownership from a name or prefix.
+- Failure contract: cross-run, cross-owner, visibility, template, repository-ID, and release-SHA mismatches reject with stable codes before a proof is emitted; indeterminate reads stop the proof.
+- Ownership and payload: classify the helper as `archetype_only_release_e2e`; regenerate the payload manifest because its ownership inventory is a retained payload input.
+- Verification: offline injected-client tests cover invalid names, mismatches, no further read after repository mismatch, and deterministic serialization. No live GitHub request, mutation, workflow, provisioning, or cleanup is in scope.
 
 ## Slice C: Node workflow static-checker parity
 
