@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice E2 exact-tarball installed-runner boundary.
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice E3 full local release-E2E orchestration.
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-node-verification`
 - Branch: `feat/issue-111-node-verification`
 - Base: `origin/feat/issue-110-governance-node-06e-reporter-cleanup` at `f3f6d2b`
@@ -64,8 +64,9 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                   └── Slice C: feat/issue-111-workflow-contract
                          └── Slice D: feat/issue-111-delivery-approval
                                └── 📍 Slice E1: feat/issue-111-e1-evidence
-                                      └── 📍 Slice E2: feat/issue-111-e2-installed-runner
-                                            └── later: hosted execution, then legacy cleanup
+                                       └── 📍 Slice E2: feat/issue-111-e2-installed-runner
+                                             └── 📍 Slice E3: feat/issue-111-e3-orchestration
+                                                  └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -98,6 +99,15 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
 | Later legacy cleanup | 150-300 | Remove superseded Python checks after parity evidence |
 
 The tracker and Slice A are separate cohesive work units. Slice A must remain at or below the 400-line review budget; it contains its tests and identity documentation together.
+
+## Slice E3: full local release-E2E orchestration
+
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-e3-orchestration`
+- Branch: `feat/issue-111-e3-orchestration`
+- Base: `origin/feat/issue-111-e2-installed-runner` (PR #158)
+- Boundary: `pnpm release-e2e:local -- --output <evidence-directory>` packs one local artifact, executes exactly 1,200 real installed-creator cases through the E2 runner, and writes `matrix-evidence.json`; the first result is reused during matrix iteration rather than rerun.
+- Failure contract: every case runs after a case failure; bounded E1 command evidence and failure text are redacted and validated for all 1,200 records before the evidence file is written and the command exits non-zero.
+- Compatibility: the full real-install command is explicit and excluded from the default unit suite. It does not change workflows, provision hosted resources, or retire Python.
 
 ## Slice C: Node workflow static-checker parity
 
