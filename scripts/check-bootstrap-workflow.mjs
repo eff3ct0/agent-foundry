@@ -76,15 +76,19 @@ const checkTemplateBootstrap = (text) => {
   const uses = actionReferences(text);
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("template bootstrap action is not pinned to a full commit SHA");
   requireText(text, [
-    "workflow_dispatch:", "permissions: {}", "fail-fast: false", "--template", "--stack", "if: always()", "issues: write", "--run-id", "cleanup-template",
+    "workflow_dispatch:", "permissions: {}", "fail-fast: false", "ref: ${{ github.workflow_sha }}", "WORKFLOW_SHA: ${{ github.workflow_sha }}",
     `actions/download-artifact@${pinnedActions["actions/download-artifact"]}`,
     `actions/setup-node@${bootstrapPinnedActions["actions/setup-node"]}`,
-    "node-version: 20.19.0", "node scripts/report-bootstrap-failure.mjs",
+    "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", "test \"$(pnpm --version)\" = \"12.4.2\"",
+    "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts --pack-destination package", "template-bootstrap-package-${{ github.run_id }}",
+    "release_sha: process.env.WORKFLOW_SHA", "tarball_path: path.join(\"package\", tarballs[0])", "node scripts/report-bootstrap-failure.mjs",
   ], "template workflow is missing");
   if (text.includes("OPENAI_API_KEY")) fail("template bootstrap must not receive OpenAI credentials");
-  const bootstrap = section(text, "\n  bootstrap:\n", "\n  cleanup:\n");
+  const bootstrap = section(text, "\n  bootstrap:\n", "\n  report:\n");
   const report = section(text, "\n  report:\n");
-  if (bootstrap.includes("GITHUB_TOKEN") || report.includes("BOOTSTRAP_E2E_TOKEN")) fail("lifecycle and reporting credentials must remain separate");
+  if (["scripts/bootstrap-e2e.py template", "cleanup-template", "actions/create-github-app-token@", "BOOTSTRAP_E2E_TOKEN", "/generate"].some((value) => text.includes(value))) fail("template bootstrap must not use Template API or lifecycle credentials");
+  if (!bootstrap.includes("finally {") || !bootstrap.includes('await rm("template-output", { recursive: true, force: true });')) fail("template bootstrap cleanup must run in the validation finally block");
+  if (bootstrap.includes("GITHUB_TOKEN") || !report.includes("if: always()") || !report.includes("needs: [prepare, bootstrap]") || !report.includes("GITHUB_TOKEN: ${{ github.token }}")) fail("template reporter must be always-run and credential-separated");
 };
 
 const checkJourney = (text, projectRoot) => {

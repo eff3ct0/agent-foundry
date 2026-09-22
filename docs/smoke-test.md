@@ -19,16 +19,21 @@ template API because that follows the default branch.
 ## Template bootstrap E2E contract
 
 The maintainer-only `.github/workflows/template-bootstrap-e2e.yml` workflow is
-the repeatable template-level check. A manual run creates one private repository
-per `ci/recipes.json` stack through GitHub's template-generation endpoint, reads
-back the generated repository, and deletes only its numeric run-prefix targets.
-Each disposable checkout runs `python3 start.py`, follows `docs/agent-init.md`,
-and invokes `python3 init.py --no-clean` with GitHub Issues, no secrets manager,
-and CodeGraph selected. The report records the cold-start, placeholder,
-self-check, pre-initialization determinism, governance, delivery-contract,
-binding, generated-CI, and no-clean results. Failed records use the existing bounded reporter, which
-searches open and closed bug issues and comments or creates exactly one marker-
-identified report.
+the repeatable template-level check. A manual run checks out the trusted
+`github.workflow_sha`, builds one immutable package with pinned Corepack/pnpm,
+and uploads it as a run-scoped artifact. Each `ci/recipes.json` case downloads
+that exact package and validates the installed creator: it installs offline with
+scripts disabled, runs `factory-template apply --non-interactive`, and requires
+the creator's verified JSON envelope. It does not use GitHub's template-
+generation endpoint or create a disposable repository.
+
+The validation job records redacted evidence and removes only its runner-local
+`template-output` directory in a `finally` block. There is no lifecycle token,
+provisioning proof, prefix scan, or remote cleanup recovery path. The always-run
+report job receives the workflow token only for `contents: read`, `actions:
+read`, and `issues: write`; it receives redacted evidence, no lifecycle or
+OpenAI credential, and uses the bounded reporter to search open and closed bug
+issues before commenting on or creating one marker-identified report.
 
 The parent contract for the cold real-agent journey is [`real-agent-journey.md`](real-agent-journey.md). It
 reuses the disposable-owner, immutable-action, credential-boundary, and bounded-evidence patterns above while
