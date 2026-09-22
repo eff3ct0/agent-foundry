@@ -49,8 +49,8 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 1146,
-      "sha256": "dd2b9e37374d07715aa94baa5bc7782945f7cba9a84a7d3ffa5205172d54aace"
+      "size": 922,
+      "sha256": "22858bd646b6225fd5e5ad585eeee34dfeada0f2fa8ecacad3441fd7eb9bd912"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -79,14 +79,14 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 10308,
-      "sha256": "6353a7b66a37ea6278e2bf874106555c105856525cad068a4c40e6198181ba05"
+      "size": 10382,
+      "sha256": "6ef1389277414ab36f37fdecb834a6aa5003ede1689008552d9a20b7271b9361"
     },
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8377,
-      "sha256": "0d2c070184e880c6c1f8d80689f3580e09e1b2c6a2298d802b5de8635d471652"
+      "size": 8488,
+      "sha256": "b6b62bb8e84fde255fa2d9e9cb67c94459afbf4aeae66ab8fab62ce5870adf8b"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -121,8 +121,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 10213,
-      "sha256": "013754bcfffcc7bd61cc427532d9a8b269fa531bcc0a37301d8ae30114fcb90e"
+      "size": 10442,
+      "sha256": "12ef081d957319f706ff0e1d07ee54080f30c45be5405836f9113e420e1f73bc"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -139,8 +139,8 @@
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 2671,
-      "sha256": "e62854982cad8493f9b632fa2c5c5282658ef9e5670ecdc67b39f3df5a6d6fef"
+      "size": 2600,
+      "sha256": "05b3936d529125484423daf3ac481bb94c2e71034694bbe9134ec3f8b079a6f0"
     },
     {
       "path": "docs/org-factory.md",
@@ -311,6 +311,12 @@
       "sha256": "1639ecf1e4f66e84405690ffe99d62104645168daa539f55c57ecdd72ed7ceda"
     },
     {
+      "path": "scripts/check-delivery-contract.mjs",
+      "mode": "100644",
+      "size": 12829,
+      "sha256": "da9ff1d90618b0d9dfde58952ef8ebac8e6d034f924767ee9d2573b52464ad7e"
+    },
+    {
       "path": "scripts/check-delivery-contract.py",
       "mode": "100644",
       "size": 17694,
@@ -323,10 +329,10 @@
       "sha256": "e47a20ba8c4bb74d5143d97d175b3ffaa6cb323f935030e49c04581e94b4b959"
     },
     {
-      "path": "scripts/check-pr-governance.py",
+      "path": "scripts/check-pr-governance.mjs",
       "mode": "100644",
-      "size": 9455,
-      "sha256": "d78199d04bd4ce2ca2fccbfce053244c0e9cfb8690ba63e46a72552cf35d5354"
+      "size": 7461,
+      "sha256": "2ecb665cd645d151af476e70d7b7363738c533ee124773facfe043c82480d29b"
     },
     {
       "path": "scripts/sync-github-labels.mjs",
@@ -397,9 +403,9 @@
     {
       "path": "test_init.py",
       "mode": "100644",
-      "size": 6990,
-      "sha256": "8fd0db6118ad182ee6585a7bfe1942f37421d8fd98dda593fae7662a7cf095cd"
+      "size": 6989,
+      "sha256": "025d8f57d3c4e1c5df7e4a791fda0d2a7a54d8a3d8299add25a78e20ffd9a869"
     }
   ],
-  "payload_digest": "sha256:c4c11d15ab7a1b0aecf119272d73de6ce130fa82567f49460e7e36fbc207cfcc"
+  "payload_digest": "sha256:0383c17f0690cf329049b6cd88eba5f7fceba8ede213dcdc83fd1428fc88008e"
 }
