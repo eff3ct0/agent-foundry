@@ -128,12 +128,20 @@ def self_check():
     factory = root / ".factory"
     templates = factory / "templates" if factory.is_dir() else root / "templates"
     assert "pull_request_target:" in workflow
-    assert "ref: ${{ github.event.pull_request.merge_commit_sha }}" in workflow
-    assert "ref: ${{ github.event.repository.default_branch }}" not in workflow
+    assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
+    assert "merge_commit_sha" not in workflow
     assert "persist-credentials: false" in workflow
     assert "contents: write" not in workflow
     assert "issues: write" not in workflow
     assert "pull-requests: write" not in workflow
+    assert "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020" in workflow
+    assert "node-version: 20.19.0" in workflow
+    assert "if [ -f scripts/check-pr-governance.mjs ]; then" in workflow
+    assert "node scripts/check-pr-governance.mjs" in workflow
+    assert "elif [ -f scripts/check-pr-governance.py ]; then" in workflow
+    assert "python3 scripts/check-pr-governance.py" in workflow
+    assert "No PR governance validator is available" in workflow
+    assert "exit 1" in workflow
     for template in (
         root / ".github" / "pull_request_template.md",
         templates / "pull-request.md",
