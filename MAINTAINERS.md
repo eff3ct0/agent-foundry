@@ -14,11 +14,11 @@ workflows and generated project files remain.
 
 | Category | Lifecycle | Examples and rule |
 | --- | --- | --- |
-| Archetype governance | Removed after initialization | `init.py`, `factory_bootstrap.py`, this file, and source change records exist only to operate the archetype. |
+| Archetype governance | Removed after initialization | `init.py`, `factory_bootstrap.py`, `scripts/check-determinism.py`, this file, and source change records exist only to operate the archetype. |
 | Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/factory-template`. |
 | Initializer inputs | Removed after initialization | `placeholders.json` is consumed before cleanup; it must not be deleted before replacement, validation, or composition. |
 | Provider and CI recipes | Removed after initialization | `providers/` and `ci/` are composition inputs. They stay available until bindings and CI are generated, then are removed as a unit. |
-| Inherited generic assets | Retained | `start.py`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic checkers belong to every initialized project. |
+| Inherited generic assets | Retained | `start.py`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic checkers that do not require source-only files belong to every initialized project. |
 | Generated outputs | Retained | `docs/bindings.md` and `.github/workflows/ci.yml` are project outputs and must never be added to cleanup. |
 
 ### Rules for adding files
@@ -117,11 +117,12 @@ whose proof is missing or mismatched.
 The real-agent user journey is defined in [`docs/real-agent-journey.md`](docs/real-agent-journey.md) and
 `.github/workflows/real-agent-journey.yml`. It is initially manual/nightly, not release-triggered. The parent
 workflow owns stage ordering, run identity, credential separation, fail-closed aggregation, and bounded evidence.
-The supported adapter identifier is `codex-cli`, which selects the pinned
-`@openai/codex@0.148.0` runtime without selecting a secret. Configure
-`REAL_AGENT_JOURNEY_RUNTIME=codex-cli` only when the dedicated agent API key,
-model variable, and GitHub App credentials are available; missing credentials
-must fail closed rather than use a mock.
+The canonical runtime catalog is `scripts/real-agent-runtime-catalog.json`.
+Its supported `codex-cli` entry selects the pinned `@openai/codex@0.148.0`
+runtime without selecting a secret. Operators choose it from the parent
+workflow's dispatch control once the dedicated agent API key, model variable,
+and GitHub App credentials are available; missing credentials must fail closed
+rather than use a mock.
 
 ## Cold real-agent journey contract
 
