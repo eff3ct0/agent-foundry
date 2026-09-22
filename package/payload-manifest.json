@@ -79,8 +79,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8878,
-      "sha256": "fe43deb28c3ab5c26931946e0b4f36f250d7bcabad2c785788815377ea1b37a2"
+      "size": 8954,
+      "sha256": "52946447303cc09a32ed28fc67ee062ff197ec46148628547f06a38c30590e95"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -407,5 +407,5 @@
       "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
     }
   ],
-  "payload_digest": "sha256:0f1a2ebc9c010274307680ac72a7cc1537a4e8df5667564a6abf04c4c1b0fae8"
+  "payload_digest": "sha256:7f7973b440168d45f9290889b29d245de12089ae1f84093ab5dab2ce9643b707"
 }

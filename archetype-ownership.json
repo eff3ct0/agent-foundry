@@ -99,6 +99,7 @@
         {"path": "scripts/resource-cleanup-eligibility.mjs", "kind": "file"},
         {"path": "scripts/release-prepare.mjs", "kind": "file"},
         {"path": "scripts/resource-provision-and-proof.mjs", "kind": "file"},
+        {"path": "scripts/released-validation-runner.mjs", "kind": "file"},
         {"path": "scripts/check-bootstrap-workflow.py", "kind": "file"},
         {"path": "scripts/check-bootstrap-workflow.mjs", "kind": "file"},
         {"path": "scripts/release-ref.mjs", "kind": "file"},

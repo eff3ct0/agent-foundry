@@ -72,9 +72,10 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                                      └── Slice F4: feat/issue-111-f4-cleanup-recovery
                                                                            └── 📍 G0: feat/issue-111-g0-lifecycle-repair
                                                                                 └── 📍 G1: feat/issue-111-g1-mutation-client
-                                                                                       └── G2: feat/issue-111-g2-release-prepare
-                                                                                            └── 📍 G3: feat/issue-111-g3-provision-proof
-                                                                                                 └── later: hosted execution, then legacy cleanup
+                                                                                        └── G2: feat/issue-111-g2-release-prepare
+                                                                                             └── 📍 G3: feat/issue-111-g3-provision-proof
+                                                                                                  └── 📍 G4: feat/issue-111-g4-release-runner
+                                                                                                       └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -175,6 +176,12 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Verification: offline injected-client and in-memory-store tests cover one exact creation, F3 routes, proof-before-validation ordering, readback rejection, tampered proof recovery, and pre-mutation boundary validation. No live repository is created.
 
 - [x] Implemented the G3 canonical provision-and-proof composition with offline verification only.
+
+## G4: released-validation runner
+
+- Boundary: `scripts/released-validation-runner.mjs` defines the future Actions handoff without changing a workflow. It verifies a clean checkout at the resolved full release SHA, performs fixed `pnpm install --frozen-lockfile`, `build`, and `pack --ignore-scripts` commands, then runs one installed creator only with the existing allowlisted environment.
+- Evidence: every validated matrix case writes a versioned, redacted `release-evidence.json` containing the immutable release SHA, case ID, installed package/tree/payload identity, and bounded command result. Failed cases write redacted evidence before returning a stable failure.
+- Compatibility: tests inject command and creator seams only; no live resource, workflow cutover, or Python retirement is included.
 
 ## Slice C: Node workflow static-checker parity
 
