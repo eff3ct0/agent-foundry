@@ -39,7 +39,7 @@ jobs:
       - name: Validate harness
         run: |
           node scripts/release-ref.mjs --self-check
-          python3 scripts/bootstrap-e2e.py --self-check
+          node scripts/check-bootstrap-workflow.mjs
           node scripts/report-bootstrap-failure.mjs --self-check
       - name: Resolve published release commit
         id: release
@@ -48,14 +48,17 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
           EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
-          RESOLVED="$(python3 scripts/bootstrap-e2e.py resolve-release --repository "$REPOSITORY" --tag "$TAG_NAME")"
-          RESOLVED_SHA="${RESOLVED#sha=}"
-          printf 'tag=%s\nsha=%s\n' "$TAG_NAME" "$RESOLVED_SHA" >> "$GITHUB_OUTPUT"
-      - name: Build recipe matrix
-        id: matrix
-        run: printf 'matrix=%s\n' "$(python3 scripts/bootstrap-e2e.py matrix)" >> "$GITHUB_OUTPUT"
+          node --input-type=module <<'NODE'
+          import { appendFile, readFile } from "node:fs/promises";
+          import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
+          import { prepareRelease } from "./scripts/release-prepare.mjs";
+          const client = createHostedLifecycleReadClient({ token: process.env.GITHUB_TOKEN, transport: ({ url, headers, signal }) => fetch(url, { headers, signal }) });
+          const recipes = JSON.parse(await readFile("ci/recipes.json", "utf8"));
+          const result = await prepareRelease({ client, repository: process.env.REPOSITORY, tag: process.env.TAG_NAME, expectedSha: process.env.EXPECTED_SHA, recipes });
+          if (result.status !== "ok") throw new Error(`release preparation failed: ${result.code}`);
+          await appendFile(process.env.GITHUB_OUTPUT, `tag=${result.release.tag}\nsha=${result.release.sha}\nmatrix=${JSON.stringify(result.matrix.recipes)}\n`);
+          NODE
   bootstrap:
     needs: prepare
     runs-on: ubuntu-latest
@@ -77,6 +80,19 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20.19.0
+      - name: Check out the immutable release source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          path: release-source
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Activate pinned package toolchain
+        working-directory: release-source
+        run: |
+          corepack enable
+          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2
+          test "$(pnpm --version)" = "12.4.2"
       - name: Mint lifecycle app token
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
@@ -87,7 +103,7 @@ jobs:
           permission-administration: write
           permission-contents: write
           permission-workflows: write
-      - name: Run released bootstrap
+      - name: Provision and validate the exact release package
         env:
           BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
           BOOTSTRAP_E2E_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -97,18 +113,33 @@ jobs:
           RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
           STACK: ${{ matrix.stack }}
           RUN_ID: ${{ github.run_id }}
-          EVIDENCE_PATH: evidence/${{ matrix.stack }}.json
-          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           mkdir -p evidence
-          python3 scripts/bootstrap-e2e.py run \
-            --repository "$REPOSITORY" \
-            --tag "$RELEASE_TAG" \
-            --sha "$RELEASE_SHA" \
-            --stack "$STACK" \
-            --run-id "$RUN_ID" \
-            --evidence "$EVIDENCE_PATH" \
-            --workflow-url "$WORKFLOW_URL"
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          import { createHostedLifecycleMutationClient } from "./scripts/hosted-lifecycle-mutation-client.mjs";
+          import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
+          import { matrixConfiguration } from "./scripts/local-matrix.mjs";
+          import { provisionAndProve } from "./scripts/resource-provision-and-proof.mjs";
+          import { buildReleasePackage, runReleasedValidationCase } from "./scripts/released-validation-runner.mjs";
+          import { validateModel } from "./scripts/triage-bootstrap-failure.mjs";
+          const transport = ({ url, method = "GET", headers, body, signal }) => fetch(url, { method, headers, body, signal });
+          const evidence = { schema_version: "bootstrap-e2e-failure/v1", source_repository: process.env.REPOSITORY, release_tag: process.env.RELEASE_TAG, release_sha: process.env.RELEASE_SHA, matrix_case: process.env.STACK, check_identifier: `bootstrap-e2e/${process.env.STACK}`, failure_code: "release_validation_failed", exit_code: 0, logs: [], result: "passed", cleanup_status: "not-attempted", openai_model: validateModel(process.env.OPENAI_MODEL) };
+          try {
+            const proofPath = `evidence/${process.env.STACK}.proof.json`;
+            const mutationClient = createHostedLifecycleMutationClient({ token: process.env.BOOTSTRAP_E2E_TOKEN, transport });
+            const proofClient = createHostedLifecycleReadClient({ token: process.env.BOOTSTRAP_E2E_TOKEN, transport });
+            const provisioned = await provisionAndProve({ mutationClient, proofClient, proofStore: { write: (value) => writeFile(proofPath, value), read: () => readFile(proofPath, "utf8") }, runId: process.env.RUN_ID, owner: process.env.BOOTSTRAP_E2E_OWNER, resource: process.env.STACK, template: process.env.REPOSITORY, releaseSha: process.env.RELEASE_SHA });
+            if (provisioned.status !== "verified") throw new Error(provisioned.code);
+            const matrixCase = { ci: process.env.STACK, task: "github-issues", secrets: "none", intelligence: "codegraph", agent: "opencode" };
+            const releasePackage = await buildReleasePackage({ sourcePath: "release-source", releaseSha: process.env.RELEASE_SHA, outputDirectory: "release-artifacts" });
+            await runReleasedValidationCase({ releasePackage, matrixCase, configuration: matrixConfiguration(matrixCase), outputDirectory: "evidence" });
+          } catch (error) {
+            await writeFile(`evidence/${process.env.STACK}.json`, `${JSON.stringify({ ...evidence, result: "failed", exit_code: 1, logs: ["Node release validation failed"] })}\n`);
+            throw error;
+          }
+          await writeFile(`evidence/${process.env.STACK}.json`, `${JSON.stringify(evidence)}\n`);
+          NODE
       - name: Upload redacted evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -117,15 +148,44 @@ jobs:
           path: evidence/${{ matrix.stack }}.json
           if-no-files-found: error
           retention-days: 7
+      - name: Upload detailed release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-e2e-release-evidence-${{ github.run_id }}-${{ matrix.stack }}
+          path: evidence/**/release-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload provisioning proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-e2e-proof-${{ github.run_id }}-${{ matrix.stack }}
+          path: evidence/${{ matrix.stack }}.proof.json
+          if-no-files-found: warn
+          retention-days: 7
 
   cleanup:
     if: always()
     needs: [prepare, bootstrap]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     permissions:
       contents: read
     steps:
+      - name: Check out trusted cleanup harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.19.0
       - name: Mint lifecycle app token
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
@@ -135,94 +195,37 @@ jobs:
           owner: ${{ vars.BOOTSTRAP_E2E_OWNER }}
           permission-administration: write
           permission-contents: write
-      - name: Delete this run's disposable repositories
+      - name: Download this case's provisioning proof
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bootstrap-e2e-proof-${{ github.run_id }}-${{ matrix.stack }}
+          path: evidence
+          if-no-artifact-found: warn
+      - name: Delete this run's proof-bound disposable repository
         if: always()
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BOOTSTRAP_E2E_TOKEN: ${{ steps.app-token.outputs.token }}
           BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
           RUN_ID: ${{ github.run_id }}
-          MATRIX: ${{ needs.prepare.outputs.matrix }}
+          STACK: ${{ matrix.stack }}
         run: |
           mkdir -p cleanup
-          python3 - <<'PY'
-          import json
-          import os
-          import re
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-
-          output = "cleanup/cleanup.json"
-          owner = os.environ.get("BOOTSTRAP_E2E_OWNER", "").strip()
-          run_id = os.environ.get("RUN_ID", "").strip()
-          token = os.environ.get("GH_TOKEN", "")
-          evidence = {"schema_version": "bootstrap-e2e-cleanup/v1", "owner": owner or None,
-                      "run_id": run_id or None, "prefix": "bootstrap-e2e-%s-" % run_id,
-                      "status": "failed", "deleted": [], "failures": []}
-
-          def write(status):
-              evidence["status"] = status
-              with open(output, "w", encoding="utf-8") as handle:
-                  json.dump(evidence, handle, sort_keys=True)
-                  handle.write("\n")
-
-          if not token or not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", owner) or not re.fullmatch(r"[0-9]{1,20}", run_id):
-              evidence["failures"].append("missing or invalid cleanup configuration")
-              write("failed")
-              raise SystemExit(1)
-          try:
-              cases = json.loads(os.environ.get("MATRIX", ""))
-          except json.JSONDecodeError:
-              cases = []
-          allowed = {"bootstrap-e2e-%s-%s" % (run_id, case) for case in cases
-                     if isinstance(case, str) and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", case)} if isinstance(cases, list) else set()
-          if not allowed:
-              write("skipped")
-              raise SystemExit(0)
-
-          def api(method, path):
-              request = urllib.request.Request(
-                  "https://api.github.com/" + path, method=method,
-                  headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + token,
-                           "X-GitHub-Api-Version": "2022-11-28"})
-              try:
-                  with urllib.request.urlopen(request, timeout=30) as response:
-                      raw = response.read(64 * 1024 + 1)
-                      if len(raw) > 64 * 1024:
-                          raise RuntimeError("cleanup API response is too large")
-                      if response.status not in (200, 204):
-                          raise RuntimeError("cleanup API returned HTTP %s" % response.status)
-                      return json.loads(raw.decode("utf-8")) if raw else {}
-              except urllib.error.HTTPError as error:
-                  if error.code == 404 and method == "GET":
-                      return None
-                  error.read(64 * 1024 + 1)
-                  raise RuntimeError("cleanup API request failed") from error
-              except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
-                  raise RuntimeError("cleanup API request failed") from error
-
-          try:
-              account = api("GET", "users/" + urllib.parse.quote(owner, safe=""))
-              if ((account.get("login") or "").lower() != owner.lower() or
-                      account.get("type") not in ("Organization", "User")):
-                  raise RuntimeError("cleanup owner identity could not be verified")
-              for name in sorted(allowed):
-                  path = "repos/%s/%s" % (urllib.parse.quote(owner, safe=""), urllib.parse.quote(name, safe=""))
-                  if api("GET", path) is None:
-                      continue
-                  api("DELETE", path)
-                  evidence["deleted"].append(name)
-          except RuntimeError as error:
-              evidence["failures"].append(str(error))
-          write("passed" if not evidence["failures"] else "failed")
-          raise SystemExit(0 if not evidence["failures"] else 1)
-          PY
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          import { createHostedLifecycleMutationClient } from "./scripts/hosted-lifecycle-mutation-client.mjs";
+          import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
+          import { cleanupProvisionedResource } from "./scripts/resource-proof-cleanup.mjs";
+          const transport = ({ url, method = "GET", headers, body, signal }) => fetch(url, { method, headers, body, signal });
+          const token = process.env.BOOTSTRAP_E2E_TOKEN;
+          const result = await cleanupProvisionedResource({ evidence: { download: () => readFile(`evidence/${process.env.STACK}.proof.json`, "utf8") }, artifact: { write: (value) => writeFile(`cleanup/${process.env.STACK}.json`, value) }, readClient: createHostedLifecycleReadClient({ token, transport }), mutationClient: createHostedLifecycleMutationClient({ token, transport }), owner: process.env.BOOTSTRAP_E2E_OWNER, target: process.env.STACK, runId: process.env.RUN_ID });
+          if (!['deleted', 'already-absent'].includes(result.status)) throw new Error(`cleanup failed: ${result.code}`);
+          NODE
       - name: Upload cleanup evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: bootstrap-e2e-cleanup-${{ github.run_id }}
-          path: cleanup/cleanup.json
+          name: bootstrap-e2e-cleanup-${{ github.run_id }}-${{ matrix.stack }}
+          path: cleanup/${{ matrix.stack }}.json
           if-no-files-found: error
           retention-days: 7
 
