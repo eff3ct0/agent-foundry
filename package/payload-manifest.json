@@ -23,6 +23,12 @@
       "sha256": "a71cd2de6fca2adde2de1975188d79c58b6cd6712bfcf3251a546c9a66b977f1"
     },
     {
+      "path": ".github/ISSUE_TEMPLATE/feature.yml",
+      "mode": "100644",
+      "size": 1396,
+      "sha256": "73858f385627d1641360d4dd448726582688f5df52beca494dccf8a22356ebad"
+    },
+    {
       "path": ".github/ISSUE_TEMPLATE/task.yml",
       "mode": "100644",
       "size": 1115,
@@ -43,14 +49,14 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 1146,
-      "sha256": "dd2b9e37374d07715aa94baa5bc7782945f7cba9a84a7d3ffa5205172d54aace"
+      "size": 922,
+      "sha256": "22858bd646b6225fd5e5ad585eeee34dfeada0f2fa8ecacad3441fd7eb9bd912"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
       "mode": "100644",
-      "size": 418,
-      "sha256": "af67210e38d90f1ed7f33317f88407dc6b1f28608a76b00b605435460f2ea427"
+      "size": 575,
+      "sha256": "f50ce7dcf82cbfda5f360a20b3fce39a96d2a978f11acdfe16ff81e420048cf7"
     },
     {
       "path": ".gitignore",
@@ -73,14 +79,14 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 10310,
-      "sha256": "2581d700aa4f3bed12a2099135cc2abe5099b501db1dd2149b53b61b1f022063"
+      "size": 10382,
+      "sha256": "6ef1389277414ab36f37fdecb834a6aa5003ede1689008552d9a20b7271b9361"
     },
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8184,
-      "sha256": "5d6394d79a474702a16c4e9af91355194eeb24b0d24c96f6ee243b12a82dcde7"
+      "size": 8488,
+      "sha256": "b6b62bb8e84fde255fa2d9e9cb67c94459afbf4aeae66ab8fab62ce5870adf8b"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -115,8 +121,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 10195,
-      "sha256": "a64d4a357cf2a0dd72687959ca9aeb85e8a2f95c0f1cfd872b17fb8a60c55546"
+      "size": 10442,
+      "sha256": "12ef081d957319f706ff0e1d07ee54080f30c45be5405836f9113e420e1f73bc"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -133,8 +139,8 @@
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 2671,
-      "sha256": "e62854982cad8493f9b632fa2c5c5282658ef9e5670ecdc67b39f3df5a6d6fef"
+      "size": 2600,
+      "sha256": "05b3936d529125484423daf3ac481bb94c2e71034694bbe9134ec3f8b079a6f0"
     },
     {
       "path": "docs/org-factory.md",
@@ -305,6 +311,12 @@
       "sha256": "1639ecf1e4f66e84405690ffe99d62104645168daa539f55c57ecdd72ed7ceda"
     },
     {
+      "path": "scripts/check-delivery-contract.mjs",
+      "mode": "100644",
+      "size": 12829,
+      "sha256": "da9ff1d90618b0d9dfde58952ef8ebac8e6d034f924767ee9d2573b52464ad7e"
+    },
+    {
       "path": "scripts/check-delivery-contract.py",
       "mode": "100644",
       "size": 17694,
@@ -317,16 +329,16 @@
       "sha256": "e47a20ba8c4bb74d5143d97d175b3ffaa6cb323f935030e49c04581e94b4b959"
     },
     {
-      "path": "scripts/check-pr-governance.py",
+      "path": "scripts/check-pr-governance.mjs",
       "mode": "100644",
-      "size": 9455,
-      "sha256": "d78199d04bd4ce2ca2fccbfce053244c0e9cfb8690ba63e46a72552cf35d5354"
+      "size": 7461,
+      "sha256": "2ecb665cd645d151af476e70d7b7363738c533ee124773facfe043c82480d29b"
     },
     {
-      "path": "scripts/sync-github-labels.py",
+      "path": "scripts/sync-github-labels.mjs",
       "mode": "100644",
-      "size": 2428,
-      "sha256": "ff40fd8568def858f100fff682559a3e75e6011860eb467143875a8625168ac6"
+      "size": 3083,
+      "sha256": "181618275724d6f48b42b0f38aa85490ed7fc47a6767c00937950516540ad776"
     },
     {
       "path": "start.mjs",
@@ -391,9 +403,9 @@
     {
       "path": "test_init.py",
       "mode": "100644",
-      "size": 5787,
-      "sha256": "60e23c53b7b80b84e18feae494ed06f793e8033850069c42acbdd43af809bca2"
+      "size": 6989,
+      "sha256": "025d8f57d3c4e1c5df7e4a791fda0d2a7a54d8a3d8299add25a78e20ffd9a869"
     }
   ],
-  "payload_digest": "sha256:9d65be13a3f4d84a1ef8481337e5a878ef3f7d73b04546b9cdfdf34b1e0ce25b"
+  "payload_digest": "sha256:0383c17f0690cf329049b6cd88eba5f7fceba8ede213dcdc83fd1428fc88008e"
 }

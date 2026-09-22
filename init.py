@@ -101,9 +101,7 @@ ARCHETYPE_ONLY_PATHS = (
     "scripts/bootstrap-e2e.py",
     "scripts/check-bootstrap-workflow.py",
     "scripts/release_ref.py",
-    "scripts/report-bootstrap-failure.py",
-    "scripts/triage-bootstrap-failure.py",
-    "scripts/test-bootstrap-triage.py",
+    "scripts/triage-bootstrap-failure.mjs",
 )
 
 TRACKER_DISPLAY = {
@@ -464,6 +462,7 @@ def _rewrite_moved_commands(text, destination, root):
     if destination_dir == ".factory/docs":
         text = text.replace("python3 scripts/", "python3 .factory/scripts/")
         text = text.replace("python scripts/", "python .factory/scripts/")
+        text = text.replace("node scripts/", "node .factory/scripts/")
         text = text.replace("cp hooks/", "cp .factory/hooks/")
         text = text.replace("chmod +x hooks/", "chmod +x .factory/hooks/")
     return text

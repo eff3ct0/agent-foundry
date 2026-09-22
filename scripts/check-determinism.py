@@ -142,18 +142,30 @@ def check_initializer_lifecycle(init):
                 )
                 assert repeat_opt_in.returncode == 0, (repeat_opt_in.stdout, repeat_opt_in.stderr)
                 assert os.stat(plugin).st_mtime_ns == plugin_mtime
-                contract_script = (
-                    ".factory/scripts/check-delivery-contract.py"
-                    if os.path.isfile(os.path.join(root, ".factory", "scripts", "check-delivery-contract.py"))
-                    else "scripts/check-delivery-contract.py"
+                structural_script = (
+                    ".factory/scripts/check-delivery-contract.mjs"
+                    if os.path.isfile(os.path.join(root, ".factory", "scripts", "check-delivery-contract.mjs"))
+                    else "scripts/check-delivery-contract.mjs"
                 )
-                contract = subprocess.run(
-                    [sys.executable, contract_script],
+                structural = subprocess.run(
+                    ["node", structural_script, "--self-check"],
                     cwd=root,
                     capture_output=True,
                     text=True,
                 )
-                assert contract.returncode == 0, (contract.stdout, contract.stderr)
+                assert structural.returncode == 0, (structural.stdout, structural.stderr)
+                approval_script = (
+                    ".factory/scripts/check-delivery-contract.py"
+                    if os.path.isfile(os.path.join(root, ".factory", "scripts", "check-delivery-contract.py"))
+                    else "scripts/check-delivery-contract.py"
+                )
+                approval = subprocess.run(
+                    [sys.executable, approval_script, "--approval-self-check"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                assert approval.returncode == 0, (approval.stdout, approval.stderr)
             else:
                 assert all(not os.path.exists(os.path.join(root, path)) for path in cleanup_paths), cleanup_paths
                 assert not os.path.exists(os.path.join(root, "scripts", "check-determinism.py"))
@@ -392,19 +404,38 @@ def check_factory_bootstrap(factory):
     ], calls
 
 
-def check_scripts(labels, governance, delivery, factory_layout, release_scripts=(), real_agent=()):
-    catalog = labels.load_labels()
+def check_scripts(factory_layout, release_scripts=(), real_agent=()):
+    labels_script = (
+        ".factory/scripts/sync-github-labels.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.mjs"))
+        else "scripts/sync-github-labels.mjs"
+    )
     assert_repeatable_command(["node", "start.mjs", "--self-check"])
-    assert_same_output(lambda: labels.sync(
-        catalog, repo="acme/example", dry_run=True))
-    assert_same_output(governance.self_check)
-    assert_same_output(delivery.self_check)
+    assert_repeatable_command(["node", labels_script, "--self-check"])
+    governance_script = (
+        ".factory/scripts/check-pr-governance.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "check-pr-governance.mjs"))
+        else "scripts/check-pr-governance.mjs"
+    )
+    assert_repeatable_command(["node", governance_script, "--self-check"])
+    delivery_script = (
+        ".factory/scripts/check-delivery-contract.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "check-delivery-contract.mjs"))
+        else "scripts/check-delivery-contract.mjs"
+    )
+    approval_script = (
+        ".factory/scripts/check-delivery-contract.py"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "check-delivery-contract.py"))
+        else "scripts/check-delivery-contract.py"
+    )
+    assert_repeatable_command(["node", delivery_script, "--self-check"])
+    assert_repeatable_command([sys.executable, approval_script, "--approval-self-check"])
     assert_same_output(factory_layout.self_check)
     if release_scripts:
-        bootstrap, reporter, triage, workflow = release_scripts
+        bootstrap, workflow = release_scripts
         assert_same_output(bootstrap.self_check)
-        assert_same_output(reporter.self_check)
-        assert_same_output(triage.self_check)
+        assert_repeatable_command(["node", "scripts/report-bootstrap-failure.mjs", "--self-check"])
+        assert_repeatable_command(["node", "scripts/triage-bootstrap-failure.mjs", "--self-check"])
         assert_same_output(workflow.check)
     if real_agent:
         checker, focused = real_agent
@@ -422,12 +453,12 @@ def check_cli_commands(source_mode):
             sys.executable, "factory_bootstrap.py", "--plan", "--org", "acme",
         ])
     labels_script = (
-        ".factory/scripts/sync-github-labels.py"
-        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.py"))
-        else "scripts/sync-github-labels.py"
+        ".factory/scripts/sync-github-labels.mjs"
+        if os.path.isfile(os.path.join(ROOT, ".factory", "scripts", "sync-github-labels.mjs"))
+        else "scripts/sync-github-labels.mjs"
     )
     assert_repeatable_command([
-        sys.executable, labels_script, "--dry-run", "--repo", "acme/example",
+        "node", labels_script, "--dry-run", "--repo", "acme/example",
     ])
 
 
@@ -436,22 +467,16 @@ def self_check():
     init = load_module("archetype_init", "init.py") if source_mode else None
     factory = load_module("factory_bootstrap", "factory_bootstrap.py") if source_mode else None
     script_dir = ".factory/scripts" if not source_mode else "scripts"
-    labels = load_module("sync_github_labels", script_dir + "/sync-github-labels.py")
-    governance = load_module("check_pr_governance", script_dir + "/check-pr-governance.py")
-    delivery = load_module("check_delivery_contract", script_dir + "/check-delivery-contract.py")
     factory_layout = load_module("check_factory_layout", script_dir + "/check-factory-layout.py")
     release_paths = (
         "scripts/bootstrap-e2e.py",
-        "scripts/report-bootstrap-failure.py",
-        "scripts/triage-bootstrap-failure.py",
+        "scripts/report-bootstrap-failure.mjs",
         "scripts/check-bootstrap-workflow.py",
     )
     release_scripts = ()
     if all(os.path.isfile(os.path.join(ROOT, path)) for path in release_paths):
         release_scripts = (
             load_module("bootstrap_e2e", "scripts/bootstrap-e2e.py"),
-            load_module("report_bootstrap_failure", "scripts/report-bootstrap-failure.py"),
-            load_module("triage_bootstrap_failure", "scripts/triage-bootstrap-failure.py"),
             load_module("check_bootstrap_workflow", "scripts/check-bootstrap-workflow.py"),
         )
     real_agent = ()
@@ -470,7 +495,7 @@ def self_check():
         check_initializer_lifecycle(init)
     if factory:
         check_factory_bootstrap(factory)
-    check_scripts(labels, governance, delivery, factory_layout, release_scripts, real_agent)
+    check_scripts(factory_layout, release_scripts, real_agent)
     check_cli_commands(source_mode)
     print("determinism self-check OK")
 

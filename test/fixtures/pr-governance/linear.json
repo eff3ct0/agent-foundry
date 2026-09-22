@@ -1,0 +1,16 @@
+{
+  "provider": "linear",
+  "bindings": "> **Capability:** `task`\n> **Provider:** `linear`\n",
+  "repository": "acme/example",
+  "event": {
+    "pull_request": {
+      "body": "Summary\n\nLinear: FEX-1",
+      "labels": [
+        {
+          "name": "type:product"
+        }
+      ]
+    }
+  },
+  "expectedErrors": []
+}
