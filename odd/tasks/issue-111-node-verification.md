@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for the feature-branch-chain tracker; Slice A resumes at `IMPLEMENTATION`.
+- State: `ACTIVE` in `IMPLEMENTATION` for Slice B local matrix and failure fixtures.
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-node-verification`
 - Branch: `feat/issue-111-node-verification`
 - Base: `origin/feat/issue-110-governance-node-06e-reporter-cleanup` at `f3f6d2b`
@@ -24,7 +24,7 @@
 
 ### Out of scope
 
-- Local matrix execution, failure injection, workflow changes, hosted resources, and legacy Python cleanup.
+- Workflow changes, hosted resources, and legacy Python cleanup.
 - Publishing the package, GitHub Template migration, live provider mutations, or any non-local disposable resource.
 
 ## Complete Cartesian matrix
@@ -65,7 +65,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
 2. Slice A: adds packed-artifact identity contract and two-tarball tests only.
-3. Later slices: add a local matrix runner, failure injection, workflow/hosted resource coordination, and legacy cleanup only after separately scoped review and authorization.
+3. Slice B: execute the complete local matrix through an injected local creator runner and prove corruption, partial-write, unknown-file, and malformed-evidence failures fail closed.
+4. Later slices: add workflow/hosted resource coordination and legacy cleanup only after separately scoped review and authorization.
 
 ## Delivery forecast
 
@@ -110,4 +111,15 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 
 ## Resume condition
 
-Commit, push, and open the Slice A child PR targeting tracker PR #148. Do not execute any matrix case or provision any hosted resource without a new explicit resource authorization.
+### Slice B: local Cartesian matrix and fault fixtures
+
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-local-matrix`
+- Branch: `feat/issue-111-local-matrix`
+- Base: `origin/feat/issue-111-artifact-identity` (PR #149)
+- Boundary: `scripts/local-matrix.mjs` enumerates and executes all 1,200 local cases with a caller-supplied runner, writes bounded machine-readable evidence, and supplies an installed-creator adapter without provisioning hosted resources.
+- Failure fixtures: corrupt payload bytes, mismatched payload digest, partial project write, unknown payload file, and malformed matrix evidence each fail closed in focused Node tests.
+- Explicitly deferred: workflow cutover, hosted lifecycle/resources, and legacy Python removal.
+
+## Resume condition
+
+Run the focused matrix and repository verification gates, then commit, push, and open the Slice B child PR targeting PR #149. Do not provision hosted resources or modify workflows without a new explicit authorization.
