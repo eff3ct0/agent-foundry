@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate and independently assert the bounded real-agent journey contract."""
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -64,6 +65,8 @@ MAX_EVIDENCE_BYTES = 64 * 1024
 MAX_OUTPUT_CHARS = 1200
 MAX_CHECKS = 32
 MAX_FAILURES = 8
+MAX_REPORT_BODY_CHARS = 12000
+MAX_REPORT_RESULTS = 100
 SAFE_REPOSITORY = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,38})/[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,99})")
 SAFE_BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}")
 SAFE_SHA = re.compile(r"[0-9a-f]{40}")
@@ -71,6 +74,9 @@ SAFE_RUN = re.compile(r"[0-9]{1,20}")
 SAFE_OWNER = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
 BOUNDARIES = ("source-readback", "initialization", "feature-issue", "implementation", "checkout", "test", "cleanup")
 APPROVAL_LABELS = {"status:approved", "approved", "approval"}
+REPORT_VERSION = "real-agent-journey-report/v1"
+REPORT_STATUSES = {"passed", "failed", "blocked", "inconclusive"}
+BUG_FORM_HEADINGS = ("Steps to reproduce", "Expected behavior", "Actual behavior", "Environment", "Severity")
 CHECK_COMMANDS = {
     "init-check": ["init.py", "--check"],
     "determinism": ["scripts/check-determinism.py"],
@@ -137,13 +143,17 @@ def branch(value, boundary="implementation"):
     return value
 
 
-def api_request(method, path, token, expected=(200,)):
+def api_request(method, path, token, expected=(200,), payload=None, include_headers=False):
     if not token:
         raise JourneyError("source-readback", "github_token_missing", "GitHub readback credential is missing")
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    if body is not None and len(body) > MAX_REPORT_BODY_CHARS:
+        raise JourneyError("reporting", "github_request_oversized", "GitHub report request exceeded its limit")
     request = urllib.request.Request(
-        "https://api.github.com/" + path.lstrip("/"), method=method,
+        "https://api.github.com/" + path.lstrip("/"), data=body, method=method,
         headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + token,
-                 "X-GitHub-Api-Version": "2022-11-28"},
+                 "X-GitHub-Api-Version": "2022-11-28",
+                 **({"Content-Type": "application/json"} if body is not None else {})},
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -157,9 +167,10 @@ def api_request(method, path, token, expected=(200,)):
     if status not in expected:
         raise JourneyError("source-readback", "github_response_mismatch", "GitHub returned an unexpected response")
     try:
-        return json.loads(raw.decode("utf-8")) if raw else {}
+        result = json.loads(raw.decode("utf-8")) if raw else {}
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise JourneyError("source-readback", "github_response_malformed", "GitHub readback was malformed") from error
+    return (result, response.headers) if include_headers else result
 
 
 def load_input(path):
@@ -183,6 +194,180 @@ def validate_url(value, repository_name, run):
     if parsed.path.rstrip("/").lower() != prefix.lower() and not parsed.path.lower().startswith(prefix.lower() + "/"):
         raise JourneyError("source-readback", "workflow_url_mismatch", "workflow URL does not identify this run")
     return value
+
+
+def failure_fingerprint(revision, runtime, stage, failure_code, check_identifier):
+    """Return the stable identifier for one immutable journey failure."""
+    revision = sha(revision, "reporting")
+    runtime = validate_runtime(runtime)
+    if stage not in STAGES:
+        raise JourneyError("reporting", "stage_invalid", "report stage is invalid")
+    failure_code = str(failure_code or "").strip().lower()
+    if not SAFE_STAGE.fullmatch(failure_code):
+        raise JourneyError("reporting", "failure_code_invalid", "failure code is invalid")
+    check_identifier = str(check_identifier or "").strip()
+    if not re.fullmatch(r"real-agent-journey/[a-z0-9_-]{1,32}", check_identifier):
+        raise JourneyError("reporting", "check_identifier_invalid", "check identifier is invalid")
+    return hashlib.sha256("\0".join((revision, runtime, stage, failure_code, check_identifier)).encode("utf-8")).hexdigest()[:32]
+
+
+def earliest_failed_stage(stages):
+    if not isinstance(stages, dict) or set(stages) - set(STAGES):
+        raise JourneyError("reporting", "stages_invalid", "report stages are invalid")
+    for stage in STAGES:
+        status = stages.get(stage, "missing")
+        if status != "missing" and status not in REPORT_STATUSES:
+            raise JourneyError("reporting", "stages_invalid", "report stage status is invalid")
+        if status != "passed":
+            return stage
+    raise JourneyError("reporting", "stages_invalid", "failed evidence has no failed stage")
+
+
+def normalize_report_failure(evidence, artifact_url):
+    """Validate bounded failed evidence without reading or mutating external systems."""
+    if not isinstance(evidence, dict) or evidence.get("schema_version") != ENVELOPE_VERSION:
+        raise JourneyError("reporting", "evidence_schema_invalid", "report evidence has an unsupported schema")
+    if evidence.get("result") == "passed":
+        return None
+    if evidence.get("result") != "failed":
+        raise JourneyError("reporting", "evidence_status_invalid", "report evidence result is invalid")
+    source_repository = repository(evidence.get("source_template"))
+    revision = sha(evidence.get("tested_revision"), "reporting")
+    runtime = validate_runtime(evidence.get("runtime"))
+    run = run_id(evidence.get("run_id"))
+    generated_repository = repository(evidence.get("repository"))
+    stage = earliest_failed_stage(evidence.get("stages"))
+    failure_code = str(evidence.get("failure_code") or "").strip().lower()
+    if not SAFE_STAGE.fullmatch(failure_code):
+        raise JourneyError("reporting", "failure_code_invalid", "report failure code is invalid")
+    cleanup_status = evidence.get("cleanup_status")
+    if cleanup_status not in {"passed", "failed", "skipped", "not-attempted"}:
+        raise JourneyError("reporting", "cleanup_status_invalid", "report cleanup status is invalid")
+    return {
+        "schema_version": REPORT_VERSION,
+        "source_repository": source_repository,
+        "revision": revision,
+        "runtime": runtime,
+        "run_id": run,
+        "generated_repository": generated_repository,
+        "stage": stage,
+        "failure_code": failure_code,
+        "check_identifier": "real-agent-journey/%s" % stage,
+        "cleanup_status": cleanup_status,
+        "workflow_url": validate_url(evidence.get("workflow_url"), source_repository, run),
+        "artifact_url": validate_url(artifact_url, source_repository, run),
+    }
+
+
+def validate_bug_body(body):
+    headings = [match.group(1).strip() for match in re.finditer(r"^### ([^\n]+)$", body or "", re.MULTILINE)]
+    sections = re.split(r"^### [^\n]+$", body or "", flags=re.MULTILINE)[1:]
+    if headings != list(BUG_FORM_HEADINGS) or len(sections) != len(BUG_FORM_HEADINGS):
+        raise JourneyError("reporting", "bug_body_invalid", "bug report body does not match the form")
+    if any(not section.strip() for section in sections) or sections[-1].strip() != "High":
+        raise JourneyError("reporting", "bug_body_invalid", "bug report body has missing required fields")
+
+
+def build_bug_report(evidence, artifact_url):
+    """Build a pure, validated canonical issue payload for failed journey evidence."""
+    report = normalize_report_failure(evidence, artifact_url)
+    if report is None:
+        return None
+    report["fingerprint"] = failure_fingerprint(
+        report["revision"], report["runtime"], report["stage"], report["failure_code"], report["check_identifier"]
+    )
+    marker = "\n".join((
+        "Real-Agent-Journey-Failure: %s@%s" % (report["source_repository"], report["revision"]),
+        "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"],
+    ))
+    body = "\n".join((
+        "### Steps to reproduce",
+        "1. Run the real-agent journey for `%s` at `%s`." % (report["source_repository"], report["workflow_url"]),
+        "2. Review the bounded evidence artifact at `%s`." % report["artifact_url"],
+        "",
+        "### Expected behavior",
+        "Every real-agent journey stage completes and cleanup evidence is available.",
+        "",
+        "### Actual behavior",
+        "The earliest failed stage was `%s` with failure code `%s`." % (report["stage"], report["failure_code"]),
+        "Cleanup status: `%s`." % report["cleanup_status"],
+        marker,
+        "",
+        "### Environment",
+        "GitHub Actions real-agent journey; source revision `%s`; runtime `%s`; run `%s`." % (
+            report["revision"], report["runtime"], report["run_id"]
+        ),
+        "",
+        "### Severity",
+        "High",
+    ))
+    if len(body) > MAX_REPORT_BODY_CHARS:
+        raise JourneyError("reporting", "bug_body_oversized", "bug report body exceeds its limit")
+    validate_bug_body(body)
+    return {"title": "[Bug] Real-agent journey failed: %s" % report["stage"], "body": body, **report}
+
+
+def _normalized_body(value):
+    return (value or "").replace("\r\n", "\n").rstrip("\n")
+
+
+def _canonical_issue(report, target, token, request_fn):
+    marker = "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"]
+    matches = {}
+    for state in ("open", "closed"):
+        query = urllib.parse.urlencode({"q": 'repo:%s is:issue state:%s "%s"' % (target, state, marker), "per_page": 100})
+        result = request_fn("GET", "search/issues?" + query, token)
+        if (not isinstance(result, dict) or result.get("incomplete_results") or
+                not isinstance(result.get("total_count"), int) or result["total_count"] > MAX_REPORT_RESULTS or
+                not isinstance(result.get("items"), list) or result["total_count"] != len(result["items"])):
+            raise JourneyError("reporting", "duplicate_lookup_incomplete", "GitHub duplicate lookup was incomplete")
+        for issue in result["items"]:
+            labels = issue.get("labels", []) if isinstance(issue, dict) else []
+            if (isinstance(issue.get("number"), int) and issue.get("repository_url", "").lower() ==
+                    ("https://api.github.com/repos/" + target).lower() and marker in (issue.get("body") or "") and
+                    "type:bug" in {label.get("name") for label in labels if isinstance(label, dict)}):
+                matches[issue["number"]] = issue
+    if len(matches) > 1:
+        raise JourneyError("reporting", "duplicate_lookup_ambiguous", "GitHub duplicate lookup found multiple canonical issues")
+    return next(iter(matches.values()), None), marker
+
+
+def report_failure(report, target, token, request_fn=api_request):
+    """Perform one bounded duplicate lookup and, only when needed, one report mutation."""
+    if report is None:
+        return "no journey failures"
+    target = repository(target)
+    if report.get("source_repository") != target:
+        raise JourneyError("reporting", "report_target_mismatch", "report target does not match the source repository")
+    issue, marker = _canonical_issue(report, target, token, request_fn)
+    if issue:
+        comments = request_fn("GET", "repos/%s/issues/%s/comments?per_page=100" % (target, issue["number"]), token)
+        if not isinstance(comments, list) or len(comments) >= MAX_REPORT_RESULTS:
+            raise JourneyError("reporting", "comment_lookup_incomplete", "GitHub comment lookup was incomplete")
+        if any(marker in (comment.get("body") or "") and comment.get("issue_url", "").lower() ==
+               ("https://api.github.com/repos/%s/issues/%s" % (target, issue["number"])).lower()
+               for comment in comments if isinstance(comment, dict)):
+            return "already reported #%s" % issue["number"]
+        created = request_fn("POST", "repos/%s/issues/%s/comments" % (target, issue["number"]), token,
+                             expected=(201,), payload={"body": report["body"]})
+        comment_id = created.get("id") if isinstance(created, dict) else None
+        readback = request_fn("GET", "repos/%s/issues/comments/%s" % (target, comment_id), token) if type(comment_id) is int else None
+        if (not isinstance(readback, dict) or readback.get("id") != comment_id or readback.get("issue_url", "").lower() !=
+                ("https://api.github.com/repos/%s/issues/%s" % (target, issue["number"])).lower() or
+                _normalized_body(readback.get("body")) != _normalized_body(report["body"])):
+            raise JourneyError("reporting", "comment_readback_failed", "GitHub comment readback did not match")
+        return "commented canonical issue #%s" % issue["number"]
+    created = request_fn("POST", "repos/%s/issues" % target, token, expected=(201,),
+                         payload={"title": report["title"], "body": report["body"], "labels": ["type:bug"]})
+    number = created.get("number") if isinstance(created, dict) else None
+    readback = request_fn("GET", "repos/%s/issues/%s" % (target, number), token) if type(number) is int else None
+    labels = readback.get("labels", []) if isinstance(readback, dict) else []
+    if (not isinstance(readback, dict) or readback.get("number") != number or readback.get("repository_url", "").lower() !=
+            ("https://api.github.com/repos/" + target).lower() or readback.get("title") != report["title"] or
+            "type:bug" not in {label.get("name") for label in labels if isinstance(label, dict)} or
+            _normalized_body(readback.get("body")) != _normalized_body(report["body"])):
+        raise JourneyError("reporting", "issue_readback_failed", "GitHub issue readback did not match")
+    return "created canonical journey issue #%s" % number
 
 
 def issue_form(path):
@@ -826,12 +1011,20 @@ def main():
     collect.add_argument("--stage-dir", required=True)
     collect.add_argument("--output", required=True)
     collect.add_argument("--workflow-url")
+    report = subparsers.add_parser("report")
+    report.add_argument("--input", required=True)
+    report.add_argument("--repository", required=True)
+    report.add_argument("--artifact-url", required=True)
+    report.add_argument("--token-env", default="GITHUB_TOKEN")
     args = parser.parse_args()
     try:
         if args.self_check:
             self_check()
             return
-        if args.input or args.checkout or args.cleanup_evidence or args.artifact_url:
+        if args.command == "report":
+            print(report_failure(build_bug_report(read_json(args.input), args.artifact_url), args.repository,
+                                 os.environ.get(args.token_env, "")))
+        elif args.input or args.checkout or args.cleanup_evidence or args.artifact_url:
             if not args.input or not args.checkout or not args.workflow_url:
                 parser.error("--input, --checkout, and --workflow-url are required")
             try:
