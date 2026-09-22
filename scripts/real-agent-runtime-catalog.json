@@ -1,0 +1,32 @@
+{
+  "schema_version": "real-agent-runtime-catalog/v1",
+  "default_runtime": "codex-cli",
+  "runtimes": [
+    {
+      "id": "codex-cli",
+      "label": "OpenAI Codex CLI",
+      "adapter": "scripts/real-agent-journey-agent.py",
+      "package": "@openai/codex",
+      "version": "0.148.0",
+      "required_credentials": [
+        "AGENT_GITHUB_TOKEN",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL"
+      ],
+      "status": "supported"
+    },
+    {
+      "id": "codex-cli-disabled",
+      "label": "OpenAI Codex CLI (disabled)",
+      "adapter": "scripts/real-agent-journey-agent.py",
+      "package": "@openai/codex",
+      "version": "0.148.0",
+      "required_credentials": [
+        "AGENT_GITHUB_TOKEN",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL"
+      ],
+      "status": "disabled"
+    }
+  ]
+}

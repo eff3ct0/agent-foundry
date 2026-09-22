@@ -2,6 +2,9 @@
 """Focused offline checks for the real-agent journey contract and assertions."""
 import importlib.util
 import json
+import re
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -10,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("real_agent_journey", ROOT / "scripts" / "real-agent-journey.py")
 journey = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(journey)
+PROVISION_SPEC = importlib.util.spec_from_file_location("real_agent_journey_provision", ROOT / "scripts" / "real-agent-journey-provision.py")
+provision = importlib.util.module_from_spec(PROVISION_SPEC)
+PROVISION_SPEC.loader.exec_module(provision)
 
 
 SHA = "a" * 40
@@ -153,11 +159,32 @@ if __name__ == "__main__":
     test_timeout_fails_closed()
     test_assert_stage_can_finish_before_cleanup()
 def test_contract_plan_is_provider_neutral():
-    plan = journey.contract_plan("123", "eff3ct0/factory-template")
-    assert plan["runtime"] is None
+    plan = journey.contract_plan("123", "eff3ct0/factory-template", runtime="codex-cli", source_sha=SHA,
+                                 source_tag_value="v1.2.3")
+    assert plan["runtime"] == "codex-cli"
+    assert plan["source_sha"] == SHA and plan["source_tag"] == "v1.2.3"
     assert plan["stages"] == ["provision", "agent", "assert", "cleanup"]
     assert plan["explicit_decisions"] == list(journey.DECISIONS)
     assert "status:approved" in plan["approval_boundary"]
+
+
+def test_plan_route_requires_runtime_before_writing_output():
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "plan.json"
+        command = [
+            journey.sys.executable, str(ROOT / "scripts" / "real-agent-journey.py"),
+            "plan", "--run-id", "123", "--template", "eff3ct0/factory-template",
+            "--source-sha", SHA, "--output", str(output),
+        ]
+        missing = subprocess.run(command, capture_output=True, text=True)
+        assert missing.returncode != 0
+        assert "the following arguments are required: --runtime" in missing.stderr
+        assert not output.exists()
+
+        accepted = subprocess.run(command + ["--runtime", "codex-cli"], capture_output=True, text=True)
+        assert accepted.returncode == 0, accepted.stderr
+        plan = json.loads(output.read_text(encoding="utf-8"))
+        assert plan["runtime"] == "codex-cli" and plan["source_sha"] == SHA
 
 
 def test_identity_and_decisions_fail_closed():
@@ -177,7 +204,10 @@ def test_identity_and_decisions_fail_closed():
 
 def test_runtime_and_adapter_contract():
     assert journey.validate_runtime("codex-cli") == "codex-cli"
-    for runtime, code in (("", "runtime_missing"), ("mock", "runtime_unsupported")):
+    catalog = journey.runtime_catalog()
+    assert catalog["default_runtime"] == "codex-cli"
+    assert journey.supported_runtime_ids() == ["codex-cli"]
+    for runtime, code in (("", "runtime_missing"), ("mock", "runtime_unsupported"), ("codex-cli-disabled", "runtime_disabled")):
         try:
             journey.validate_runtime(runtime)
         except journey.JourneyError as error:
@@ -191,6 +221,64 @@ def test_runtime_and_adapter_contract():
                "provision_token": "provision", "cleanup_token": "cleanup"}
     assert journey.stage_environment({}, "provision", context)["JOURNEY_TOKEN"] == "provision"
     assert journey.stage_environment({}, "cleanup", context)["JOURNEY_TOKEN"] == "cleanup"
+
+
+def test_catalog_routes_install_and_adapter_without_shell_interpolation():
+    commands = []
+
+    def runner(command, **_kwargs):
+        commands.append(command)
+        return type("Result", (), {"returncode": 0})()
+
+    journey.install_runtime("codex-cli", runner=runner)
+    assert commands == [["npm", "install", "--global", "@openai/codex@0.148.0"]]
+    assert journey.invoke_runtime_adapter("codex-cli", ["--self-check"], runner=runner) == 0
+    assert commands[1] == [journey.sys.executable, str(ROOT / "scripts/real-agent-journey-agent.py"), "--self-check"]
+
+
+def test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning():
+    workflow = (ROOT / ".github/workflows/real-agent-journey.yml").read_text(encoding="utf-8")
+    choices = re.findall(r"^          - ([a-z][a-z0-9-]*)$", workflow, re.MULTILINE)
+    assert choices == journey.supported_runtime_ids()
+    assert "type: choice" in workflow
+    assert "inputs.confirm" not in workflow and "confirm:" not in workflow
+    assert "vars.REAL_AGENT_JOURNEY_RUNTIME" not in workflow
+    assert "JOURNEY_RUNTIME: ${{ inputs.runtime || 'codex-cli' }}" in workflow
+    assert "release:\n    types: [published]" in workflow
+    assert "schedule:" in workflow and "workflow_dispatch:" in workflow
+    assert "resolve-release --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"" in workflow
+    assert "SOURCE_SHA: ${{ github.sha }}" in workflow
+    assert "EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}" in workflow
+    assert "GITHUB_EVENT_NAME: ${{ github.event_name }}" in workflow
+    assert "--source-sha \"$SOURCE_SHA\"" in workflow
+    assert "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"" in workflow
+    assert "install --runtime \"$JOURNEY_RUNTIME\"" in workflow
+    assert "invoke-agent --runtime \"$JOURNEY_RUNTIME\" --" in workflow
+    assert workflow.index("args=(plan ") < workflow.index("\n  provision:")
+
+
+def test_provisioning_rejects_a_mismatched_source_before_repository_creation():
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "provision.json"
+        original = provision.BOOTSTRAP.template_details, provision.BOOTSTRAP.owner_identity, provision.BOOTSTRAP.template_repository
+        calls = []
+        try:
+            provision.BOOTSTRAP.template_details = lambda *_: {"initial_revision": SHA}
+            provision.BOOTSTRAP.owner_identity = lambda *_: None
+            provision.BOOTSTRAP.template_repository = lambda *_: calls.append("created")
+            args = type("Args", (), {"run_id": "123", "owner": "acme", "template": "eff3ct0/factory-template",
+                                      "expected_source_sha": "c" * 40, "output": output})()
+            try:
+                provision.run(args)
+            except SystemExit as error:
+                assert error.code == 1
+            else:
+                raise AssertionError("mismatched source revision was accepted")
+            evidence = json.loads(output.read_text(encoding="utf-8"))
+            assert evidence["failure_code"] == "source_revision_mismatch" and not calls
+        finally:
+            (provision.BOOTSTRAP.template_details, provision.BOOTSTRAP.owner_identity,
+             provision.BOOTSTRAP.template_repository) = original
 
 
 def test_stage_schema_identity_and_approval_fail_closed():
@@ -260,9 +348,227 @@ def test_unsupported_runtime_keeps_cleanup_evidence():
         assert result["cleanup_status"] == "passed"
 
 
+def reporting_evidence(stages=None, failure_code="agent_failed"):
+    return {
+        "schema_version": journey.ENVELOPE_VERSION,
+        "result": "failed",
+        "run_id": "123",
+        "repository": "acme/real-agent-journey-123",
+        "source_template": "eff3ct0/factory-template",
+        "tested_revision": SHA,
+        "runtime": "codex-cli",
+        "stages": stages or {"provision": "passed", "agent": "failed", "assert": "passed", "cleanup": "passed"},
+        "failure_code": failure_code,
+        "cleanup_status": "passed",
+        "workflow_url": "https://github.com/eff3ct0/factory-template/actions/runs/123",
+    }
+
+
+def test_reporting_contract_builds_deterministic_bug_form_payload():
+    artifact = "https://github.com/eff3ct0/factory-template/actions/runs/123/artifacts/456"
+    report = journey.build_bug_report(reporting_evidence(), artifact)
+    assert report["schema_version"] == journey.REPORT_VERSION
+    assert report["title"] == "[Bug] Real-agent journey failed: agent"
+    assert report["stage"] == "agent" and report["check_identifier"] == "real-agent-journey/agent"
+    assert report["fingerprint"] == journey.failure_fingerprint(SHA, "codex-cli", "agent", "agent_failed", "real-agent-journey/agent")
+    assert "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"] in report["body"]
+    assert report["generated_repository"] not in report["body"]
+    journey.validate_bug_body(report["body"])
+
+
+def test_reporting_contract_uses_the_earliest_non_passing_stage():
+    evidence = reporting_evidence({"provision": "passed", "agent": "blocked", "assert": "failed", "cleanup": "failed"})
+    report = journey.build_bug_report(evidence, "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    assert report["stage"] == "agent"
+    assert report["cleanup_status"] == "passed"
+
+
+def test_reporting_contract_ignores_success_and_rejects_unsafe_evidence():
+    artifact = "https://github.com/eff3ct0/factory-template/actions/runs/123"
+    passed = reporting_evidence()
+    passed["result"] = "passed"
+    assert journey.build_bug_report(passed, artifact) is None
+    for field, value in (("tested_revision", "short"), ("runtime", "unsupported"),
+                         ("failure_code", "unsafe code"), ("cleanup_status", "unknown")):
+        evidence = reporting_evidence()
+        evidence[field] = value
+        try:
+            journey.build_bug_report(evidence, artifact)
+        except journey.JourneyError:
+            pass
+        else:
+            raise AssertionError("unsafe report evidence accepted: %s" % field)
+    try:
+        journey.build_bug_report(reporting_evidence(), "https://example.invalid/artifact")
+    except journey.JourneyError:
+        pass
+    else:
+        raise AssertionError("unsafe artifact URL accepted")
+
+
+def test_reporting_github_integration_is_bounded_and_reads_back_mutations():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    calls = []
+
+    def request(method, path, _token, expected=(200,), payload=None):
+        calls.append((method, path, payload))
+        if path.startswith("search/issues?"):
+            return {"total_count": 0, "incomplete_results": False, "items": []}
+        if method == "POST":
+            assert expected == (201,) and payload["labels"] == ["type:bug"]
+            return {"number": 42}
+        if path == "repos/eff3ct0/factory-template/issues/42":
+            return {"number": 42, "repository_url": "https://api.github.com/repos/eff3ct0/factory-template",
+                    "title": report["title"], "body": report["body"], "labels": [{"name": "type:bug"}]}
+        raise AssertionError(path)
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", request) == "created canonical journey issue #42"
+    assert [method for method, _, _ in calls].count("POST") == 1
+
+
+def test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    marker = "Real-Agent-Journey-Fingerprint: " + report["fingerprint"]
+
+    def duplicate(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return []
+        if method == "POST":
+            assert payload == {"body": report["body"]}
+            return {"id": 8}
+        if path.endswith("/comments/8"):
+            return {"id": 8, "issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
+        raise AssertionError(path)
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", duplicate) == "commented canonical issue #7"
+    def already_commented(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return [{"issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": marker}]
+        raise AssertionError("a recorded fingerprint must not mutate")
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", already_commented) == "already reported #7"
+    def ambiguous(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 2, "incomplete_results": False, "items": [{"number": number,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]} for number in (7, 8)]}
+        raise AssertionError("ambiguous lookup must not mutate")
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", ambiguous)
+    except journey.JourneyError as error:
+        assert error.failure_code == "duplicate_lookup_ambiguous"
+    else:
+        raise AssertionError("ambiguous canonical issues accepted")
+    try:
+        journey.report_failure(report, "wrong/repository", "token", duplicate)
+    except journey.JourneyError as error:
+        assert error.failure_code == "report_target_mismatch"
+    else:
+        raise AssertionError("mismatched report target accepted")
+
+
+def test_reporting_github_integration_rejects_inconsistent_lookup_counts_before_writing():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    calls = []
+
+    def inconsistent_count(method, path, _token, expected=(200,), payload=None):
+        calls.append((method, path, payload))
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": []}
+        raise AssertionError("inconsistent duplicate lookup must not classify or mutate")
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", inconsistent_count)
+    except journey.JourneyError as error:
+        assert error.failure_code == "duplicate_lookup_incomplete"
+    else:
+        raise AssertionError("inconsistent duplicate lookup count accepted")
+    assert calls and all(method == "GET" and path.startswith("search/issues?") for method, path, _ in calls)
+
+
+def test_reporting_github_integration_rejects_comment_readback_identity_mismatch():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    marker = "Real-Agent-Journey-Fingerprint: " + report["fingerprint"]
+
+    def invalid_comment_readback(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return []
+        if method == "POST":
+            return {"id": 8}
+        if path.endswith("/comments/8"):
+            return {"id": 9, "issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
+        raise AssertionError(path)
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", invalid_comment_readback)
+    except journey.JourneyError as error:
+        assert error.failure_code == "comment_readback_failed"
+    else:
+        raise AssertionError("mismatched comment readback identity accepted")
+
+
+def test_reporting_github_integration_rejects_mutation_readback_mismatch():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+
+    def invalid_readback(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 0, "incomplete_results": False, "items": []}
+        if method == "POST":
+            return {"number": 42}
+        return {"number": 42, "repository_url": "https://api.github.com/repos/eff3ct0/factory-template",
+                "title": report["title"], "body": "mismatched", "labels": [{"name": "type:bug"}]}
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", invalid_readback)
+    except journey.JourneyError as error:
+        assert error.failure_code == "issue_readback_failed"
+    else:
+        raise AssertionError("mismatched issue readback accepted")
+
+
+def test_report_cli_dispatch_does_not_require_assertion_arguments():
+    with tempfile.TemporaryDirectory() as tmp:
+        evidence = Path(tmp) / "journey.json"
+        evidence.write_text(json.dumps({"schema_version": journey.ENVELOPE_VERSION, "result": "passed"}), encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "real-agent-journey.py"), "report",
+             "--input", str(evidence), "--repository", "eff3ct0/factory-template",
+             "--artifact-url", "https://github.com/eff3ct0/factory-template/actions/runs/123"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == "no journey failures\n"
+
+
 if __name__ == "__main__":
     test_contract_plan_is_provider_neutral()
+    test_plan_route_requires_runtime_before_writing_output()
     test_identity_and_decisions_fail_closed()
     test_aggregate_rejects_mismatch_and_cleanup_failure()
     test_unsupported_runtime_keeps_cleanup_evidence()
+    test_reporting_contract_builds_deterministic_bug_form_payload()
+    test_reporting_contract_uses_the_earliest_non_passing_stage()
+    test_reporting_contract_ignores_success_and_rejects_unsafe_evidence()
+    test_reporting_github_integration_is_bounded_and_reads_back_mutations()
+    test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity()
+    test_reporting_github_integration_rejects_inconsistent_lookup_counts_before_writing()
+    test_reporting_github_integration_rejects_comment_readback_identity_mismatch()
+    test_reporting_github_integration_rejects_mutation_readback_mismatch()
+    test_report_cli_dispatch_does_not_require_assertion_arguments()
+    test_catalog_routes_install_and_adapter_without_shell_interpolation()
+    test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning()
+    test_provisioning_rejects_a_mismatched_source_before_repository_creation()
     print("real-agent journey offline tests OK")
