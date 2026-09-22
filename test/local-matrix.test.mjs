@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
+  captureCommandResult,
   LocalMatrixError,
   assertFailureFixture,
   enumerateMatrix,
@@ -60,7 +61,14 @@ test("the local runner executes and records every matrix case", async () => {
       identity,
       runCase: async ({ matrixCase, configuration, directory: caseDirectory }) => {
         invoked.push({ matrixCase, configuration, caseDirectory });
-        return { status: "passed", commands: ["factory-template apply", "factory-template verify"] };
+        return {
+          status: "passed",
+          commands: ["factory-template apply", "factory-template verify"],
+          release_e2e: {
+            schema_version: 1,
+            command_results: [captureCommandResult({ name: "factory-template apply", command: "factory-template apply", status: "passed", exit_code: 0, output: "created" })],
+          },
+        };
       },
     });
     assert.equal(invoked.length, 1200);
@@ -69,6 +77,52 @@ test("the local runner executes and records every matrix case", async () => {
     const written = JSON.parse(await readFile(path.join(directory, "matrix-evidence.json"), "utf8"));
     assert.deepEqual(validateMatrixEvidence(written), evidence);
     assert.equal(written.cases[0].commands.length, 2);
+    assert.equal(written.cases[0].release_e2e.schema_version, 1);
+    assert.equal(written.cases[0].release_e2e.command_results[0].output, "created");
+  });
+});
+
+test("release E2E command results redact credentials and private temporary paths", () => {
+  const result = captureCommandResult({
+    name: "release command",
+    command: "TOKEN=secret factory-template apply --target /tmp/private-project",
+    status: "failed",
+    exit_code: 1,
+    output: "Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz0123456789 /home/runner/work/key github_pat_abcdefghijklmnopqrstuvwxyz0123456789",
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.exit_code, 1);
+  assert.match(serialized, /<redacted>/);
+  assert.match(serialized, /<private-path>/);
+  assert.doesNotMatch(serialized, /secret|ghp_|github_pat_|\/tmp\/|\/home\//);
+});
+
+test("release E2E evidence rejects unsafe or oversized serialized command results", async () => {
+  await temporaryDirectory("factory-local-matrix-evidence", async (directory) => {
+    const evidence = await runLocalMatrix({
+      outputDirectory: directory,
+      identity,
+      runCase: async () => ({ status: "passed" }),
+    });
+    evidence.cases[0].release_e2e.command_results = Array.from({ length: 8 }, (_, index) => captureCommandResult({
+      name: `command-${index}`,
+      command: "factory-template apply",
+      status: "passed",
+      exit_code: 0,
+      output: "x".repeat(512),
+    }));
+    await assert.rejects(async () => validateMatrixEvidence(evidence), LocalMatrixError);
+
+    evidence.cases[0].release_e2e = { schema_version: 1, command_results: [] };
+    evidence.oversized = "x".repeat(1024 * 1024);
+    await assert.rejects(async () => validateMatrixEvidence(evidence), LocalMatrixError);
+    delete evidence.oversized;
+    evidence.cases[1].release_e2e = {
+      schema_version: 1,
+      command_results: [captureCommandResult({ name: "unsafe", command: "factory-template apply", status: "passed", exit_code: 0, output: "safe" })],
+      unexpected: "field",
+    };
+    await assert.rejects(async () => validateMatrixEvidence(evidence), LocalMatrixError);
   });
 });
 
