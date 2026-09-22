@@ -102,18 +102,22 @@ pending; restore the cleanup credential, download the matching provisioning
 proof artifact, and rerun only that proof-bound cleanup job for the exact run
 and matrix case. Do not broaden the scope or delete unrelated repositories.
 
-The template bootstrap workflow is a manual, maintainer-only check. It generates
-one disposable repository per recipe from the published template, records a
-run-scoped ownership/readback proof before the cold-start and `--no-clean`
-validation matrix, and records redacted evidence. Its `if: always()` cleanup
-job downloads those proofs and deletes only exact owner/name pairs independently
-validated against GitHub. If the runner or API fails, retain the evidence
-artifact and rerun exact recovery with:
+The template bootstrap workflow is a manual, maintainer-only check. Its trusted
+`github.workflow_sha` checkout builds one immutable package with pinned
+Corepack/pnpm, then uploads that package as a run-scoped artifact. Each recipe
+job downloads exactly that artifact and validates the installed creator: it
+installs the package offline with scripts disabled, runs
+`factory-template apply --non-interactive`, and requires the verified creator
+JSON envelope. It does not call the Template API or create a disposable
+repository.
 
-`BOOTSTRAP_E2E_TOKEN=<short-lived-token> python3 scripts/bootstrap-e2e.py cleanup-template --owner <sandbox-owner> --run-id <run-id> --template eff3ct0/factory-template --evidence-dir <downloaded-evidence> --output cleanup.json`
-
-Never replace the evidence directory with a prefix scan or delete a repository
-whose proof is missing or mismatched.
+Template validation owns only runner-local output. Its `finally` block removes
+the case's `template-output` directory after recording redacted evidence; it
+does not use a lifecycle credential, provisioning proof, prefix scan, or remote
+cleanup recovery procedure. The always-run reporter receives only the workflow
+token with `contents: read`, `actions: read`, and `issues: write`; it receives
+redacted evidence, does not receive a lifecycle or OpenAI credential, and uses
+the bounded canonical-issue reporter.
 
 The real-agent user journey is defined in [`docs/real-agent-journey.md`](docs/real-agent-journey.md) and
 `.github/workflows/real-agent-journey.yml`. It is initially manual/nightly, not release-triggered. The parent
