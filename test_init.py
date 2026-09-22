@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -111,6 +112,33 @@ class InitializerChecks(unittest.TestCase):
             self.assertEqual(init.relocate_factory_assets(directory), [])
         finally:
             shutil.rmtree(directory)
+
+    def test_feature_issue_form_has_required_product_fields(self):
+        path = os.path.join(ROOT, ".github", "ISSUE_TEMPLATE", "feature.yml")
+        with open(path, encoding="utf-8") as source:
+            form = source.read()
+
+        self.assertIn("name: Feature request", form)
+        self.assertIn("  - type:feature", form)
+        blocks = re.split(r"^  - type: ", form, flags=re.MULTILINE)[1:]
+        controls = []
+        for block in blocks:
+            identifier = re.search(r"^    id: (.+)$", block, re.MULTILINE)
+            label = re.search(r"^      label: (.+)$", block, re.MULTILINE)
+            required = re.search(r"^      required: true$", block, re.MULTILINE)
+            self.assertIsNotNone(identifier)
+            self.assertIsNotNone(label)
+            self.assertIsNotNone(required)
+            controls.append((identifier.group(1), label.group(1)))
+
+        self.assertEqual(controls, [
+            ("problem", "Problem"),
+            ("desired-outcome", "Desired outcome"),
+            ("scope", "Scope"),
+            ("acceptance", "Acceptance criteria"),
+            ("constraints", "Constraints"),
+            ("verification", "Verification"),
+        ])
 
 
 if __name__ == "__main__":
