@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice E1 local release-E2E evidence contract.
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice E2 exact-tarball installed-runner boundary.
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-node-verification`
 - Branch: `feat/issue-111-node-verification`
 - Base: `origin/feat/issue-110-governance-node-06e-reporter-cleanup` at `f3f6d2b`
@@ -64,7 +64,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                   └── Slice C: feat/issue-111-workflow-contract
                          └── Slice D: feat/issue-111-delivery-approval
                                └── 📍 Slice E1: feat/issue-111-e1-evidence
-                                     └── later: tarball runner, hosted execution, then legacy cleanup
+                                      └── 📍 Slice E2: feat/issue-111-e2-installed-runner
+                                            └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -73,7 +74,17 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
 4. Slice C: port the workflow static checker and focused test suite to Node while retaining the Python checker and its existing consumers.
 5. Slice D: port only the protected-approval self-check into the existing Node delivery-contract command with fixtures; retain Python and every workflow consumer.
 6. Slice E1: add local command-result evidence capture, redaction, and serialized-size bounds without changing identity, matrix dimensions, runners, workflows, hosted resources, or Python.
-7. Later slices: add a tarball runner, hosted resource coordination, and legacy cleanup only after separately scoped review and authorization.
+7. Slice E2: add only the local exact-tarball installed-runner boundary; hosted resource coordination and legacy cleanup remain later separately scoped work.
+
+## Slice E2: exact-tarball installed-runner boundary
+
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-e2-installed-runner`
+- Branch: `feat/issue-111-e2-installed-runner`
+- Base: `origin/feat/issue-111-e1-evidence` (PR #155)
+- Boundary: add a local CLI/helper that accepts only a regular `.tgz`, installs that exact file with `npm --offline --ignore-scripts`, resolves the installed package CLI, and runs `apply` with an allowlisted environment.
+- Evidence: derive the packed artifact identity and fail closed unless the installed creator produces a successful, verified JSON `apply` envelope for the requested target.
+- Verification: one focused real installed-CLI test packs the artifact, calls the helper, and asserts the creator result plus all identity digests. Matrix orchestration, workflow changes, hosted resources, and Python retirement remain out of scope.
+- Evidence: `pnpm typecheck`, `pnpm test:installed-runner` (1/1), `pnpm test:local-matrix` (7/7), `pnpm test` (108/108), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. The payload mirror was regenerated because the ownership manifest is itself a payload input.
 
 ## Delivery forecast
 
