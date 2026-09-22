@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for H2 template workflow static contracts.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-h2-template-contract`
-- Branch: `feat/issue-111-h2-template-contract`
-- Base: `origin/feat/issue-111-h1-template-package` at `50f2d39`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for I legacy Python retirement.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-python-retirement`
+- Branch: `feat/issue-111-python-retirement`
+- Base: `origin/feat/issue-111-h3-template-docs` at `2fd9672`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -79,7 +79,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                                                                                └── G6: feat/issue-111-g6-release-workflow
                                                                                                                      └── 📍 H1: feat/issue-111-h1-template-package
                                                                                                                           └── 📍 H2: feat/issue-111-h2-template-contract
-                                                                                                                               └── later: documentation and legacy cleanup
+                                                                                                                                └── H3: feat/issue-111-h3-template-docs
+                                                                                                                                     └── 📍 I: feat/issue-111-python-retirement
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -227,6 +228,20 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Ownership: classify the Node checker as `archetype_only_release_e2e` so initialization removes it and the generated payload remains unchanged. Classify the existing Slice B `scripts/local-matrix.mjs` in the same category to restore the ownership-boundary check.
 - Verification: `pnpm typecheck`; `pnpm test:workflow-contract` (14/14); `pnpm test` (104/104); Node and Python workflow checkers; `python3 scripts/test-bootstrap-e2e.py`; `python3 scripts/check-determinism.py`; `python3 init.py --self-check`; and `git diff --check` passed. `python3 init.py --check` is intentionally inapplicable in this placeholder source repository.
 - Review budget: the maintainer explicitly approved `size:exception` for the cohesive 450-600-line static checker and parity-test work unit.
+
+## H3: template workflow documentation
+
+- Boundary: document the H1 package-based template workflow and H2's static contract without changing workflow behavior or retiring Python.
+- Compatibility: the complete Python-stack recipe matrix remains a generated-project fixture dimension.
+
+## I: legacy Python retirement
+
+- Boundary: remove only the superseded Python release bootstrap harness, its dedicated offline test, and the Python workflow checker. Remove their ownership and compatibility-cleanup registrations, and update the retained determinism and real-agent paths to use Node workflow checks or local validation without importing the retired harness.
+- Compatibility: keep the Node release, workflow, triage, and reporter replacements; retain `ci/recipes.json` and all generated Python-stack fixture support. The real-agent journey remains Python and continues to validate bounded repository, owner, SHA, and diagnostic values locally.
+- Ownership and payload: remove the retired release-only ownership entries and regenerate `package/payload-manifest.json` and `package/payload-files.json`, because `archetype-ownership.json` is a retained payload input.
+- Verification: run the focused real-agent regression, Node workflow-contract suite, the full Node suite, retained Python function tests, initializer self-check, and whitespace validation. Do not publish a package or run hosted workflows.
+- Review budget: the maintainer explicitly regularized `size:exception` for the actual cohesive final-child diff: 48 additions and 1,651 deletions (1,699 changed lines). This authorization replaces the earlier 1,250-1,500 forecast. The final child above H3 cannot be split without leaving an invalid retained Python execution path.
+- Delivery commit: `82cef8d` (`feat(verification): retire legacy Python bootstrap`). `pnpm typecheck`, workflow-contract tests (16/16), `pnpm test` (156/156), retained Python function tests (11/11 plus the real-agent journey suite), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. No package publication or hosted workflow execution occurred.
 
 ## Slice D: Node protected-approval self-check
 
