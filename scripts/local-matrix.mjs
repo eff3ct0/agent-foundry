@@ -184,20 +184,27 @@ const validateResult = (value, matrixCase) => {
   };
 };
 
-export const validateMatrixEvidence = (evidence) => {
+export const validateMatrixEvidence = (evidence, { allowFailures = false } = {}) => {
   if (!object(evidence) || evidence.schema_version !== 1 || !Array.isArray(evidence.cases)) fail("matrix evidence is absent or malformed");
   if (serializedBytes(evidence) > MAX_MATRIX_EVIDENCE_BYTES) fail("matrix evidence exceeds the serialized size limit");
   validateIdentity(evidence.identity);
   const expected = enumerateMatrix();
   if (evidence.cases.length !== expected.length) fail("matrix evidence does not cover every case");
+  let passed = 0;
+  let failed = 0;
   for (const [index, matrixCase] of expected.entries()) {
     const record = evidence.cases[index];
-    if (!object(record) || record.id !== matrixCase.id || record.status !== "passed" || !object(record.configuration) || JSON.stringify(record.configuration) !== JSON.stringify(matrixConfiguration(matrixCase))) {
+    if (!object(record) || record.id !== matrixCase.id || !["passed", "failed"].includes(record.status) || !object(record.configuration) || JSON.stringify(record.configuration) !== JSON.stringify(matrixConfiguration(matrixCase))) {
       fail(`matrix evidence is invalid for ${matrixCase.id}`);
     }
+    if (!Array.isArray(record.commands) || record.commands.length > 8 || record.commands.some((command) => typeof command !== "string" || command !== sanitizeEvidenceText(command, 256))) fail(`matrix evidence commands are invalid for ${matrixCase.id}`);
+    if (record.status === "failed" && (typeof record.failure !== "string" || !record.failure || record.failure !== sanitizeEvidenceText(record.failure, 256))) fail(`matrix evidence failure is invalid for ${matrixCase.id}`);
+    if (record.status === "passed" && record.failure !== undefined) fail(`matrix evidence success has a failure for ${matrixCase.id}`);
     validateReleaseE2eEvidence(record.release_e2e, matrixCase);
+    if (record.status === "passed") passed += 1;
+    else failed += 1;
   }
-  if (evidence.summary?.total !== expected.length || evidence.summary?.passed !== expected.length || evidence.summary?.failed !== 0) fail("matrix evidence summary is invalid");
+  if (evidence.summary?.total !== expected.length || evidence.summary?.passed !== passed || evidence.summary?.failed !== failed || !allowFailures && failed > 0) fail("matrix evidence summary is invalid");
   return evidence;
 };
 
@@ -230,6 +237,7 @@ export const runLocalMatrix = async ({ outputDirectory, identity, runCase }) => 
     cases,
     summary: { total: cases.length, passed: cases.filter((entry) => entry.status === "passed").length, failed: cases.filter((entry) => entry.status === "failed").length },
   };
+  validateMatrixEvidence(evidence, { allowFailures: true });
   await writeFile(path.join(outputDirectory, "matrix-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   if (evidence.summary.failed > 0) fail("local matrix contains failed cases");
   return validateMatrixEvidence(evidence);
