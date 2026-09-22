@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#110](https://github.com/eff3ct0/factory-template/issues/110)
-- State: `ACTIVE` in `IMPLEMENTATION`; Child 05b adds only the advisory Node model request, parsing, fallback artifact, and CLI after Child 05a evidence contract at commit `59f5d59`.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-05b-triage-cli`
-- Branch: `feat/issue-110-governance-node-05b-triage-cli`
-- Base: `origin/feat/issue-110-governance-node-05-triage` at `59f5d59`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY`; Child 06c cuts static workflow and determinism consumers over to the Node reporter while retaining Python compatibility paths.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-110-governance-node-06c-reporter-cutover`
+- Branch: `feat/issue-110-governance-node-06c-reporter-cutover`
+- Base: `origin/feat/issue-110-governance-node-06b-reporter-adapter` at `d5d27fe`
 - Delivery strategy: Feature Branch Chain. The tracker targets `main` as a draft/no-merge integration branch; each child targets its immediate chain parent.
 
 ## Scope
@@ -163,3 +163,46 @@ The first split is intentionally bounded: Child 01 is the only currently forecas
 - The CLI always writes a bounded success or deterministic fallback artifact; it exits non-zero on fallback. It has no workflow consumer in this child.
 - The Python triage command and active workflows remain authoritative until the separately scoped Child 05c cutover.
 - Verification passed: focused Node triage tests, full `pnpm test` (75 tests), retained Python triage checks, workflow static checks, `pnpm typecheck`, ownership/determinism self-checks, a local fallback CLI replay, and payload-mirror regeneration (no mirror delta because the release-only path was already registered).
+
+## Child 05c active consumer cutover
+
+- The release triage job pins Node.js 20.19.0 and invokes `scripts/triage-bootstrap-failure.mjs` through the existing `env -i` boundary, passing only `PATH`, `OPENAI_API_KEY`, and `OPENAI_MODEL` into the process.
+- The artifact contract remains `bootstrap-e2e-triage/v1`, so the Python reporter continues to consume the same handoff without a reporting migration.
+- Determinism and local smoke documentation now exercise the Node self-check and Node contract suites; the legacy Python triage test consumers are no longer part of the active verification path. The legacy Python implementation remains lifecycle-classified until Child 06 removes the final Python reporting/triage paths.
+- Verification passed: `pnpm test` (76 tests), `pnpm typecheck`, workflow static validation, ownership/determinism and initializer self-checks, and a clean-environment fallback replay. The payload integrity mirror was regenerated after the ownership and determinism inputs changed.
+
+## Child 06a reporter pure-contract boundary
+
+- `scripts/report-bootstrap-failure.mjs` ports bounded evidence and triage loading, release identity/case validation, stable fingerprints and markers, bug-form validation, and deterministic release/template issue-body construction.
+- This child makes no GitHub request, workflow change, consumer cutover, or Python removal; reporter pagination, deduplication, mutation, readback, and CLI integration remain a later coherent boundary.
+- Offline fixtures replay invalid evidence and triage, cleanup failures, redaction, fingerprints/markers, and bug-form-compatible bodies. The Node reporter is registered as release-only ownership; the payload mirror is regenerated with its inventory change.
+
+## Child 06b reporter GitHub adapter boundary
+
+- `scripts/report-bootstrap-failure.mjs` now provides bounded GitHub HTTP, target verification, trusted Link-header pagination, run-scoped artifact links, canonical open/closed issue deduplication, and issue/comment mutation readback behind an injected-fetch adapter.
+- Offline Node fixtures exercise pagination, unsafe pagination rejection, artifact discovery, canonical comment reporting, issue creation, and mutation readback. No CLI/workflow consumer changes, Python removal, or live GitHub mutation are included.
+- The reporter remains release-only, so its changed source is excluded from the retained payload; `pnpm build` refreshes and verifies the payload mirror without adding this adapter.
+- Verification: focused reporter fixtures (6 tests), full Node suite (82 tests), `pnpm typecheck`, `pnpm build`, and `python3 scripts/check-determinism.py` pass; the 222 changed lines remain within the 400-line child review budget.
+
+## Child 06c reporter CLI and consumer cutover
+
+- `scripts/report-bootstrap-failure.mjs` now provides the bounded reporter CLI: it reads sorted, size-limited evidence; derives status failures, release identity, fingerprints, and bug-form bodies; then invokes the injected-fetch adapter and emits a stable JSON outcome. A no-failure replay exits without a GitHub request.
+- The release and template bootstrap report jobs pin Node.js 20.19.0 and invoke the Node CLI. Workflow static validation, determinism, and smoke-test documentation now consume the Node reporter; Python reporter files and compatibility tests remain intact for a later retirement slice.
+- Verification: focused reporter suite (8 tests, including an offline failing-matrix CLI replay), full `pnpm test` (84 tests), `pnpm typecheck`, `pnpm build`, bootstrap-workflow static checks, determinism, and initializer self-check all pass. `package/payload-manifest.json` was regenerated after the documentation and ODD changes. The work unit changes 217 authored lines, below the 400-line budget.
+
+## Child 06c reporter corrective boundary
+
+- The active Node CLI now loads configured recipe names before validating evidence, accepts every non-passed matrix result, and rejects missing, malformed, or inconsistent evidence `OPENAI_MODEL` values, matching the retained Python reporter boundary.
+- The focused CLI fixture writes a configured `python` matrix record with a non-passed result and proves it reaches the GitHub credential boundary rather than being rejected as an invalid case. The offline replay still proves no-failure reports perform no GitHub request.
+
+## Child 06d Python triage retirement boundary
+
+- The obsolete Python triage command and its dedicated legacy test module are retired after the completed Node triage consumer cutover. The Node triage command and both reporter implementations remain unchanged; Python reporter retirement is reserved for Child 06e.
+- The `legacy_python_triage` ownership category is removed, and the payload integrity mirror is regenerated for the ownership-manifest change.
+- Accepted exception evidence: the maintainer explicitly regularized `size:exception` for the actual cohesive Child 06d diff: 9 additions and 879 deletions (888 changed lines). This authorization replaces the earlier 500-620 forecast. The retirement, ownership cleanup, ODD evidence, and regenerated payload mirror must remain reviewable as one lifecycle boundary.
+
+## Child 06e Python reporter retirement boundary
+
+- The now-unused Python bootstrap-failure reporter and its reporter-only compatibility fixture are retired after the Node reporter's covered CLI and workflow cutover. The retained bootstrap E2E fixture keeps its unrelated bootstrap and workflow assertions; the Node reporter and its test suite remain unchanged.
+- The obsolete Python reporter is removed from both lifecycle registrations, and the payload integrity mirror is regenerated after the ownership-manifest update.
+- Accepted exception evidence: the maintainer explicitly approved `size:exception` for the actual cohesive Child 06e diff: 9 additions and 739 deletions (748 changed lines). The legacy reporter removal, retained-test cleanup, lifecycle cleanup, ODD evidence, and regenerated payload mirror must remain one reviewable unit.

@@ -257,6 +257,12 @@ export const fallback = (reason, model = "") => {
   return { schema_version: TRIAGE_VERSION, status: "fallback", reason: String(reason).slice(0, 240), selected_model: selectedModel };
 };
 
+export const selfCheck = () => {
+  const request = buildRequest("model", "incident");
+  if (request.store || request.max_output_tokens !== 300) throw new TriageError("triage request contract is invalid");
+  validateResult({ classification: "unknown", summary: "Incident summary.", reproduction: "Run the released initializer." });
+};
+
 export const writeArtifact = async (file, result) => {
   const serialized = `${asciiJson(result)}\n`;
   if (Buffer.byteLength(serialized, "utf8") > 16 * 1024) throw new TriageError("triage result is too large");
@@ -292,5 +298,7 @@ export const run = async (args, { env = process.env, fetchFn = globalThis.fetch 
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  run(parseArgs(process.argv.slice(2))).catch((error) => { console.error(error.message); process.exitCode = 1; });
+  if (process.argv.slice(2).join(" ") === "--self-check") {
+    try { selfCheck(); console.log("triage self-check OK"); } catch (error) { console.error(error.message); process.exitCode = 1; }
+  } else run(parseArgs(process.argv.slice(2))).catch((error) => { console.error(error.message); process.exitCode = 1; });
 }
