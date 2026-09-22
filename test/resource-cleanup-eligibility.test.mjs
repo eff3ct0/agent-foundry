@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { createHostedLifecycleReadClient } from "../scripts/hosted-lifecycle-read-client.mjs";
 import { decideCleanupEligibility, readCleanupEligibility } from "../scripts/resource-cleanup-eligibility.mjs";
 
 const owner = "sandbox-owner";
@@ -54,6 +55,22 @@ test("recognizes one exact target as already absent", async () => {
   const injected = client({ status: "missing" });
   assert.deepEqual(await readCleanupEligibility({ client: injected.client, ...exact() }), { status: "already-absent" });
   assert.deepEqual(injected.calls, [`/repos/${target}`]);
+});
+
+test("treats an exact repository 404 from the lifecycle client as already absent", async () => {
+  const calls = [];
+  const lifecycleClient = createHostedLifecycleReadClient({
+    token: "github_pat_secret-value",
+    transport: async (request) => {
+      calls.push(request);
+      return new Response('{"message":"Not Found"}', { status: 404 });
+    },
+  });
+
+  assert.deepEqual(await readCleanupEligibility({ client: lifecycleClient, ...exact() }), { status: "already-absent" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].method, "GET");
+  assert.equal(calls[0].url, `https://api.github.com/repos/${target}`);
 });
 
 test("requires recovery after timeout or malformed readback without widening the target", async () => {

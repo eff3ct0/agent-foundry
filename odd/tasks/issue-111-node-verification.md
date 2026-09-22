@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `IMPLEMENTATION` for Slice F3 run-scoped resource proof.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-f3-resource-proof`
-- Branch: `feat/issue-111-f3-resource-proof`
-- Base: `origin/feat/issue-111-f2-release-readback` at `16d4bb5`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for the G0 lifecycle 404 prerequisite repair.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g0-lifecycle-repair`
+- Branch: `feat/issue-111-g0-lifecycle-repair`
+- Base: `origin/feat/issue-111-f4-cleanup-recovery` at `88880b2`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -68,8 +68,10 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                              └── 📍 Slice E3: feat/issue-111-e3-orchestration
                                                     └── Slice F1: feat/issue-111-f1-read-client
                                                          └── Slice F2: feat/issue-111-f2-release-readback
-                                                               └── 📍 Slice F3: feat/issue-111-f3-resource-proof
-                                                                    └── later: hosted execution, then legacy cleanup
+                                                                └── Slice F3: feat/issue-111-f3-resource-proof
+                                                                     └── Slice F4: feat/issue-111-f4-cleanup-recovery
+                                                                          └── 📍 G0: feat/issue-111-g0-lifecycle-repair
+                                                                               └── later: hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -135,6 +137,14 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Failure contract: cross-run, cross-owner, visibility, template, repository-ID, and release-SHA mismatches reject with stable codes before a proof is emitted; indeterminate reads stop the proof.
 - Ownership and payload: classify the helper as `archetype_only_release_e2e`; regenerate the payload manifest because its ownership inventory is a retained payload input.
 - Verification: offline injected-client tests cover invalid names, mismatches, no further read after repository mismatch, and deterministic serialization. No live GitHub request, mutation, workflow, provisioning, or cleanup is in scope.
+
+## G0: lifecycle 404 prerequisite repair
+
+- Boundary: normalize the F1 read client's exact repository `404` response to `missing`, so F4 can return `already-absent` without treating the absence as an indeterminate recovery condition.
+- Verification: add one offline F1-to-F4 integration test using the guarded injected transport; it proves the sole request is `GET /repos/<exact-target>` and a `404` produces `already-absent`.
+- Ownership and payload mirror: register `scripts/resource-cleanup-eligibility.mjs` as `archetype_only_release_e2e` and regenerate `package/payload-manifest.json` because the retained ownership inventory is a payload input.
+- Evidence: the focused F1/F4 suite passed 11/11; `pnpm typecheck`, `pnpm test` (132/132), `python3 scripts/check-determinism.py`, `python3 init.py --self-check`, and `git diff --check` passed. All transport use was injected and offline.
+- Explicitly deferred: client transport changes beyond `404` semantics, workflow changes, hosted resources, provisioning, mutations, cleanup execution, and legacy cleanup.
 
 ## Slice C: Node workflow static-checker parity
 

@@ -88,6 +88,7 @@ export const createHostedLifecycleReadClient = ({ transport, token }) => {
         return { status: "indeterminate", code: "read_indeterminate" };
       }
       if (!object(response) || !Number.isInteger(response.status)) return { status: "rejected", code: "invalid_response" };
+      if (response.status === 404) return { status: "missing" };
       if (response.status >= 500 && response.status <= 599) return { status: "indeterminate", code: "read_indeterminate" };
       if (response.status < 200 || response.status > 299) return { status: "rejected", code: "read_rejected" };
       try {
