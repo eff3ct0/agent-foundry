@@ -23,6 +23,12 @@
       "sha256": "a71cd2de6fca2adde2de1975188d79c58b6cd6712bfcf3251a546c9a66b977f1"
     },
     {
+      "path": ".github/ISSUE_TEMPLATE/feature.yml",
+      "mode": "100644",
+      "size": 1396,
+      "sha256": "73858f385627d1641360d4dd448726582688f5df52beca494dccf8a22356ebad"
+    },
+    {
       "path": ".github/ISSUE_TEMPLATE/task.yml",
       "mode": "100644",
       "size": 1115,
@@ -79,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8287,
-      "sha256": "94a5f31f1b9e99fa390c87e8b377e88701141adffb2a25b889b5550924fd645a"
+      "size": 8757,
+      "sha256": "df497f6d57b501093f082c19e36c57bd892755a68051d6da1102a0c8bb67581a"
     },
     {
       "path": "checks/phase_state_check.py",
@@ -109,8 +115,8 @@
     {
       "path": "docs/bootstrap.md",
       "mode": "100644",
-      "size": 6531,
-      "sha256": "bc5d84395371775dad99263f74aa80951de9dabfc50e91f448a46ad97545ba50"
+      "size": 6605,
+      "sha256": "b40effedff21aaf7ddd32f3c8f0229308991b9a02711aa0d6a885768a07e5119"
     },
     {
       "path": "docs/determinism.md",
@@ -163,8 +169,8 @@
     {
       "path": "hooks/opencode/factory-start.ts",
       "mode": "100644",
-      "size": 813,
-      "sha256": "448482fc9cbdb9dafbf87c1a7295fb6f8cd8696f68f02273a6c9a083c12597db"
+      "size": 1448,
+      "sha256": "cbbd859fc91eb20ea6140341f40e780f6be5e5ba31b45d4384b2d4b54cd6ead1"
     },
     {
       "path": "hooks/pi/factory-start.ts",
@@ -317,12 +323,6 @@
       "sha256": "42c89303d9f0e228bf86a75e2431a810697460cb3353c00e0fd5308152e7d3b7"
     },
     {
-      "path": "scripts/check-determinism.py",
-      "mode": "100644",
-      "size": 22155,
-      "sha256": "ea3548b93fd12c1f8d4115f43b37e296327fe9961807d3368af965ba080125ca"
-    },
-    {
       "path": "scripts/check-factory-layout.py",
       "mode": "100644",
       "size": 5480,
@@ -403,9 +403,9 @@
     {
       "path": "test_init.py",
       "mode": "100644",
-      "size": 5786,
-      "sha256": "9616b63d6adb317bc4d206a731446b0e61dd2211343c91d2ceb645c9c628ed66"
+      "size": 6989,
+      "sha256": "025d8f57d3c4e1c5df7e4a791fda0d2a7a54d8a3d8299add25a78e20ffd9a869"
     }
   ],
-  "payload_digest": "sha256:690b873b662e6d9c92d678753c249cdaa311bd98a3e7c08965b5f6206a2ef124"
+  "payload_digest": "sha256:2aa124ce23288a4ac6cfdb53b093b61e73296309a9c017189e126c020a8d6494"
 }
