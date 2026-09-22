@@ -166,5 +166,6 @@ implement, verify, commit, push, open the PR, and leave evidence. It does not au
 merge, production deployment, destructive operations, or release publication. `status:approved` remains
 protected and is allowed only through the evidence-based protocol above; this change does not approve
 existing work. Check the structural contract with `node scripts/check-delivery-contract.mjs --self-check`.
-The protected delegated-approval cases remain in Python until their separate cutover and can be run directly with
-`python3 scripts/check-delivery-contract.py --approval-self-check`; it performs no GitHub mutation.
+The protected delegated-approval fixture is `node scripts/check-delivery-contract.mjs
+--approval-self-check`; it performs no GitHub mutation. The equivalent Python fixture remains available during the
+migration and is not retired by this check.

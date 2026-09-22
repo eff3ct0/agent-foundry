@@ -27,13 +27,36 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20.19.0
-      - name: Validate harness
+      - name: Activate pinned package toolchain
         run: |
-          python3 scripts/bootstrap-e2e.py --self-check
+          corepack enable
+          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2
+          test "$(pnpm --version)" = "12.4.2"
+      - name: Build immutable template package
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          mkdir -p package
+          pnpm pack --ignore-scripts --pack-destination package
+          test "$(find package -maxdepth 1 -name '*.tgz' -type f | wc -l)" = "1"
+      - name: Upload immutable template package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: template-bootstrap-package-${{ github.run_id }}
+          path: package/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+      - name: Validate reporter
+        run: |
           node scripts/report-bootstrap-failure.mjs --self-check
       - name: Build recipe matrix
         id: matrix
-        run: printf 'matrix=%s\n' "$(python3 scripts/bootstrap-e2e.py matrix)" >> "$GITHUB_OUTPUT"
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFile, readFile } from "node:fs/promises";
+          const recipes = Object.keys(JSON.parse(await readFile("ci/recipes.json", "utf8"))).sort();
+          await appendFile(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(recipes)}\n`);
+          NODE
 
   bootstrap:
     needs: prepare
@@ -51,32 +74,45 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - name: Mint lifecycle app token
-        id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
-          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
-          owner: ${{ vars.BOOTSTRAP_E2E_OWNER }}
-          permission-administration: write
-          permission-contents: write
-      - name: Run template bootstrap
+          node-version: 20.19.0
+      - name: Download immutable template package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: template-bootstrap-package-${{ github.run_id }}
+          path: package
+          if-no-artifact-found: error
+      - name: Run installed template package
         env:
-          BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
-          BOOTSTRAP_E2E_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
           STACK: ${{ matrix.stack }}
           RUN_ID: ${{ github.run_id }}
-          EVIDENCE_PATH: evidence/${{ matrix.stack }}.json
-          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           mkdir -p evidence
-          python3 scripts/bootstrap-e2e.py template \
-            --template "$REPOSITORY" \
-            --stack "$STACK" \
-            --run-id "$RUN_ID" \
-            --evidence "$EVIDENCE_PATH" \
-            --workflow-url "$WORKFLOW_URL"
+          node --input-type=module <<'NODE'
+          import { readdir, rm, writeFile } from "node:fs/promises";
+          import path from "node:path";
+          import { matrixConfiguration } from "./scripts/local-matrix.mjs";
+          import { runReleasedValidationCase } from "./scripts/released-validation-runner.mjs";
+          const tarballs = (await readdir("package")).filter((entry) => entry.endsWith(".tgz"));
+          if (tarballs.length !== 1) throw new Error("immutable template package is absent or ambiguous");
+          const matrixCase = { ci: process.env.STACK, task: "github-issues", secrets: "none", intelligence: "codegraph", agent: "opencode" };
+          const evidence = { schema_version: "bootstrap-e2e-failure/v1", source_repository: process.env.REPOSITORY, release_tag: "main", release_sha: process.env.WORKFLOW_SHA, matrix_case: process.env.STACK, check_identifier: `bootstrap-e2e/${process.env.STACK}`, failure_code: "template_validation_failed", exit_code: 0, logs: [], result: "passed", cleanup_status: "not-applicable", openai_model: "not-applicable" };
+          try {
+            await runReleasedValidationCase({ releasePackage: { release_sha: process.env.WORKFLOW_SHA, tarball_path: path.join("package", tarballs[0]) }, matrixCase, configuration: matrixConfiguration(matrixCase), outputDirectory: "template-output" });
+          } catch (error) {
+            evidence.result = "failed";
+            evidence.exit_code = 1;
+            evidence.logs = ["Node template package validation failed"];
+            throw error;
+          } finally {
+            await writeFile(`evidence/${process.env.STACK}.json`, `${JSON.stringify(evidence)}\n`);
+            await rm("template-output", { recursive: true, force: true });
+          }
+          NODE
       - name: Upload redacted evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -86,63 +122,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  cleanup:
-    if: always()
-    needs: [prepare, bootstrap]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - name: Check out trusted cleanup helper
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-      - name: Download provisioning evidence
-        if: always()
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          pattern: template-bootstrap-e2e-${{ github.run_id }}-*
-          path: evidence
-          merge-multiple: true
-          if-no-artifact-found: warn
-      - name: Mint lifecycle app token
-        id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
-        with:
-          app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
-          private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
-          owner: ${{ vars.BOOTSTRAP_E2E_OWNER }}
-          permission-administration: write
-          permission-contents: write
-      - name: Delete this run's independently verified repositories
-        if: always()
-        env:
-          BOOTSTRAP_E2E_TOKEN: ${{ steps.app-token.outputs.token }}
-          BOOTSTRAP_E2E_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          mkdir -p cleanup
-          python3 scripts/bootstrap-e2e.py cleanup-template \
-            --template "$REPOSITORY" \
-            --owner "$BOOTSTRAP_E2E_OWNER" \
-            --run-id "$RUN_ID" \
-            --evidence-dir evidence \
-            --output cleanup/cleanup.json
-      - name: Upload cleanup evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: template-bootstrap-cleanup-${{ github.run_id }}
-          path: cleanup/cleanup.json
-          if-no-files-found: error
-          retention-days: 7
-
   report:
     if: always()
-    needs: [prepare, bootstrap, cleanup]
+    needs: [prepare, bootstrap]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -174,7 +156,6 @@ jobs:
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           PREPARE_STATUS: ${{ needs.prepare.result }}
           BOOTSTRAP_STATUS: ${{ needs.bootstrap.result }}
-          CLEANUP_STATUS: ${{ needs.cleanup.result }}
         run: |
           node scripts/report-bootstrap-failure.mjs report \
             --template-e2e \
@@ -185,5 +166,4 @@ jobs:
             --evidence-dir evidence \
             --run-id "$RUN_ID" \
             --prepare-status "$PREPARE_STATUS" \
-            --bootstrap-status "$BOOTSTRAP_STATUS" \
-            --cleanup-status "$CLEANUP_STATUS"
+            --bootstrap-status "$BOOTSTRAP_STATUS"

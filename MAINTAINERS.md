@@ -67,10 +67,11 @@ Configure these repository settings before enabling the workflow:
 - `OPENAI_API_KEY` (Actions secret): used only by the isolated advisory triage
   job. It is never passed to bootstrap, cleanup, or reporting.
 
-The short-lived lifecycle credential is available only to create/push/clone/cleanup steps,
-is removed from the released subprocess environment before released code
-executes, and is never available to the issue reporter. The released subprocess
-gets an allowlisted environment, not a copy of the runner environment. The
+The short-lived lifecycle credential is available only to provision and cleanup
+steps and is never available to the installed released creator or issue reporter.
+The workflow checks out the resolved release SHA separately, builds and packs it
+with pinned Corepack/pnpm, and gives the installed creator an allowlisted
+environment rather than a copy of the runner environment. The
 advisory triage job invokes `node scripts/triage-bootstrap-failure.mjs` with only a bounded sanitized JSON payload, the model
 variable, and `OPENAI_API_KEY`; its clean process environment contains no GitHub
 token and it has no tools or mutation authority. The reporter uses the workflow
@@ -87,32 +88,36 @@ triage artifacts are retained for 7 days; raw logs, raw prompts, and raw model
 responses are not retained by the workflow.
 
 The matrix is every current key in `ci/recipes.json` and is fail-fast false.
-Each case uses a private repository named
-`bootstrap-e2e-<run-id>-<case>`, exact-prefix cleanup derived independently from
-the numeric run ID in an `if: always()` job, and a 7-day redacted evidence
-artifact. The disposable repository is not deleted until released bootstrap
-validation completes. Report jobs serialize by resolved release SHA, falling
+Each case uses a private repository named `bootstrap-e2e-<run-id>-<case>`, a
+persisted exact provisioning proof, and proof-bound `if: always()` cleanup in a
+trusted `github.workflow_sha` checkout. Cleanup never scans a prefix. The
+disposable repository is not deleted until released bootstrap validation
+completes. Report jobs serialize by resolved release SHA, falling
 back to the validated tag when preparation cannot resolve one, and do not cancel
 an active run. GitHub API and every git/initializer subprocess have
 a 30-second operation timeout; job timeouts are 10 minutes for prepare, triage,
 and report, 30 minutes for the matrix, and 15 minutes for cleanup. API failures,
 runner loss, forced cancellation, or missing credentials can leave cleanup
-pending; restore the credential, inspect the owner, and run
-`python3 scripts/bootstrap-e2e.py cleanup --owner "$BOOTSTRAP_E2E_OWNER" --run-id "$GITHUB_RUN_ID"`
-with the exact run ID. Do not broaden the prefix or delete unrelated repos.
+pending; restore the cleanup credential, download the matching provisioning
+proof artifact, and rerun only that proof-bound cleanup job for the exact run
+and matrix case. Do not broaden the scope or delete unrelated repositories.
 
-The template bootstrap workflow is a manual, maintainer-only check. It generates
-one disposable repository per recipe from the published template, records a
-run-scoped ownership/readback proof before the cold-start and `--no-clean`
-validation matrix, and records redacted evidence. Its `if: always()` cleanup
-job downloads those proofs and deletes only exact owner/name pairs independently
-validated against GitHub. If the runner or API fails, retain the evidence
-artifact and rerun exact recovery with:
+The template bootstrap workflow is a manual, maintainer-only check. Its trusted
+`github.workflow_sha` checkout builds one immutable package with pinned
+Corepack/pnpm, then uploads that package as a run-scoped artifact. Each recipe
+job downloads exactly that artifact and validates the installed creator: it
+installs the package offline with scripts disabled, runs
+`factory-template apply --non-interactive`, and requires the verified creator
+JSON envelope. It does not call the Template API or create a disposable
+repository.
 
-`BOOTSTRAP_E2E_TOKEN=<short-lived-token> python3 scripts/bootstrap-e2e.py cleanup-template --owner <sandbox-owner> --run-id <run-id> --template eff3ct0/factory-template --evidence-dir <downloaded-evidence> --output cleanup.json`
-
-Never replace the evidence directory with a prefix scan or delete a repository
-whose proof is missing or mismatched.
+Template validation owns only runner-local output. Its `finally` block removes
+the case's `template-output` directory after recording redacted evidence; it
+does not use a lifecycle credential, provisioning proof, prefix scan, or remote
+cleanup recovery procedure. The always-run reporter receives only the workflow
+token with `contents: read`, `actions: read`, and `issues: write`; it receives
+redacted evidence, does not receive a lifecycle or OpenAI credential, and uses
+the bounded canonical-issue reporter.
 
 The real-agent user journey is defined in [`docs/real-agent-journey.md`](docs/real-agent-journey.md) and
 `.github/workflows/real-agent-journey.yml`. It is initially manual/nightly, not release-triggered. The parent
@@ -161,8 +166,9 @@ The workflow pins every third-party action to a verified full commit SHA:
 - `actions/create-github-app-token` v2.2.2: `fee1f7d63c2ff003460e3d139729b119787bc349`
 - `actions/setup-node` v4.4.0: `49933ea5288caeca8642d1e84afbd3f7d6820020`
 
-Run `python3 scripts/check-bootstrap-workflow.py` to reject floating, branch,
-tag, or non-40-hex action references.
+Run `node scripts/check-bootstrap-workflow.mjs` to reject floating, branch,
+tag, or non-40-hex action references. The Node checker is the sole workflow
+contract authority.
 
 Before closing changes to this workflow, use the Definition of Done and retain
 evidence for every matrix case, cleanup success/failure, reporting outcome,
