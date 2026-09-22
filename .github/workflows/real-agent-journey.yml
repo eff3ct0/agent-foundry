@@ -332,6 +332,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      issues: write
     steps:
       - name: Check out trusted journey contract
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -364,3 +365,12 @@ jobs:
           path: evidence/journey.json
           if-no-files-found: error
           retention-days: 7
+      - name: Report canonical journey failure
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 scripts/real-agent-journey.py report \
+            --input evidence/journey.json --repository "$JOURNEY_TEMPLATE" \
+            --artifact-url "$WORKFLOW_URL"

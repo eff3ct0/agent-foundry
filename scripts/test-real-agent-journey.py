@@ -4,6 +4,7 @@ import importlib.util
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -347,12 +348,226 @@ def test_unsupported_runtime_keeps_cleanup_evidence():
         assert result["cleanup_status"] == "passed"
 
 
+def reporting_evidence(stages=None, failure_code="agent_failed"):
+    return {
+        "schema_version": journey.ENVELOPE_VERSION,
+        "result": "failed",
+        "run_id": "123",
+        "repository": "acme/real-agent-journey-123",
+        "source_template": "eff3ct0/factory-template",
+        "tested_revision": SHA,
+        "runtime": "codex-cli",
+        "stages": stages or {"provision": "passed", "agent": "failed", "assert": "passed", "cleanup": "passed"},
+        "failure_code": failure_code,
+        "cleanup_status": "passed",
+        "workflow_url": "https://github.com/eff3ct0/factory-template/actions/runs/123",
+    }
+
+
+def test_reporting_contract_builds_deterministic_bug_form_payload():
+    artifact = "https://github.com/eff3ct0/factory-template/actions/runs/123/artifacts/456"
+    report = journey.build_bug_report(reporting_evidence(), artifact)
+    assert report["schema_version"] == journey.REPORT_VERSION
+    assert report["title"] == "[Bug] Real-agent journey failed: agent"
+    assert report["stage"] == "agent" and report["check_identifier"] == "real-agent-journey/agent"
+    assert report["fingerprint"] == journey.failure_fingerprint(SHA, "codex-cli", "agent", "agent_failed", "real-agent-journey/agent")
+    assert "Real-Agent-Journey-Fingerprint: %s" % report["fingerprint"] in report["body"]
+    assert report["generated_repository"] not in report["body"]
+    journey.validate_bug_body(report["body"])
+
+
+def test_reporting_contract_uses_the_earliest_non_passing_stage():
+    evidence = reporting_evidence({"provision": "passed", "agent": "blocked", "assert": "failed", "cleanup": "failed"})
+    report = journey.build_bug_report(evidence, "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    assert report["stage"] == "agent"
+    assert report["cleanup_status"] == "passed"
+
+
+def test_reporting_contract_ignores_success_and_rejects_unsafe_evidence():
+    artifact = "https://github.com/eff3ct0/factory-template/actions/runs/123"
+    passed = reporting_evidence()
+    passed["result"] = "passed"
+    assert journey.build_bug_report(passed, artifact) is None
+    for field, value in (("tested_revision", "short"), ("runtime", "unsupported"),
+                         ("failure_code", "unsafe code"), ("cleanup_status", "unknown")):
+        evidence = reporting_evidence()
+        evidence[field] = value
+        try:
+            journey.build_bug_report(evidence, artifact)
+        except journey.JourneyError:
+            pass
+        else:
+            raise AssertionError("unsafe report evidence accepted: %s" % field)
+    try:
+        journey.build_bug_report(reporting_evidence(), "https://example.invalid/artifact")
+    except journey.JourneyError:
+        pass
+    else:
+        raise AssertionError("unsafe artifact URL accepted")
+
+
+def test_reporting_github_integration_is_bounded_and_reads_back_mutations():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    calls = []
+
+    def request(method, path, _token, expected=(200,), payload=None):
+        calls.append((method, path, payload))
+        if path.startswith("search/issues?"):
+            return {"total_count": 0, "incomplete_results": False, "items": []}
+        if method == "POST":
+            assert expected == (201,) and payload["labels"] == ["type:bug"]
+            return {"number": 42}
+        if path == "repos/eff3ct0/factory-template/issues/42":
+            return {"number": 42, "repository_url": "https://api.github.com/repos/eff3ct0/factory-template",
+                    "title": report["title"], "body": report["body"], "labels": [{"name": "type:bug"}]}
+        raise AssertionError(path)
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", request) == "created canonical journey issue #42"
+    assert [method for method, _, _ in calls].count("POST") == 1
+
+
+def test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    marker = "Real-Agent-Journey-Fingerprint: " + report["fingerprint"]
+
+    def duplicate(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return []
+        if method == "POST":
+            assert payload == {"body": report["body"]}
+            return {"id": 8}
+        if path.endswith("/comments/8"):
+            return {"id": 8, "issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
+        raise AssertionError(path)
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", duplicate) == "commented canonical issue #7"
+    def already_commented(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return [{"issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": marker}]
+        raise AssertionError("a recorded fingerprint must not mutate")
+
+    assert journey.report_failure(report, "eff3ct0/factory-template", "token", already_commented) == "already reported #7"
+    def ambiguous(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 2, "incomplete_results": False, "items": [{"number": number,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]} for number in (7, 8)]}
+        raise AssertionError("ambiguous lookup must not mutate")
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", ambiguous)
+    except journey.JourneyError as error:
+        assert error.failure_code == "duplicate_lookup_ambiguous"
+    else:
+        raise AssertionError("ambiguous canonical issues accepted")
+    try:
+        journey.report_failure(report, "wrong/repository", "token", duplicate)
+    except journey.JourneyError as error:
+        assert error.failure_code == "report_target_mismatch"
+    else:
+        raise AssertionError("mismatched report target accepted")
+
+
+def test_reporting_github_integration_rejects_inconsistent_lookup_counts_before_writing():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    calls = []
+
+    def inconsistent_count(method, path, _token, expected=(200,), payload=None):
+        calls.append((method, path, payload))
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": []}
+        raise AssertionError("inconsistent duplicate lookup must not classify or mutate")
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", inconsistent_count)
+    except journey.JourneyError as error:
+        assert error.failure_code == "duplicate_lookup_incomplete"
+    else:
+        raise AssertionError("inconsistent duplicate lookup count accepted")
+    assert calls and all(method == "GET" and path.startswith("search/issues?") for method, path, _ in calls)
+
+
+def test_reporting_github_integration_rejects_comment_readback_identity_mismatch():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+    marker = "Real-Agent-Journey-Fingerprint: " + report["fingerprint"]
+
+    def invalid_comment_readback(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 1, "incomplete_results": False, "items": [{"number": 7,
+                    "repository_url": "https://api.github.com/repos/eff3ct0/factory-template", "body": marker,
+                    "labels": [{"name": "type:bug"}]}]}
+        if path.endswith("/comments?per_page=100"):
+            return []
+        if method == "POST":
+            return {"id": 8}
+        if path.endswith("/comments/8"):
+            return {"id": 9, "issue_url": "https://api.github.com/repos/eff3ct0/factory-template/issues/7", "body": report["body"]}
+        raise AssertionError(path)
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", invalid_comment_readback)
+    except journey.JourneyError as error:
+        assert error.failure_code == "comment_readback_failed"
+    else:
+        raise AssertionError("mismatched comment readback identity accepted")
+
+
+def test_reporting_github_integration_rejects_mutation_readback_mismatch():
+    report = journey.build_bug_report(reporting_evidence(), "https://github.com/eff3ct0/factory-template/actions/runs/123")
+
+    def invalid_readback(method, path, _token, expected=(200,), payload=None):
+        if path.startswith("search/issues?"):
+            return {"total_count": 0, "incomplete_results": False, "items": []}
+        if method == "POST":
+            return {"number": 42}
+        return {"number": 42, "repository_url": "https://api.github.com/repos/eff3ct0/factory-template",
+                "title": report["title"], "body": "mismatched", "labels": [{"name": "type:bug"}]}
+
+    try:
+        journey.report_failure(report, "eff3ct0/factory-template", "token", invalid_readback)
+    except journey.JourneyError as error:
+        assert error.failure_code == "issue_readback_failed"
+    else:
+        raise AssertionError("mismatched issue readback accepted")
+
+
+def test_report_cli_dispatch_does_not_require_assertion_arguments():
+    with tempfile.TemporaryDirectory() as tmp:
+        evidence = Path(tmp) / "journey.json"
+        evidence.write_text(json.dumps({"schema_version": journey.ENVELOPE_VERSION, "result": "passed"}), encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "real-agent-journey.py"), "report",
+             "--input", str(evidence), "--repository", "eff3ct0/factory-template",
+             "--artifact-url", "https://github.com/eff3ct0/factory-template/actions/runs/123"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == "no journey failures\n"
+
+
 if __name__ == "__main__":
     test_contract_plan_is_provider_neutral()
     test_plan_route_requires_runtime_before_writing_output()
     test_identity_and_decisions_fail_closed()
     test_aggregate_rejects_mismatch_and_cleanup_failure()
     test_unsupported_runtime_keeps_cleanup_evidence()
+    test_reporting_contract_builds_deterministic_bug_form_payload()
+    test_reporting_contract_uses_the_earliest_non_passing_stage()
+    test_reporting_contract_ignores_success_and_rejects_unsafe_evidence()
+    test_reporting_github_integration_is_bounded_and_reads_back_mutations()
+    test_reporting_github_integration_comments_once_and_fails_closed_on_ambiguity()
+    test_reporting_github_integration_rejects_inconsistent_lookup_counts_before_writing()
+    test_reporting_github_integration_rejects_comment_readback_identity_mismatch()
+    test_reporting_github_integration_rejects_mutation_readback_mismatch()
+    test_report_cli_dispatch_does_not_require_assertion_arguments()
     test_catalog_routes_install_and_adapter_without_shell_interpolation()
     test_workflow_runtime_choices_match_the_catalog_and_fail_before_provisioning()
     test_provisioning_rejects_a_mismatched_source_before_repository_creation()
