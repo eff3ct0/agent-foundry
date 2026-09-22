@@ -7,6 +7,12 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const FAULTS = new Set(["corrupt-payload", "corrupt-digest", "partial-write", "unknown-file", "malformed-evidence"]);
+const MAX_COMMAND_RESULTS = 8;
+const MAX_COMMAND_NAME_CHARS = 96;
+const MAX_COMMAND_CHARS = 256;
+const MAX_COMMAND_OUTPUT_CHARS = 512;
+const MAX_RELEASE_E2E_EVIDENCE_BYTES = 4 * 1024;
+const MAX_MATRIX_EVIDENCE_BYTES = 1024 * 1024;
 
 export class LocalMatrixError extends Error {}
 
@@ -28,6 +34,49 @@ const text = (value, name) => {
 };
 const json = async (file, name) => {
   try { return JSON.parse(await readFile(file, "utf8")); } catch { fail(`${name} is absent or malformed`); }
+};
+
+export const sanitizeEvidenceText = (value, limit = MAX_COMMAND_OUTPUT_CHARS) => String(value ?? "")
+  .replaceAll("\0", "")
+  .replace(/\b([A-Z_][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|CREDENTIAL)[A-Z0-9_]*)\s*=\s*[^\s,]+/giu, "$1=<redacted>")
+  .replace(/(authorization|bearer|token|password|secret|api[_-]?key|credential)\s*[:=]\s*[^\s,]+/giu, "$1=<redacted>")
+  .replace(/\b(?:gh[pousr]_[A-Za-z0-9_-]+|github_pat_[A-Za-z0-9_-]+|sk-[A-Za-z0-9_-]+)\b/gu, "<redacted>")
+  .replace(/https?:\/\/[^\s/@:]+:[^\s/@]+@/gu, "https://<redacted>@")
+  .replace(/(?:\/tmp|\/var\/tmp|\/private\/tmp|\/home\/[^\s:]+|\/Users\/[^\s:]+|[A-Za-z]:\\[^\s:]+)[^\s,;)]*/gu, "<private-path>")
+  .replace(/\s+/gu, " ").trim().slice(0, limit);
+
+const boundedText = (value, limit, name) => {
+  if (typeof value !== "string" || !value.trim()) fail(`${name} is absent or malformed`);
+  return sanitizeEvidenceText(value, limit);
+};
+
+export const captureCommandResult = (value) => {
+  if (!object(value) || !["passed", "failed"].includes(value.status) || !Number.isInteger(value.exit_code) && value.exit_code !== null) {
+    fail("command result is absent or malformed");
+  }
+  if (value.exit_code !== null && (value.exit_code < -255 || value.exit_code > 255)) fail("command result exit code is malformed");
+  return {
+    name: boundedText(value.name, MAX_COMMAND_NAME_CHARS, "command result name"),
+    command: boundedText(value.command, MAX_COMMAND_CHARS, "command result command"),
+    status: value.status,
+    exit_code: value.exit_code,
+    output: sanitizeEvidenceText(value.output, MAX_COMMAND_OUTPUT_CHARS),
+  };
+};
+
+const serializedBytes = (value) => Buffer.byteLength(JSON.stringify(value), "utf8");
+
+const validateReleaseE2eEvidence = (value, matrixCase) => {
+  if (value === undefined) return undefined;
+  if (!object(value) || value.schema_version !== 1 || !Array.isArray(value.command_results) || value.command_results.length > MAX_COMMAND_RESULTS) {
+    fail(`runner returned malformed release E2E evidence for ${matrixCase.id}`);
+  }
+  const commandResults = value.command_results.map(captureCommandResult);
+  const evidence = { schema_version: 1, command_results: commandResults };
+  if (JSON.stringify(value) !== JSON.stringify(evidence) || serializedBytes(evidence) > MAX_RELEASE_E2E_EVIDENCE_BYTES) {
+    fail(`runner returned oversized or unsafe release E2E evidence for ${matrixCase.id}`);
+  }
+  return evidence;
 };
 
 export const matrixCaseId = (matrixCase) => {
@@ -126,11 +175,18 @@ const validateResult = (value, matrixCase) => {
   if (value.commands !== undefined && (!Array.isArray(value.commands) || value.commands.length > 8 || value.commands.some((command) => typeof command !== "string" || command.length > 256))) {
     fail(`runner returned malformed commands for ${matrixCase.id}`);
   }
-  return { status: value.status, commands: value.commands ?? [], ...(typeof value.failure === "string" && value.failure ? { failure: value.failure.slice(0, 256) } : {}) };
+  const releaseE2e = validateReleaseE2eEvidence(value.release_e2e, matrixCase);
+  return {
+    status: value.status,
+    commands: (value.commands ?? []).map((command) => sanitizeEvidenceText(command, 256)),
+    ...(typeof value.failure === "string" && value.failure ? { failure: sanitizeEvidenceText(value.failure, 256) } : {}),
+    ...(releaseE2e ? { release_e2e: releaseE2e } : {}),
+  };
 };
 
 export const validateMatrixEvidence = (evidence) => {
   if (!object(evidence) || evidence.schema_version !== 1 || !Array.isArray(evidence.cases)) fail("matrix evidence is absent or malformed");
+  if (serializedBytes(evidence) > MAX_MATRIX_EVIDENCE_BYTES) fail("matrix evidence exceeds the serialized size limit");
   validateIdentity(evidence.identity);
   const expected = enumerateMatrix();
   if (evidence.cases.length !== expected.length) fail("matrix evidence does not cover every case");
@@ -139,6 +195,7 @@ export const validateMatrixEvidence = (evidence) => {
     if (!object(record) || record.id !== matrixCase.id || record.status !== "passed" || !object(record.configuration) || JSON.stringify(record.configuration) !== JSON.stringify(matrixConfiguration(matrixCase))) {
       fail(`matrix evidence is invalid for ${matrixCase.id}`);
     }
+    validateReleaseE2eEvidence(record.release_e2e, matrixCase);
   }
   if (evidence.summary?.total !== expected.length || evidence.summary?.passed !== expected.length || evidence.summary?.failed !== 0) fail("matrix evidence summary is invalid");
   return evidence;
@@ -156,9 +213,16 @@ export const runLocalMatrix = async ({ outputDirectory, identity, runCase }) => 
     try {
       result = validateResult(await runCase({ matrixCase, directory, configuration: matrixConfiguration(matrixCase) }), matrixCase);
     } catch (error) {
-      result = { status: "failed", commands: [], failure: error instanceof Error ? error.message.slice(0, 256) : "runner failed" };
+      result = { status: "failed", commands: [], failure: sanitizeEvidenceText(error instanceof Error ? error.message : "runner failed", 256) };
     }
-    cases.push({ id: matrixCase.id, status: result.status, configuration: matrixConfiguration(matrixCase), commands: result.commands, ...(result.failure ? { failure: result.failure } : {}) });
+    cases.push({
+      id: matrixCase.id,
+      status: result.status,
+      configuration: matrixConfiguration(matrixCase),
+      commands: result.commands,
+      release_e2e: result.release_e2e ?? { schema_version: 1, command_results: [] },
+      ...(result.failure ? { failure: result.failure } : {}),
+    });
   }
   const evidence = {
     schema_version: 1,
@@ -177,7 +241,21 @@ export const installedCreatorRunner = ({ cliPath, environment = process.env }) =
   await writeFile(config, JSON.stringify(configuration), "utf8");
   const result = await execFileAsync(process.execPath, [cliPath, "apply", "--target", target, "--config", config, "--agent", matrixCase.agent, "--non-interactive"], { env: environment })
     .then((value) => ({ ...value, status: "passed" })).catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", status: "failed" }));
-  return { status: result.status, commands: ["factory-template apply"], ...(result.status === "failed" ? { failure: String(result.stderr).slice(0, 256) } : {}) };
+  return {
+    status: result.status,
+    commands: ["factory-template apply"],
+    release_e2e: {
+      schema_version: 1,
+      command_results: [captureCommandResult({
+        name: "factory-template apply",
+        command: "factory-template apply",
+        status: result.status,
+        exit_code: result.status === "passed" ? 0 : null,
+        output: `${result.stdout}\n${result.stderr}`,
+      })],
+    },
+    ...(result.status === "failed" ? { failure: String(result.stderr) } : {}),
+  };
 };
 
 export const writeFailureFixture = async ({ root, kind }) => {

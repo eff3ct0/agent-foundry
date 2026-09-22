@@ -8,7 +8,7 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice D protected-approval self-check parity.
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for Slice E1 local release-E2E evidence contract.
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-node-verification`
 - Branch: `feat/issue-111-node-verification`
 - Base: `origin/feat/issue-110-governance-node-06e-reporter-cleanup` at `f3f6d2b`
@@ -62,8 +62,9 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
        └── Slice A: feat/issue-111-artifact-identity
              └── Slice B: feat/issue-111-local-matrix (PR #150)
                   └── Slice C: feat/issue-111-workflow-contract
-                        └── 📍 Slice D: feat/issue-111-delivery-approval
-                              └── later: hosted execution, then legacy cleanup
+                         └── Slice D: feat/issue-111-delivery-approval
+                               └── 📍 Slice E1: feat/issue-111-e1-evidence
+                                     └── later: tarball runner, hosted execution, then legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -71,7 +72,8 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
 3. Slice B: execute the complete local matrix through an injected local creator runner and prove corruption, partial-write, unknown-file, and malformed-evidence failures fail closed.
 4. Slice C: port the workflow static checker and focused test suite to Node while retaining the Python checker and its existing consumers.
 5. Slice D: port only the protected-approval self-check into the existing Node delivery-contract command with fixtures; retain Python and every workflow consumer.
-6. Later slices: add hosted resource coordination and legacy cleanup only after separately scoped review and authorization.
+6. Slice E1: add local command-result evidence capture, redaction, and serialized-size bounds without changing identity, matrix dimensions, runners, workflows, hosted resources, or Python.
+7. Later slices: add a tarball runner, hosted resource coordination, and legacy cleanup only after separately scoped review and authorization.
 
 ## Delivery forecast
 
@@ -106,6 +108,17 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Compatibility: retain `scripts/check-delivery-contract.py --approval-self-check`, all Python consumers, and all workflow behavior. Hosted work, E2E, workflow cutover, and Python retirement remain out of scope.
 - Verification: focused Node delivery-contract tests, both Node CLI modes, the retained Python approval fixture, typecheck, repository tests, initializer self-check, and whitespace validation.
 - Review budget: keep this cohesive command, fixtures, documentation, and payload-mirror work unit within 400 changed lines.
+
+## Slice E1: local release-E2E evidence contract
+
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-e1-evidence`
+- Branch: `feat/issue-111-e1-evidence`
+- Base: `origin/feat/issue-111-delivery-approval` (PR #153)
+- Boundary: add the versioned `release_e2e` evidence extension to each local matrix case. It captures at most eight command results with bounded names, commands, output, and exit codes; the existing identity envelope, matrix dimensions, case IDs, configurations, and `commands` list remain unchanged.
+- Redaction and bounds: command evidence redacts token/credential values and literals plus private home and temporary paths before serialization. Each case extension is capped at 4 KiB and the complete matrix evidence at 1 MiB; unsafe, unknown, malformed, or oversized extensions fail closed.
+- Compatibility: `schema_version: 1` matrix evidence without `release_e2e` remains valid. New matrix output adds a `release_e2e` object with its own `schema_version: 1`, so consumers can adopt the extension without an identity or matrix migration.
+- Explicitly deferred: tarball runner execution, workflow changes, hosted resources, cleanup coordination, and Python changes.
+- Payload mirror: `scripts/local-matrix.mjs`, its tests, and this ODD record are release-only or removed assets. Regenerate the payload mirror during verification; no payload entry changes unless a retained payload input changes.
 
 ## Route evidence
 
