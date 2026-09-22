@@ -1140,7 +1140,6 @@ def self_check():
                 "README.md": "# Example project\n",
                 ".github/workflows/ci.yml": "name: CI\n",
                 "docs/bindings.md": "# Bindings\n",
-                "scripts/check-determinism.py": "print('retained')\n",
             }
             for relative, content in inherited.items():
                 path = os.path.join(d4, relative)
