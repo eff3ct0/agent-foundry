@@ -88,14 +88,16 @@ def check():
     for action, sha in PINNED_ACTIONS.items():
         if "%s@%s" % (action, sha) not in journey_uses:
             raise AssertionError("real-agent journey is missing required action pin: %s" % action)
-    for required in ("schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false",
-                     "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.py collect",
-                     "retention-days: 7", "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json",
-                     "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY"):
+    for required in ("release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false",
+                      "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.py collect",
+                      "retention-days: 7", "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json",
+                      "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY",
+                      "resolve-release --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"",
+                      "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\""):
         if required not in journey:
             raise AssertionError("real-agent journey is missing %s" % required)
-    if "release:" in journey:
-        raise AssertionError("real-agent journey must not be a release gate")
+    if journey.index("Resolve immutable source revision") > journey.index("\n  provision:"):
+        raise AssertionError("real-agent journey must resolve its source before provisioning")
     for adapter in ("provision", "agent", "assert", "cleanup"):
         path = ROOT / "scripts" / ("real-agent-journey-%s.py" % adapter)
         if not path.is_file() or "scripts/real-agent-journey-%s.py" % adapter not in journey:

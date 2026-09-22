@@ -20,14 +20,19 @@ def run(args):
     run_id = str(args.run_id or "")
     owner = str(args.owner or "")
     template = str(args.template or "")
+    expected_source_sha = str(args.expected_source_sha or "")
     repository = str(os.environ.get("JOURNEY_REPOSITORY", ""))
     token = os.environ.get("JOURNEY_TOKEN", "")
     try:
         run_id = journey.validate_run_id(run_id)
         owner = journey.validate_owner(owner)
         template = journey.validate_repository(template)
+        expected_source_sha = journey.sha(expected_source_sha)
         repository = journey.journey_repository(owner, run_id)
         details = BOOTSTRAP.template_details(template, token)
+        if details["initial_revision"] != expected_source_sha:
+            raise BOOTSTRAP.HarnessError("source template does not match the selected immutable revision",
+                                         "source_revision_mismatch")
         BOOTSTRAP.owner_identity(owner, token)
         name = repository.split("/", 1)[1]
         BOOTSTRAP.template_repository(template, owner, name, token)
@@ -44,7 +49,7 @@ def run(args):
                     raise BOOTSTRAP.HarnessError("fresh checkout revision did not match readback", "checkout_mismatch")
             finally:
                 askpass.unlink(missing_ok=True)
-        if readback["initial_revision"] != details["initial_revision"]:
+        if readback["initial_revision"] != expected_source_sha:
             raise BOOTSTRAP.HarnessError("generated repository revision did not match the source template",
                                           "revision_mismatch")
         evidence = journey.stage_envelope(
@@ -76,13 +81,14 @@ def main():
     parser.add_argument("--template")
     parser.add_argument("--owner")
     parser.add_argument("--run-id")
+    parser.add_argument("--expected-source-sha")
     parser.add_argument("--output")
     args = parser.parse_args()
     if args.self_check:
         self_check()
         return
-    if not all((args.template, args.owner, args.run_id, args.output)):
-        parser.error("--template, --owner, --run-id, and --output are required")
+    if not all((args.template, args.owner, args.run_id, args.expected_source_sha, args.output)):
+        parser.error("--template, --owner, --run-id, --expected-source-sha, and --output are required")
     run(args)
 
 
