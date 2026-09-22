@@ -8,10 +8,10 @@
 ## Status
 
 - Ticket: [#111](https://github.com/eff3ct0/factory-template/issues/111)
-- State: `ACTIVE` in `EVIDENCE/DELIVERY` for G6 release workflow cutover.
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-g6-release-workflow`
-- Branch: `feat/issue-111-g6-release-workflow`
-- Base: `origin/feat/issue-111-g5-cleanup` at `a6befb1`
+- State: `ACTIVE` in `EVIDENCE/DELIVERY` for H1 template package workflow cutover.
+- Worktree: `/home/steam/git/project-archetype-worktrees/issue-111-h1-template-package`
+- Branch: `feat/issue-111-h1-template-package`
+- Base: `origin/feat/issue-111-g6-release-workflow` at `1d87df4`
 - Delivery strategy: Feature Branch Chain. The tracker is a draft/no-merge PR targeting the completed #110 Child 06e branch; every child targets its immediate chain parent.
 
 ## Scope
@@ -76,8 +76,9 @@ origin/feat/issue-110-governance-node-06e-reporter-cleanup (PR #147)
                                                                                              └── 📍 G3: feat/issue-111-g3-provision-proof
                                                                                                    └── 📍 G4: feat/issue-111-g4-release-runner
                                                                                                         └── 📍 G5: feat/issue-111-g5-cleanup
-                                                                                                              └── 📍 G6: feat/issue-111-g6-release-workflow
-                                                                                                                   └── later: legacy cleanup
+                                                                                                               └── G6: feat/issue-111-g6-release-workflow
+                                                                                                                    └── 📍 H1: feat/issue-111-h1-template-package
+                                                                                                                         └── later: static contract, tests, docs, and legacy cleanup
 ```
 
 1. Tracker: records the matrix, ownership, delivery order, and authorization boundary. It does not add verification runtime behavior.
@@ -198,6 +199,13 @@ The tracker and Slice A are separate cohesive work units. Slice A must remain at
 - Compatibility: the Python template workflow and `scripts/bootstrap-e2e.py` harness remain retained. No hosted workflow execution, repository mutation, or deletion is authorized by this delivery.
 - Verification: offline Node and Python workflow checks, Python bootstrap/determinism/initializer self-checks, typecheck, and the full Node suite pass. The payload mirror was regenerated because the retained determinism checker changed.
 - Review budget: 321 authored additions plus deletions. Hosted workflow execution is explicitly not run.
+
+## H1: template package workflow cutover
+
+- Boundary: cut over only `.github/workflows/template-bootstrap-e2e.yml` from Python template-API execution to one package packed from the trusted `github.workflow_sha` checkout. The prepare job activates Node 20 Corepack with pnpm 12.4.2, builds the package, and uploads the exact tarball for every matrix job.
+- Safety: each matrix job installs and invokes only that artifact through the existing installed runner, records its bounded evidence, and removes the generated project locally in the same runner. No lifecycle token, template API call, hosted resource, or cleanup job remains.
+- Compatibility: manual dispatch, recipe matrix, evidence artifacts, and the reporter stay in place. H2/H3 own the static-contract, test, and documentation updates; this slice intentionally does not change them.
+- Verification: YAML parsing, whitespace validation, and one local packed-package installed-runner case pass. The current static workflow checker and its suite fail on the removed legacy `--stack`/cleanup contract, as expected until H2 updates that contract. No hosted workflow was run.
 
 ## Slice C: Node workflow static-checker parity
 
