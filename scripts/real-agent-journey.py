@@ -86,8 +86,8 @@ BUG_FORM_HEADINGS = ("Steps to reproduce", "Expected behavior", "Actual behavior
 CHECK_COMMANDS = {
     "init-check": ["init.py", "--check"],
     "determinism": ["scripts/check-determinism.py"],
-    "delivery-contract": ["scripts/check-delivery-contract.py"],
-    "governance": ["scripts/check-pr-governance.py", "--self-check"],
+    "delivery-contract": ["scripts/check-delivery-contract.mjs", "--self-check"],
+    "governance": ["scripts/check-pr-governance.mjs", "--self-check"],
 }
 REQUIRED_INPUT = {
     "schema_version", "run_id", "source_repository", "source_sha", "generated_repository",
@@ -637,7 +637,8 @@ def assert_journey(data, checkout, token, workflow_url, artifact_url, cleanup_pa
                 command = CHECK_COMMANDS.get(check["name"])
                 if command is None:
                     raise JourneyError("initialization", "check_unknown", "documented check is not allowlisted")
-                actual = command_result(check["name"], [sys.executable, *command], checkout, runner=runner)
+                executable = "node" if check["name"] == "governance" else sys.executable
+                actual = command_result(check["name"], [executable, *command], checkout, runner=runner)
             checks.append(actual)
             if actual["status"] != "passed":
                 raise JourneyError("initialization", "documented_check_failed", "a documented initialization check did not pass")
