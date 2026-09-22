@@ -77,8 +77,10 @@
         {"path": "archetype-ownership.json", "kind": "file"},
         {"path": "factory_bootstrap.py", "kind": "file"},
         {"path": "MAINTAINERS.md", "kind": "file"},
-        {"path": "scripts/check-determinism.py", "kind": "file"},
+        {"path": "odd/tasks/issue-96-runtime-catalog.md", "kind": "file"},
+        {"path": "odd/tasks/issue-97-release-trigger.md", "kind": "file"},
         {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
+        {"path": "scripts/check-determinism.py", "kind": "file"},
         {"path": "odd", "kind": "directory"}
       ]
     },
