@@ -15,7 +15,8 @@ jobs:
     name: validate
     runs-on: ubuntu-latest
     steps:
-      # Run the validator from the trusted base revision; PR files are metadata only.
+      # The PR event supplies metadata only. Run the validator and bindings from
+      # the trusted base revision so a PR cannot replace required-check code.
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -24,14 +25,6 @@ jobs:
         with:
           node-version: 20.19.0
       - name: Validate PR metadata
-        run: |
-          if [ -f scripts/check-pr-governance.mjs ]; then
-            node scripts/check-pr-governance.mjs
-          elif [ -f scripts/check-pr-governance.py ]; then
-            python3 scripts/check-pr-governance.py
-          else
-            echo "::error::No PR governance validator is available"
-            exit 1
-          fi
+        run: node scripts/check-pr-governance.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}

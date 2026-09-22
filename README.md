@@ -154,7 +154,7 @@ label may be added by an agent only through the fail-closed delegated-approval p
 instruction naming the exact issue and action, target-host maintainer/authorized-approver evidence,
 `MAINTAIN` or `ADMIN` actor capability, one exact add attempt, and target-host readback. Otherwise the
 human applies it directly. Labels are synchronized with:
-`python3 scripts/sync-github-labels.py --repo OWNER/REPO`.
+`node scripts/sync-github-labels.mjs --repo OWNER/REPO`.
 
 The workflow only validates pull-request metadata. GitHub branch protection separately requires the stable
 `validate` check, a human review, and administrator enforcement before `main` can be updated. See
@@ -165,6 +165,6 @@ Delegating a task authorizes its routine path without intermediate confirmation:
 implement, verify, commit, push, open the PR, and leave evidence. It does not authorize review approval,
 merge, production deployment, destructive operations, or release publication. `status:approved` remains
 protected and is allowed only through the evidence-based protocol above; this change does not approve
-existing work. Check the contract with `python3 scripts/check-delivery-contract.py`.
-The offline delegated-approval cases can be run directly with
+existing work. Check the structural contract with `node scripts/check-delivery-contract.mjs --self-check`.
+The protected delegated-approval cases remain in Python until their separate cutover and can be run directly with
 `python3 scripts/check-delivery-contract.py --approval-self-check`; it performs no GitHub mutation.
