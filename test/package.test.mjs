@@ -14,11 +14,13 @@ import {
 } from "../scripts/build-payload.mjs";
 import { packedArtifactIdentity } from "../scripts/artifact-identity.mjs";
 import emitter from "../dist/typed-module-emitter.js";
+import policy from "../dist/module-policy.js";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(await readFile(path.join(root, "dist/payload-manifest.json"), "utf8"));
 const { emitTypedModules } = emitter;
+const { checkModulePolicy } = policy;
 
 const walk = async (directory, relative = "") => {
   const result = [];
@@ -141,6 +143,80 @@ test("typed module emitter rejects unsafe or unresolved imports before writing o
     await writeFile(path.join(source, "entry.mts"), "const value: number = 'invalid';\n");
     await assert.rejects(emitTypedModules(source, path.join(parent, "type-error")), /Type 'string' is not assignable/u);
     await assert.rejects(stat(path.join(parent, "type-error")), { code: "ENOENT" });
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("module policy classifies tracked, payload, and generated support separately", () => {
+  const inventory = {
+    tracked: ["src/entry.mts", "src/cli.ts", "hooks/pi/factory-start.ts", "src/tool.ts", "dist/tool.js"],
+    payload: ["hooks/opencode/factory-start.ts", "scripts/support.mts"],
+    generated: [".factory/scripts/support.js", ".opencode/plugins/factory-start.ts", "app/index.js", "app/feature.mjs"],
+    generatedApplication: ["app/index.js", "app/feature.mjs"],
+    compiled: [
+      { sourceScope: "tracked", source: "src/tool.ts", outputScope: "tracked", output: "dist/tool.js" },
+      { sourceScope: "payload", source: "scripts/support.mts", outputScope: "generated", output: ".factory/scripts/support.js" },
+    ],
+  };
+  assert.deepEqual(checkModulePolicy(inventory), []);
+  assert.deepEqual(checkModulePolicy({ ...inventory,
+    tracked: [...inventory.tracked, "z.mjs", "a.js"],
+    payload: [...inventory.payload, "scripts/z.js", "start.mjs"],
+    generated: [...inventory.generated, ".factory/scripts/z.mjs", ".factory/scripts/a.js"],
+  }), [
+    { scope: "generated", path: ".factory/scripts/a.js", reason: "untyped JavaScript module" },
+    { scope: "generated", path: ".factory/scripts/z.mjs", reason: "untyped .mjs module" },
+    { scope: "payload", path: "scripts/z.js", reason: "untyped JavaScript module" },
+    { scope: "payload", path: "start.mjs", reason: "untyped .mjs module" },
+    { scope: "tracked", path: "a.js", reason: "untyped JavaScript module" },
+    { scope: "tracked", path: "z.mjs", reason: "untyped .mjs module" },
+  ]);
+});
+
+test("module policy requires exact typed provenance and rejects malformed inventories", () => {
+  const baseline = {
+    tracked: ["src/tool.ts"], payload: [], generated: [".factory/scripts/tool.js", "app/own.js"],
+    generatedApplication: ["app/own.js"], compiled: [],
+  };
+  const mapping = { sourceScope: "tracked", source: "src/tool.ts", outputScope: "generated", output: ".factory/scripts/tool.js" };
+  assert.deepEqual(checkModulePolicy({ ...baseline, compiled: [mapping] }), []);
+  for (const candidate of [
+    { ...mapping, source: "src/unknown.ts" },
+    { ...mapping, source: "src/tool.js" },
+    { ...mapping, output: "app/own.js" },
+    { ...mapping, output: ".factory/scripts/other.js" },
+    { ...mapping, output: ".factory/scripts/tool.mjs" },
+  ]) assert.throws(() => checkModulePolicy({ ...baseline, compiled: [candidate] }), /invalid compiled module provenance/u);
+  assert.throws(() => checkModulePolicy({ ...baseline, compiled: [mapping, mapping] }), /invalid compiled module provenance/u);
+  for (const invalid of ["../escape.js", "/absolute.js", "C:/drive.js", "a//b.js", "a/./b.js", "a\\b.js"]) {
+    assert.throws(() => checkModulePolicy({ ...baseline, tracked: [invalid] }), /invalid module policy path/u);
+  }
+  assert.throws(() => checkModulePolicy({ ...baseline, generated: ["app/own.js", "app/own.js"] }), /duplicate module policy identity/u);
+  assert.throws(() => checkModulePolicy({ ...baseline, generated: [{ path: ".factory/scripts/tool.js", kind: "symlink" }] }), /symlink/u);
+  assert.throws(() => checkModulePolicy({ ...baseline, generatedApplication: [".factory"] }), /invalid generated application identity/u);
+  assert.throws(() => checkModulePolicy({ ...baseline, compiled: null }), /invalid module policy classification manifest/u);
+});
+
+test("module policy accepts executable type-derived output but not nearby generated JavaScript", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "module-policy-"));
+  try {
+    const source = path.join(parent, "source");
+    const output = path.join(parent, "output");
+    await mkdir(source);
+    await writeFile(path.join(source, "startup.mts"), 'console.log("typed startup");\n');
+    const emitted = await emitTypedModules(source, output);
+    const runtime = await execFileAsync(process.execPath, [emitted[0]]);
+    assert.equal(runtime.stdout, "typed startup\n");
+    const inventory = {
+      tracked: ["scripts/startup.mts"], payload: [],
+      generated: [".factory/scripts/startup.js", ".factory/scripts/rogue.js", "app/index.js"],
+      generatedApplication: ["app/index.js"],
+      compiled: [{ sourceScope: "tracked", source: "scripts/startup.mts", outputScope: "generated", output: ".factory/scripts/startup.js" }],
+    };
+    assert.deepEqual(checkModulePolicy(inventory), [
+      { scope: "generated", path: ".factory/scripts/rogue.js", reason: "untyped JavaScript module" },
+    ]);
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
