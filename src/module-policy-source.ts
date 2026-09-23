@@ -1,10 +1,39 @@
 import { execFile } from "node:child_process";
-import { lstat, readFile } from "node:fs/promises";
+import { access, lstat, readFile, realpath } from "node:fs/promises";
+import { constants } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { checkModulePolicy, type ModulePolicyDiagnostic } from "./module-policy";
 
 const execFileAsync = promisify(execFile);
+const outside = (root: string, candidate: string): boolean => {
+  const relative = path.relative(root, candidate);
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || (relative !== "" && path.isAbsolute(relative));
+};
+
+const trustedGitExecutable = async (root: string, executable: string): Promise<string> => {
+  if (typeof executable !== "string" || !path.isAbsolute(executable) || executable.includes("\0")) {
+    throw new Error("source inventory requires an absolute trusted Git executable");
+  }
+  const resolved = await realpath(executable);
+  if (!outside(root, path.resolve(executable)) || !outside(root, resolved)) {
+    throw new Error("source inventory Git executable must be outside the repository");
+  }
+  const entry = await lstat(resolved);
+  if (!entry.isFile() || (process.platform !== "win32" && !(entry.mode & 0o111))) {
+    throw new Error("source inventory Git executable must be a regular executable file");
+  }
+  await access(resolved, constants.X_OK);
+  return resolved;
+};
+
+const gitEnvironment = (): NodeJS.ProcessEnv => ({
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_OPTIONAL_LOCKS: "0",
+  LC_ALL: "C",
+  ...(process.platform === "win32" && process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+});
+
 type FileMode = "100644" | "100755";
 export interface SourceFileIdentity {
   path: string;
@@ -55,15 +84,17 @@ const onDisk = async (root: string, relative: string, expected: FileMode): Promi
 
 const json = async (file: string): Promise<unknown> => JSON.parse(await readFile(file, "utf8"));
 
-/** Inventory the Git index and the checked-in payload declaration; never follow source symlinks. */
-export const inventorySourceModules = async (directory: string): Promise<SourceModuleInventory> => {
+/** Inventory the Git index using a caller-trusted executable outside the repository. */
+export const inventorySourceModules = async (directory: string, gitExecutable: string): Promise<SourceModuleInventory> => {
   const root = path.resolve(directory);
   const rootEntry = await lstat(root);
   if (!rootEntry.isDirectory() || rootEntry.isSymbolicLink()) throw new Error("source inventory root must be a real directory");
-  const { stdout: toplevel } = await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd: root });
+  const git = await trustedGitExecutable(await realpath(root), gitExecutable);
+  const env = gitEnvironment();
+  const { stdout: toplevel } = await execFileAsync(git, ["-c", "core.fsmonitor=false", "rev-parse", "--show-toplevel"], { cwd: root, env });
   if (path.resolve(toplevel.trim()) !== root) throw new Error("source inventory requires a Git repository root");
-  const { stdout } = await execFileAsync("git", ["ls-files", "--stage", "-z"], {
-    cwd: root, encoding: "buffer", maxBuffer: 16 * 1024 * 1024,
+  const { stdout } = await execFileAsync(git, ["-c", "core.fsmonitor=false", "ls-files", "--stage", "-z"], {
+    cwd: root, env, encoding: "buffer", maxBuffer: 16 * 1024 * 1024,
   });
   const bytes = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout);
   if (bytes.length && bytes.at(-1) !== 0) throw new Error("unterminated Git source inventory");
@@ -122,7 +153,7 @@ export const inventorySourceModules = async (directory: string): Promise<SourceM
 };
 
 /** Source-only adapter: no caller-supplied generated ownership or compiler exemptions. */
-export const checkSourceModulePolicy = async (root: string): Promise<ModulePolicyDiagnostic[]> => {
-  const { tracked, payload } = await inventorySourceModules(root);
+export const checkSourceModulePolicy = async (root: string, gitExecutable: string): Promise<ModulePolicyDiagnostic[]> => {
+  const { tracked, payload } = await inventorySourceModules(root, gitExecutable);
   return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled: [] });
 };

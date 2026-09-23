@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +23,18 @@ const manifest = JSON.parse(await readFile(path.join(root, "dist/payload-manifes
 const { emitTypedModules } = emitter;
 const { checkModulePolicy } = policy;
 const { inventorySourceModules, checkSourceModulePolicy } = sourcePolicy;
+const trustedGit = await (async () => {
+  for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!directory) continue;
+    for (const name of process.platform === "win32" ? ["git.exe", "git.cmd"] : ["git"]) {
+      try {
+        const candidate = await realpath(path.join(directory, name));
+        if ((await stat(candidate)).isFile()) return candidate;
+      } catch { /* Try the next harness path. */ }
+    }
+  }
+  throw new Error("test harness requires a trusted Git executable");
+})();
 
 const walk = async (directory, relative = "") => {
   const result = [];
@@ -226,7 +238,7 @@ test("module policy accepts executable type-derived output but not nearby genera
 
 const sourceFixture = async () => {
   const repository = await mkdtemp(path.join(os.tmpdir(), "module-source-inventory-"));
-  await execFileAsync("git", ["init", "-q"], { cwd: repository });
+  await execFileAsync(trustedGit, ["init", "-q"], { cwd: repository });
   await mkdir(path.join(repository, "package"));
   await mkdir(path.join(repository, "scripts", "nested"), { recursive: true });
   await mkdir(path.join(repository, "hooks"));
@@ -238,14 +250,14 @@ const sourceFixture = async () => {
     { path: "scripts/nested/start.mjs", mode: "100755" },
     { path: "hooks/start.ts", mode: "100644" },
   ] }));
-  await execFileAsync("git", ["add", "--", "."], { cwd: repository });
+  await execFileAsync(trustedGit, ["add", "--", "."], { cwd: repository });
   return repository;
 };
 
 test("source inventory uses Git index modes and exact payload identities with stable policy output", async () => {
   const repository = await sourceFixture();
   try {
-    const inventory = await inventorySourceModules(repository);
+    const inventory = await inventorySourceModules(repository, trustedGit);
     assert.deepEqual(inventory.tracked.map(({ path: file }) => file), [
       "hooks/start.ts", "package/payload-files.json", "package/payload-manifest.json",
       "scripts/nested/rogue.js", "scripts/nested/start.mjs", "scripts/nested/typed.mts",
@@ -255,7 +267,7 @@ test("source inventory uses Git index modes and exact payload identities with st
       { path: "scripts/nested/start.mjs", kind: "file", mode: "100755" },
     ]);
     await writeFile(path.join(repository, "scripts/nested/untracked.mjs"), "export {};\n");
-    assert.deepEqual(await checkSourceModulePolicy(repository), [
+    assert.deepEqual(await checkSourceModulePolicy(repository, trustedGit), [
       { scope: "payload", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
       { scope: "tracked", path: "scripts/nested/rogue.js", reason: "untyped JavaScript module" },
       { scope: "tracked", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
@@ -278,28 +290,82 @@ test("source inventory fails closed on symlinks, modes, and malformed payload de
       [manifest.files[0]],
     ]) {
       await writeFile(manifestPath, JSON.stringify({ files }));
-      await assert.rejects(inventorySourceModules(repository), /duplicate payload identity|invalid source inventory path|payload is not a matching tracked file|payload manifest and declaration differ/u);
+      await assert.rejects(inventorySourceModules(repository, trustedGit), /duplicate payload identity|invalid source inventory path|payload is not a matching tracked file|payload manifest and declaration differ/u);
     }
     await writeFile(manifestPath, original);
     await chmod(path.join(repository, "scripts/nested/start.mjs"), 0o644);
-    await assert.rejects(inventorySourceModules(repository), /source inventory mode mismatch/u);
+    await assert.rejects(inventorySourceModules(repository, trustedGit), /source inventory mode mismatch/u);
     await chmod(path.join(repository, "scripts/nested/start.mjs"), 0o755);
     await rm(path.join(repository, "scripts/nested/rogue.js"));
     await symlink(path.join(repository, "hooks/start.ts"), path.join(repository, "scripts/nested/rogue.js"));
-    await assert.rejects(inventorySourceModules(repository), /source inventory symlink/u);
+    await assert.rejects(inventorySourceModules(repository, trustedGit), /source inventory symlink/u);
     await rm(path.join(repository, "scripts/nested/rogue.js"));
     await writeFile(path.join(repository, "scripts/nested/rogue.js"), "export {};\n");
     await rm(path.join(repository, "scripts/nested"), { recursive: true });
     await symlink(path.join(repository, "hooks"), path.join(repository, "scripts/nested"));
-    await assert.rejects(inventorySourceModules(repository), /source inventory symlink/u);
+    await assert.rejects(inventorySourceModules(repository, trustedGit), /source inventory symlink/u);
     await rm(path.join(repository, "scripts/nested"));
     await mkdir(path.join(repository, "scripts/nested"));
     await writeFile(path.join(repository, "scripts/nested/start.mjs"), "export {};\n");
     await chmod(path.join(repository, "scripts/nested/start.mjs"), 0o755);
     await writeFile(path.join(repository, "scripts/nested/typed.mts"), "export {};\n");
     await symlink(path.join(repository, "hooks/start.ts"), path.join(repository, "scripts/nested/rogue.js"));
-    await execFileAsync("git", ["add", "--", "scripts/nested/rogue.js"], { cwd: repository });
-    await assert.rejects(inventorySourceModules(repository), /invalid source inventory mode/u);
+    await execFileAsync(trustedGit, ["add", "--", "scripts/nested/rogue.js"], { cwd: repository });
+    await assert.rejects(inventorySourceModules(repository, trustedGit), /invalid source inventory mode/u);
+  } finally {
+    await rm(repository, { recursive: true, force: true });
+  }
+});
+
+test("source inventory ignores hostile fsmonitor, PATH, and inherited Git config", async (context) => {
+  if (process.platform === "win32") {
+    context.skip("the hostile executable fixtures use POSIX shell scripts");
+    return;
+  }
+  const repository = await sourceFixture();
+  try {
+    const monitor = path.join(repository, "monitor");
+    const marker = path.join(repository, "monitor-ran");
+    const shadow = path.join(repository, "git");
+    const shadowMarker = path.join(repository, "shadow-ran");
+    await writeFile(monitor, `#!/bin/sh\nprintf invoked > "${marker}"\n`);
+    await writeFile(shadow, `#!/bin/sh\nprintf invoked > "${shadowMarker}"\nexit 1\n`);
+    await chmod(monitor, 0o755);
+    await chmod(shadow, 0o755);
+    await execFileAsync(trustedGit, ["config", "--local", "core.fsmonitor", monitor], { cwd: repository });
+
+    // Establish the fixture's real execution path before testing the guarded adapter.
+    await execFileAsync(trustedGit, ["rev-parse", "--show-toplevel"], { cwd: repository });
+    await assert.rejects(stat(marker), { code: "ENOENT" });
+    await execFileAsync(trustedGit, ["ls-files", "--stage", "-z"], { cwd: repository, encoding: "buffer" });
+    assert.equal(await readFile(marker, "utf8"), "invoked");
+    await rm(marker);
+
+    const script = `const { inventorySourceModules } = require(${JSON.stringify(path.join(root, "dist/module-policy-source.js"))});\n` +
+      `inventorySourceModules(${JSON.stringify(repository)}, ${JSON.stringify(trustedGit)})` +
+      `.then(({tracked}) => console.log(JSON.stringify(tracked.map(({path}) => path))))` +
+      `.catch(error => { console.error(error); process.exitCode = 1; });`;
+    const { stdout } = await execFileAsync(process.execPath, ["-e", script], {
+      cwd: repository,
+      env: { ...process.env, PATH: repository, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.fsmonitor", GIT_CONFIG_VALUE_0: monitor },
+    });
+    assert.ok(JSON.parse(stdout).includes("scripts/nested/start.mjs"));
+    await assert.rejects(stat(marker), { code: "ENOENT" });
+    await assert.rejects(stat(shadowMarker), { code: "ENOENT" });
+  } finally {
+    await rm(repository, { recursive: true, force: true });
+  }
+});
+
+test("source inventory fails closed without an external executable or with invalid Git config", async () => {
+  const repository = await sourceFixture();
+  try {
+    for (const candidate of [undefined, "git", path.join(repository, "hooks/start.ts")]) {
+      await assert.rejects(inventorySourceModules(repository, candidate), /trusted Git executable|outside the repository/u);
+    }
+    await assert.rejects(inventorySourceModules(repository, path.join(repository, "missing-git")));
+    await writeFile(path.join(repository, ".git", "config"), "[core\n");
+    await assert.rejects(inventorySourceModules(repository, trustedGit));
   } finally {
     await rm(repository, { recursive: true, force: true });
   }
