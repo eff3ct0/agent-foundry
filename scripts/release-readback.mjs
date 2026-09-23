@@ -78,3 +78,9 @@ export const resolvePublishedRelease = async ({ client, repository, tag, expecte
   if (expectedSha && target.sha !== expectedSha) return rejected("release_sha_mismatch");
   return { status: "ok", tag, sha: target.sha };
 };
+
+export const resolveReleaseForPublish = async ({ eventName, eventSha, ...release }) => {
+  if (eventName !== "release" && eventName !== "workflow_dispatch") return rejected("unsupported_release_event");
+  if (typeof eventSha !== "string" || !SHA.test(eventSha)) return rejected("event_sha_missing_or_malformed");
+  return resolvePublishedRelease({ ...release, expectedSha: eventSha });
+};

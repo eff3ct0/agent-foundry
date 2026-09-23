@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { createHostedLifecycleReadClient } from "../scripts/hosted-lifecycle-read-client.mjs";
-import { MAX_ANNOTATED_TAG_DEPTH, resolvePublishedRelease } from "../scripts/release-readback.mjs";
+import { MAX_ANNOTATED_TAG_DEPTH, resolvePublishedRelease, resolveReleaseForPublish } from "../scripts/release-readback.mjs";
 
 const tag = "v1.2.3";
 const repository = "acme/factory";
@@ -61,6 +61,37 @@ test("rejects a mismatched release tag or expected commit", async () => {
 
   fixture = injectedClient([response(release()), response(tagReference("commit", sha))]);
   assert.deepEqual(await resolve(fixture.client, "c".repeat(40)), { status: "rejected", code: "release_sha_mismatch" });
+});
+
+test("publish guard accepts release and manual dispatch only for the exact event commit", async () => {
+  for (const eventName of ["release", "workflow_dispatch"]) {
+    const { client, calls } = injectedClient([response(release()), response(tagReference("commit", sha))]);
+    assert.deepEqual(await resolveReleaseForPublish({ client, repository, tag, eventName, eventSha: sha }), { status: "ok", tag, sha });
+    assert.equal(calls.length, 2);
+  }
+});
+
+test("publish guard rejects either event when its commit differs from the resolved tag", async () => {
+  for (const eventName of ["release", "workflow_dispatch"]) {
+    const { client, calls } = injectedClient([response(release()), response(tagReference("commit", sha))]);
+    assert.deepEqual(await resolveReleaseForPublish({ client, repository, tag, eventName, eventSha: "c".repeat(40) }),
+      { status: "rejected", code: "release_sha_mismatch" });
+    assert.equal(calls.length, 2);
+  }
+});
+
+test("publish guard rejects missing or malformed event SHA before any read", async () => {
+  for (const eventName of ["release", "workflow_dispatch"]) {
+    for (const eventSha of [undefined, "", "short", "C".repeat(40)]) {
+      const { client, calls } = injectedClient([]);
+      assert.deepEqual(await resolveReleaseForPublish({ client, repository, tag, eventName, eventSha }),
+        { status: "rejected", code: "event_sha_missing_or_malformed" });
+      assert.deepEqual(calls, []);
+    }
+  }
+  const { client } = injectedClient([]);
+  assert.deepEqual(await resolveReleaseForPublish({ client, repository, tag, eventName: "push", eventSha: sha }),
+    { status: "rejected", code: "unsupported_release_event" });
 });
 
 test("rejects malformed release and tag response payloads", async () => {
