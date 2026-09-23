@@ -76,4 +76,4 @@ package is actually published and read back.
 
 ## Next step
 
-Local implementation is complete and the six work-unit commits are recorded. The updated task tracker remains to be committed. The selected chain strategy is `stacked-to-main`; commits remain local and no PR will be opened. npm publication/registry readback (`npm view` previously returned 404; `npm whoami` returned `ENEEDAUTH`), exact published-package consumer execution, hosted real-agent execution, and final GitHub Template-mode readback/mutation remain blocked pending credentials and explicit authorization.
+Local implementation is complete. Six work-unit commits plus this task-ledger commit are local on `feat/issue-112-cutover`; no PR was opened. The selected chain strategy is `stacked-to-main`. npm publication/registry readback (`npm view` previously returned 404; `npm whoami` returned `ENEEDAUTH`), exact published-package consumer execution, hosted real-agent execution, and final GitHub Template-mode readback/mutation remain blocked pending credentials and explicit authorization.
