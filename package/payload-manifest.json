@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8904,
-      "sha256": "2c6d09de8baeb8b1e5d1ce1787593e1a7afe24d5dc03627750b83f9d5a047ee9"
+      "size": 9070,
+      "sha256": "8b43df62190dd767f70a55671631d6e705328d25689ffaa093df55789c19b410"
     },
     {
       "path": "ci/_contract.md",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 2668,
-      "sha256": "b29acd1b711be1d0f0be4e6016bf72485f6035ae4097fda612b0bdec7e381205"
+      "size": 2749,
+      "sha256": "f35b81a59b000ff76d517058b370b104c10c7e50f0575a62566d47157aeef34a"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -377,5 +377,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:d46dc8da73cdcb2958d938f5489321e3c6a491910315859aa9e4ff649d34235c"
+  "payload_digest": "sha256:c82f249b02df83440e00b2c572be728c83696d84cc7548b3469b9c4ba196b54f"
 }

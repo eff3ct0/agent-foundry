@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,7 @@ import {
 } from "../scripts/build-payload.mjs";
 import { packedArtifactIdentity } from "../scripts/artifact-identity.mjs";
 import emitter from "../dist/typed-module-emitter.js";
+import verifier from "../dist/typed-runtime-verifier.js";
 import policy from "../dist/module-policy.js";
 import sourcePolicy from "../dist/module-policy-source.js";
 
@@ -21,6 +22,7 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(await readFile(path.join(root, "dist/payload-manifest.json"), "utf8"));
 const { emitTypedModules } = emitter;
+const { verifyTypedRuntime } = verifier;
 const { checkModulePolicy } = policy;
 const { inventorySourceModules, checkSourceModulePolicy } = sourcePolicy;
 const trustedGit = await (async () => {
@@ -157,6 +159,45 @@ test("typed module emitter rejects unsafe or unresolved imports before writing o
     await writeFile(path.join(source, "entry.mts"), "const value: number = 'invalid';\n");
     await assert.rejects(emitTypedModules(source, path.join(parent, "type-error")), /Type 'string' is not assignable/u);
     await assert.rejects(stat(path.join(parent, "type-error")), { code: "ENOENT" });
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("checked-in workflow runtime matches fresh typed compiler bytes without transient .mjs", async () => {
+  const source = path.join(root, "scripts/typed");
+  const committed = path.join(root, "scripts/typed-runtime");
+  await verifyTypedRuntime(source, committed);
+  const parent = await mkdtemp(path.join(os.tmpdir(), "typed-runtime-fixture-"));
+  try {
+    const output = path.join(parent, "output");
+    await emitTypedModules(source, output);
+    assert.deepEqual(await walk(output), ["check-real-agent-workflow.js", "package.json"]);
+    assert.deepEqual(await walk(committed), await walk(output));
+    for (const file of await walk(output)) {
+      assert.deepEqual(await readFile(path.join(committed, file)), await readFile(path.join(output, file)));
+    }
+    const runtime = path.join(parent, "runtime");
+    await cp(output, runtime, { recursive: true });
+    await verifyTypedRuntime(source, runtime);
+    const js = path.join(runtime, "check-real-agent-workflow.js");
+    const bytes = await readFile(js);
+    bytes[bytes.length - 2] ^= 1;
+    await writeFile(js, bytes);
+    await assert.rejects(verifyTypedRuntime(source, runtime), /typed runtime bytes differ/u);
+    await writeFile(js, await readFile(path.join(output, "check-real-agent-workflow.js")));
+    await rm(js);
+    await assert.rejects(verifyTypedRuntime(source, runtime), /typed runtime file set differs/u);
+    await cp(output, runtime, { recursive: true });
+    await writeFile(path.join(runtime, "extra.js"), "export {};\n");
+    await assert.rejects(verifyTypedRuntime(source, runtime), /typed runtime file set differs/u);
+    await rm(path.join(runtime, "extra.js"));
+    const changedSource = path.join(parent, "source");
+    await cp(source, changedSource, { recursive: true });
+    await writeFile(path.join(changedSource, "check-real-agent-workflow.mts"), "export const changed: number = 1;\n");
+    await assert.rejects(verifyTypedRuntime(changedSource, runtime), /typed runtime bytes differ/u);
+    await writeFile(path.join(changedSource, "check-real-agent-workflow.mts"), "const invalid: number = 'wrong';\n");
+    await assert.rejects(verifyTypedRuntime(changedSource, runtime), /not assignable/u);
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

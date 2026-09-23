@@ -76,6 +76,8 @@ test("archetype Node 20 PR check rejects trigger, authority, pin, version, and c
     ["npm install --global pnpm@12.4.2", "npm install --global pnpm@latest"],
     ['test "$(pnpm --version)" = "12.4.2"', 'test "$(pnpm --version)" = "latest"'],
     ["pnpm test:package-consumer", "pnpm build"],
+    ["node scripts/typed-runtime/check-real-agent-workflow.js", "node scripts/missing-checker.js"],
+    ["          node scripts/check-determinism.mjs\n          pnpm typecheck", "          pnpm typecheck"],
     ["          pnpm typecheck", "          pnpm typecheck\n          node -e 'console.log(process.env)'"],
     ["  verify:\n", "  verify:\n    env:\n      TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"],
   ];
