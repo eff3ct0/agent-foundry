@@ -43,10 +43,15 @@ test("only one complete generated binding is accepted, without provider fallback
 
 test("fresh fake native readback confirms content and duplicate correlation without a second write", async () => {
   const entries = [];
+  const claims = new Set();
   let status = "In Progress";
   let writes = 0;
   const f = await fixture(binding(), { jira: {
-    idempotentByOperationId: true,
+    claim: async (_identity, nativeEntry) => {
+      if (claims.has(nativeEntry.operationId)) return { claimed: false };
+      claims.add(nativeEntry.operationId);
+      return { claimed: true };
+    },
     read: async () => ({ identity, status, entries: [...entries] }),
     write: async (_identity, nativeEntry, nativeStatus) => {
       writes++;
@@ -70,7 +75,7 @@ test("unknown acknowledgement, wrong target and failed readback cannot report du
     let reads = 0;
     let writes = 0;
     const f = await fixture(binding(), { jira: {
-      idempotentByOperationId: true,
+      claim: async () => ({ claimed: true }),
       read: async () => {
         reads++;
         if (mode === "unavailable" && reads > 1) throw Error("offline");
@@ -87,9 +92,31 @@ test("unknown acknowledgement, wrong target and failed readback cannot report du
   }
 });
 
+test("lost acknowledgement and stale read across adapters cannot repeat a claimed write", async () => {
+  const claims = new Set();
+  let writes = 0;
+  const f = await fixture(binding(), { jira: {
+    idempotentByOperationId: true,
+    read: async () => ({ identity, status: "In Progress", entries: [] }),
+    claim: async (_identity, nativeEntry) => {
+      if (claims.has(nativeEntry.operationId)) return { claimed: false };
+      claims.add(nativeEntry.operationId);
+      return { claimed: true };
+    },
+    write: async () => { writes++; throw Error("accepted by provider, response lost"); },
+  } });
+  try {
+    await assert.rejects((await f.adapter()).write(identity, entry), { code: "unknown_write_outcome" });
+    await assert.rejects((await f.adapter()).write(identity, entry), { code: "unknown_write_outcome" });
+    assert.equal(writes, 1);
+    assert.equal(claims.size, 1);
+  } finally { await f.cleanup(); }
+});
+
 test("structured handoff validates blocked continuation and unsupported writes do not mutate", async () => {
   let writes = 0;
   const f = await fixture(binding(), { jira: {
+    idempotentByOperationId: true,
     read: async () => ({ identity, status: "In Progress", entries: [] }),
     write: async () => { writes++; return { accepted: true }; },
   } });
