@@ -13,8 +13,8 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(root, "scripts", "check-bootstrap-workflow.mjs");
 const workflows = path.join(".github", "workflows");
-const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml" });
-const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK"];
+const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml", archetypeNode20: "archetype-node20.yml" });
+const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
 
 const fixture = async (callback) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bootstrap-workflow-contract-"));
@@ -63,6 +63,26 @@ test("the Node CLI emits the Python parity success output", async () => {
   const result = await execFileAsync(process.execPath, [script], { cwd: root });
   assert.equal(result.stdout, `${success.join("\n")}\n`);
   assert.equal(result.stderr, "");
+});
+
+test("archetype Node 20 PR check rejects trigger, authority, pin, version, and command drift", async () => {
+  const changes = [
+    ["  pull_request:", "  pull_request_target:"],
+    ["  contents: read", "  contents: write"],
+    ["actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", "actions/checkout@v4"],
+    [`actions/setup-node@${bootstrapPinnedActions["actions/setup-node"]}`, "actions/setup-node@v4"],
+    ["node-version: 20.19.0", "node-version: 22"],
+    ["pnpm@12.4.2", "pnpm@latest"],
+    ["pnpm test:package-consumer", "pnpm build"],
+    ["          pnpm typecheck", "          pnpm typecheck\n          node -e 'console.log(process.env)'"],
+    ["  verify:\n", "  verify:\n    env:\n      TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"],
+  ];
+  for (const [from, to] of changes) {
+    await fixture(async (directory) => {
+      await replace(directory, "archetypeNode20", from, to);
+      await reject(directory, "archetype Node 20 PR workflow differs from its read-only contract");
+    });
+  }
 });
 
 test("bootstrap rejects unpinned, unverified, and missing required actions", async () => {
