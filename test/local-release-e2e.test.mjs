@@ -8,7 +8,7 @@ import { validateMatrixEvidence } from "../scripts/local-matrix.mjs";
 
 const identity = {
   schema_version: 1,
-  package: { name: "factory-template-creator", version: "0.1.0" },
+  package: { name: "@eff3ct/agent-foundry", version: "0.1.0" },
   tarball_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   payload_digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   tree_digest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -21,7 +21,7 @@ test("the full local release E2E continues after failures and writes all redacte
     await assert.rejects(
       runLocalReleaseE2e({
         outputDirectory: directory,
-        tarballPath: "/tmp/factory-template.tgz",
+        tarballPath: "/tmp/eff3ct-agent-foundry.tgz",
         runCreator: async () => {
           runs += 1;
           if (runs === 2) throw new Error("TOKEN=secret failed in /tmp/private-project");

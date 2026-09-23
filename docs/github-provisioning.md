@@ -1,6 +1,6 @@
 # GitHub provisioning
 
-`factory-template github-provision` is the explicit, authenticated boundary
+`foundry github-provision` is the explicit, authenticated boundary
 for ensuring the organization repositories `<org>/.github` and
 `<org>/<factory-repo>`. Local `plan`, `apply`, `verify`, and `doctor` commands
 never invoke it.
@@ -11,15 +11,15 @@ never invoke it.
 targets without invoking `gh`, reading authentication, or mutating GitHub:
 
 ```sh
-factory-template github-provision --org acme --factory-repo factory --visibility private --plan
+foundry github-provision --org acme --factory-repo factory --visibility private --plan
 ```
 
 ## Ensure
 
 ```sh
-factory-template github-provision --org acme --factory-repo factory --visibility private
-factory-template github-provision --org acme --factory-repo factory --visibility private --yes
-factory-template github-provision --org acme --factory-repo factory --no-create
+foundry github-provision --org acme --factory-repo factory --visibility private
+foundry github-provision --org acme --factory-repo factory --visibility private --yes
+foundry github-provision --org acme --factory-repo factory --no-create
 ```
 
 The command uses `gh auth status`, `gh repo view`, and `gh repo create` with

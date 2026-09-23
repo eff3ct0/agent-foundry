@@ -251,12 +251,12 @@ export const installedCreatorRunner = ({ cliPath, environment = process.env }) =
     .then((value) => ({ ...value, status: "passed" })).catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", status: "failed" }));
   return {
     status: result.status,
-    commands: ["factory-template apply"],
+    commands: ["foundry apply"],
     release_e2e: {
       schema_version: 1,
       command_results: [captureCommandResult({
-        name: "factory-template apply",
-        command: "factory-template apply",
+        name: "foundry apply",
+        command: "foundry apply",
         status: result.status,
         exit_code: result.status === "passed" ? 0 : null,
         output: `${result.stdout}\n${result.stderr}`,

@@ -38,8 +38,8 @@ prompts, progress, summaries, and diagnostics go to stderr, so JSON can be
 captured safely. Existing non-interactive commands remain deterministic:
 
 ```sh
-factory-template dry-run --target ./new-project --config answers.json --non-interactive
-factory-template apply --target ./new-project --config answers.json --non-interactive --json
+foundry dry-run --target ./new-project --config answers.json --non-interactive
+foundry apply --target ./new-project --config answers.json --non-interactive --json
 ```
 
 Supported UX controls are:

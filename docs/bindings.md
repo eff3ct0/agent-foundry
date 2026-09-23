@@ -10,7 +10,7 @@ The shape of bindings is defined by the abstract capability contracts:
 - [`providers/code-intel/_contract.md`](../providers/code-intel/_contract.md) when `CODE_INTELLIGENCE` is not `none`
 - [`ci/_contract.md`](../ci/_contract.md) for CI
 
-During initialization, `init.py` replaces this content with the selected task and
+During initialization, the exact-version creator replaces this content with the selected task and
 secrets instances, plus the optional code-intelligence instance when selected.
 `_contract.md` files define shape; they are not selectable providers or recipes.
 

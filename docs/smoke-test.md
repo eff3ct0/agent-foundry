@@ -1,7 +1,7 @@
 # Factory smoke test (repeatable dogfood)
 
 Validate that a COLD agent, given only the repository and a minimal kickoff,
-initializes itself according to the contract. Every friction point becomes a
+  starts and configures itself according to the contract. Every friction point becomes a
 [`type:dx-feedback` issue](../.github/ISSUE_TEMPLATE/dx-feedback.yml) in the template repository.
 
 > **Archetype boundary:** Release E2E and OpenAI triage paths exist only in
@@ -16,6 +16,14 @@ the safest trigger because GitHub has published the release artifact. A manual
 a full immutable commit SHA and tests that exact revision; it does not use the
 template API because that follows the default branch.
 
+The npm publication contract is the separate
+[`.github/workflows/npm-release.yml`](../.github/workflows/npm-release.yml)
+workflow. It accepts only a published release or an explicit tag dispatch,
+requires `v<EXACT_VERSION>`, publishes the exact package once with provenance,
+and immediately verifies npm metadata, tarball bytes, payload digest, release
+tag, and source SHA. Missing npm credentials or any mismatch is a blocker, not
+a successful dry run.
+
 ## Template bootstrap E2E contract
 
 The maintainer-only `.github/workflows/template-bootstrap-e2e.yml` workflow is
@@ -23,7 +31,7 @@ the repeatable template-level check. A manual run checks out the trusted
 `github.workflow_sha`, builds one immutable package with pinned Corepack/pnpm,
 and uploads it as a run-scoped artifact. Each `ci/recipes.json` case downloads
 that exact package and validates the installed creator: it installs offline with
-scripts disabled, runs `factory-template apply --non-interactive`, and requires
+scripts disabled, runs `foundry apply --non-interactive`, and requires
 the creator's verified JSON envelope. It does not use GitHub's template-
 generation endpoint or create a disposable repository.
 
@@ -116,17 +124,17 @@ GitHub Actions execution. The OpenAI request follows the official Responses API
 structured-output guidance at
 https://developers.openai.com/api/docs/guides/structured-outputs.
 
-## 1. Create a project from the template
+## 1. Create a project from the package
 ```
-gh repo create <YOUR_ACCOUNT>/factory-smoke-test --template eff3ct0/factory-template --private --clone
-cd factory-smoke-test
+mkdir factory-smoke-test && cd factory-smoke-test
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --non-interactive
 ```
 
 ## 2. Minimal kickoff (NEW agent session inside the repo)
-> You are a cold agent in this newly created factory-template project. Read
-> CLAUDE.md and AGENT.md and follow docs/agent-init.md: propose placeholder
-> values with init.py (use `--no-clean` for verification), present the complete
-> configuration, explicitly confirm it, compose bindings and CI, and verify.
+> You are a cold agent in this newly generated project. Run `node start.mjs`,
+> read CLAUDE.md and AGENT.md, and follow docs/agent-init.md: propose the
+> configuration values, present the complete configuration, explicitly confirm
+> it, compose bindings and CI, and verify.
 > Ask me for decisions (name, stack, tracker, secrets, and persistence language)
 > rather than treating local files or defaults as consent. Do not take outward
 > actions without my approval.
@@ -136,16 +144,17 @@ Note: `eff3ct0/factory` (the org instance) does not exist yet, so leave
 
 ## 3. Success criteria
 - [ ] The kickoff was sufficient; no process explanation was needed.
-- [ ] `python3 init.py --check` -> zero required manifest placeholders (keep `--no-clean` for this; optional non-applicable values may remain empty).
+- [ ] `node start.mjs` reports the expected setup/work mode.
+- [ ] `foundry apply --non-interactive` returns a successful JSON envelope.
 - [ ] `docs/bindings.md` contains the selected task and secrets providers.
 - [ ] `.github/workflows/ci.yml` has one job per stack language.
-- [ ] Without `--no-clean`, `init.py`, `placeholders.json`, `ci/`, `providers/`, `factory_bootstrap.py`, `MAINTAINERS.md`, `docs/smoke-test.md`, and `scripts/check-determinism.py` disappear.
+- [ ] Generated output contains no `ci/`, `providers/`, `MAINTAINERS.md`, or maintainer-only release tooling.
 - [ ] The agent follows the loop contract (one task/session, tracker state, checkpoint, DoD).
 - [ ] Persisted project content uses the configured `<REPO_LANGUAGE>`.
 
 ## 4. Cleanup
 ```
-gh repo delete <YOUR_ACCOUNT>/factory-smoke-test --yes
+rm -rf factory-smoke-test
 ```
 
 ## 5. Feedback (the improvement engine)

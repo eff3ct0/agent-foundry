@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { packedArtifactIdentity } from "./artifact-identity.mjs";
 
 const execFileAsync = promisify(execFile);
-const PACKAGE_NAME = "factory-template-creator";
+const PACKAGE_NAME = "@eff3ct/agent-foundry";
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const ENVIRONMENT_KEYS = ["CI", "HOME", "NO_COLOR", "PATH", "TEMP", "TMP", "TMPDIR"];
 
@@ -37,7 +37,7 @@ const installedPackage = async (installation) => {
   if (!object(packageJson) || packageJson.name !== PACKAGE_NAME || typeof packageJson.version !== "string" || !object(packageJson.bin)) {
     fail("installed package metadata is absent or malformed");
   }
-  const entry = packageJson.bin["factory-template"];
+  const entry = packageJson.bin.foundry;
   if (typeof entry !== "string" || !entry || path.isAbsolute(entry) || entry.split(/[\\/]/u).includes("..")) {
     fail("installed package CLI is absent or malformed");
   }

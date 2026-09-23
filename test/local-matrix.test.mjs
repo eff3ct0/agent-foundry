@@ -19,7 +19,7 @@ import {
 
 const identity = {
   schema_version: 1,
-  package: { name: "factory-template-creator", version: "0.1.0" },
+  package: { name: "@eff3ct/agent-foundry", version: "0.1.0" },
   tarball_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   payload_digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   tree_digest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -63,10 +63,10 @@ test("the local runner executes and records every matrix case", async () => {
         invoked.push({ matrixCase, configuration, caseDirectory });
         return {
           status: "passed",
-          commands: ["factory-template apply", "factory-template verify"],
+          commands: ["foundry apply", "foundry verify"],
           release_e2e: {
             schema_version: 1,
-            command_results: [captureCommandResult({ name: "factory-template apply", command: "factory-template apply", status: "passed", exit_code: 0, output: "created" })],
+            command_results: [captureCommandResult({ name: "foundry apply", command: "foundry apply", status: "passed", exit_code: 0, output: "created" })],
           },
         };
       },
@@ -85,7 +85,7 @@ test("the local runner executes and records every matrix case", async () => {
 test("release E2E command results redact credentials and private temporary paths", () => {
   const result = captureCommandResult({
     name: "release command",
-    command: "TOKEN=secret factory-template apply --target /tmp/private-project",
+      command: "TOKEN=secret foundry apply --target /tmp/private-project",
     status: "failed",
     exit_code: 1,
     output: "Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz0123456789 /home/runner/work/key github_pat_abcdefghijklmnopqrstuvwxyz0123456789",
@@ -106,7 +106,7 @@ test("release E2E evidence rejects unsafe or oversized serialized command result
     });
     evidence.cases[0].release_e2e.command_results = Array.from({ length: 8 }, (_, index) => captureCommandResult({
       name: `command-${index}`,
-      command: "factory-template apply",
+      command: "foundry apply",
       status: "passed",
       exit_code: 0,
       output: "x".repeat(512),
@@ -119,7 +119,7 @@ test("release E2E evidence rejects unsafe or oversized serialized command result
     delete evidence.oversized;
     evidence.cases[1].release_e2e = {
       schema_version: 1,
-      command_results: [captureCommandResult({ name: "unsafe", command: "factory-template apply", status: "passed", exit_code: 0, output: "safe" })],
+      command_results: [captureCommandResult({ name: "unsafe", command: "foundry apply", status: "passed", exit_code: 0, output: "safe" })],
       unexpected: "field",
     };
     await assert.rejects(async () => validateMatrixEvidence(evidence), LocalMatrixError);

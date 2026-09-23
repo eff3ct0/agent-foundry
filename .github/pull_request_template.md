@@ -29,9 +29,16 @@ Closes #<TICKET_ID>
 ```
 E2e check: <STEPS_IN_ENV>
 
+## Exact package and release evidence
+- Package spec: `@eff3ct/agent-foundry@<EXACT_VERSION>` or `N/A` (explain why).
+- Release tag/source SHA: `<TAG>` / `<FULL_SOURCE_SHA>` or `N/A` (explain why).
+- Payload digest: `<PAYLOAD_DIGEST>` or `N/A`.
+- Tarball digest and generated-tree digest: `<TARBALL_DIGEST>` / `<TREE_DIGEST>` or `N/A`.
+- Evidence artifact or command output: `<LINK_OR_PATH>`.
+
 ## Risks and rollback
 - Risk: <RISK>
-- Rollback: <HOW_TO_ROLL_BACK>
+- Rollback: <HOW_TO_ROLL_BACK>. Published npm versions are immutable; use a correcting version and keep Template mode as the separately authorized safety valve until consumer evidence passes.
 
 ## Definition of Done
 - [ ] See the complete checklist in `templates/definition-of-done.md`.

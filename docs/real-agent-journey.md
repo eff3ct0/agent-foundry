@@ -11,7 +11,7 @@ is the canonical runtime catalog. Each entry has a stable machine identifier,
 display label, executable adapter path, pinned package/version, required
 credential names, and support status. The current supported choice is
 `codex-cli` (OpenAI Codex CLI), which installs `@openai/codex@0.148.0` and uses
-`scripts/real-agent-journey-agent.py`. Disabled entries remain documented in
+`scripts/real-agent-journey-agent.mjs`. Disabled entries remain documented in
 the catalog but cannot be selected or run.
 
 Missing, malformed, unsupported, or disabled identifiers fail in `prepare`
@@ -20,12 +20,13 @@ credential values and a runtime does not select a credential.
 
 The four adapters are executable entry points, not placeholders:
 
-- `scripts/real-agent-journey-provision.py` creates and reads back the exact
-  `real-agent-journey-<run-id>` repository.
-- `scripts/real-agent-journey-agent.py` runs the existing cold Codex helper.
-- `scripts/real-agent-journey-assert.py` independently reads GitHub and the
+- `scripts/real-agent-journey-provision.mjs` reads the source revision and uses
+  the guarded Node GitHub API boundary to create and read back the exact empty
+  `real-agent-journey-<run-id>` repository. It never calls GitHub Template mode.
+- `scripts/real-agent-journey-agent.mjs` runs the existing cold Codex helper.
+- `scripts/real-agent-journey-assert.mjs` independently reads GitHub and the
   generated checkout.
-- `scripts/real-agent-journey-cleanup.py` verifies and deletes only the exact
+- `scripts/real-agent-journey-cleanup.mjs` verifies and deletes only the exact
   run-scoped repository.
 
 Every adapter emits one bounded `real-agent-journey/v1` envelope. The parent
@@ -77,8 +78,10 @@ releases.
 
 1. Dispatch **Real-agent user journey**, wait for its nightly schedule, or
    publish a release.
-2. The workflow creates a run-scoped private repository from the GitHub
-   Template mechanism and passes it through the four stage interfaces below.
+2. The workflow creates a run-scoped empty private repository through the
+   guarded Node GitHub API boundary, applies the exact published
+   `@eff3ct/agent-foundry@<EXACT_VERSION>` package, and passes it through
+   the four stage interfaces below.
 3. Read the bounded artifact and GitHub/checkout readback before treating the
    run as successful.
 
@@ -90,10 +93,10 @@ parent does not choose their provider or runtime.
 
 | Stage | Required adapter | Allowed responsibility | Success handoff |
 | --- | --- | --- | --- |
-| `provision` | `scripts/real-agent-journey-provision.py` | Create/read back the template repository and a fresh checkout | `provision.json` with owner, repository, template, default branch, and revision |
-| `agent` | `scripts/real-agent-journey-agent.py` | Start cold, read the required contracts, receive explicit decisions, create the feature issue, implement, test, and commit | `agent.json` with bounded interaction and implementation identifiers |
-| `assert` | `scripts/real-agent-journey-assert.py` | Independently read GitHub and checkout state and verify the feature result | `assert.json` with deterministic checks and outcomes |
-| `cleanup` | `scripts/real-agent-journey-cleanup.py` | Delete only the current run's verified repository | `cleanup.json` with owner proof, considered target, and cleanup status |
+| `provision` | `scripts/real-agent-journey-provision.mjs` | Read the source revision, create an empty repository, and verify owner/name/ID identity | `provision.json` with owner, repository ID, source identity, default branch, and revision |
+| `agent` | `scripts/real-agent-journey-agent.mjs` | Start cold, read the required contracts, receive explicit decisions, create the feature issue, implement, test, and commit | `agent.json` with bounded interaction and implementation identifiers |
+| `assert` | `scripts/real-agent-journey-assert.mjs` | Independently read GitHub and checkout state and verify the feature result | `assert.json` with deterministic checks and outcomes |
+| `cleanup` | `scripts/real-agent-journey-cleanup.mjs` | Delete only the current run's verified repository | `cleanup.json` with owner proof, considered target, and cleanup status |
 
 Each adapter receives `JOURNEY_CONTRACT_VERSION=real-agent-journey/v1`,
 `JOURNEY_RUN_ID`, `JOURNEY_REPOSITORY`, and `JOURNEY_STAGE`. It writes one
@@ -117,7 +120,8 @@ bounded JSON object with this minimum shape:
 ```
 
 Passing adapters must provide these bounded identifiers: `provision` provides
-`source_template`, `default_branch`, and `revision`; `agent` provides `issue`,
+`source_template`, `default_branch`, `revision`, `owner`, `repository_id`, and
+`source_identity`; `agent` provides `issue`,
 `branch`, `commit`, and `tests`; `assert` provides `checkout_head`; and
 `cleanup` provides `owner` and `target`. Revision and checkout values are full
 40-character commit SHAs. The parent aggregates these identifiers but does not
@@ -165,10 +169,11 @@ For a published release, the workflow resolves `github.event.release.tag_name`
 through the GitHub API and verifies that its full commit SHA matches the
 triggering `github.sha` before recording both identities. For manual and
 scheduled runs, it records the triggering `github.sha`. Provisioning fails
-before repository creation unless the source template's default-branch revision
-matches that SHA; this intentionally fails closed for a release tag that no
-longer matches the template's current revision rather than silently testing
-mutable `main`.
+before repository creation unless the source repository's default-branch
+revision matches that SHA. The agent job then reads back the exact published
+package metadata, applies `@eff3ct/agent-foundry@<EXACT_VERSION>` to the
+empty repository, records package/source identity, initializes `main`, and
+pushes only that run-scoped repository before the cold agent starts.
 
 ## Hosted Run Setup
 
@@ -177,16 +182,19 @@ Configure these repository settings:
 - Actions variable `BOOTSTRAP_E2E_OWNER`: disposable owner for the private
   generated repository.
 - Actions variable `OPENAI_MODEL`: an available bounded model identifier.
+- Actions variable `REAL_AGENT_PACKAGE_VERSION`: exact published
+  `@eff3ct/agent-foundry` version for scheduled runs.
 - Actions secret `BOOTSTRAP_E2E_APP_ID` and
   `BOOTSTRAP_E2E_PRIVATE_KEY`: dedicated GitHub App credentials used to mint
   separate provisioning, agent, readback, and cleanup tokens.
 - Actions secret `REAL_AGENT_JOURNEY_API_KEY`: OpenAI credential passed only to
   the agent adapter.
 
-To dispatch **Real-agent user journey**, select **OpenAI Codex CLI** in the
-`runtime` choice and press GitHub's **Run workflow** button. The selected
-identifier is validated in `prepare`, then the workflow checks out the trusted
-revision, provisions the exact generated repository, runs the cold agent on
+To dispatch **Real-agent user journey**, select **OpenAI Codex CLI**, provide
+the exact published package version, and press GitHub's **Run workflow** button.
+The selected identifier is validated in `prepare`, then the workflow checks out
+the trusted revision, creates an empty repository, applies the published
+package, runs the cold agent on
 `main`, checks out its implementation branch for independent readback,
 aggregates bounded evidence, and always attempts cleanup. The Codex entry
 requires `AGENT_GITHUB_TOKEN`, `OPENAI_API_KEY`, and `OPENAI_MODEL`; the parent
@@ -200,7 +208,7 @@ match `real-agent-journey-<run-id>`.
 
 ## Evidence and cleanup
 
-`scripts/real-agent-journey.py collect` accepts only the four stage envelopes
+`scripts/real-agent-journey.mjs collect` accepts only the four stage envelopes
 and emits `real-agent-journey/v1` evidence containing run, repository, runtime,
 stage status, failure code, cleanup status, and workflow URL. It does not retain
 raw prompts, transcripts, credentials, private paths, or model output. Evidence
@@ -214,7 +222,7 @@ journey is failed and the artifact records the exact run-scoped recovery target.
 
 ## Failure reporting and GitHub integration (slices 1–2)
 
-`scripts/real-agent-journey.py` provides a pure `build_bug_report` contract for
+`scripts/real-agent-journey.mjs` provides a pure failure-reporting boundary for
 failed, aggregated journey evidence. It accepts the bounded aggregate plus the
 public artifact URL and returns `None` for a passing journey. For a failure, it
 validates the immutable source revision, supported runtime, first non-passing
@@ -237,7 +245,9 @@ reporting arguments; it does not require a generated checkout or workflow URL.
 
 ## Scope boundary
 
-Repository provisioning (#88) and real-agent invocation (#89) remain separate
-adapters. The assertion and reporting behavior described above implements the
-cross-system assertions/reporting boundary for #90. No provider-specific
-shortcut or mock success path may be added to make the parent workflow green.
+The package-first repository provisioning and real-agent invocation remain
+separate adapters. The assertion and reporting behavior described above
+implements the cross-system assertions/reporting boundary. No provider-specific
+shortcut, Template API call, Python command, or mock success path may be added
+to make the parent workflow green. If npm access or hosted package execution is
+unavailable, the journey remains explicitly blocked.

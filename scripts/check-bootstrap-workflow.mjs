@@ -20,6 +20,11 @@ export const bootstrapPinnedActions = Object.freeze({
   "actions/setup-node": "49933ea5288caeca8642d1e84afbd3f7d6820020",
 });
 
+export const releasePinnedActions = Object.freeze({
+  "actions/checkout": pinnedActions["actions/checkout"],
+  "actions/setup-node": bootstrapPinnedActions["actions/setup-node"],
+});
+
 export class WorkflowContractError extends Error {}
 
 const fail = (message) => { throw new WorkflowContractError(message); };
@@ -96,13 +101,14 @@ const checkJourney = (text, projectRoot) => {
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("real-agent journey action is not pinned to a full commit SHA");
   for (const [action, sha] of Object.entries(pinnedActions)) if (!uses.includes(`${action}@${sha}`)) fail(`real-agent journey is missing required action pin: ${action}`);
   requireText(text, [
-    "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.py collect", "retention-days: 7",
-    "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY",
-    "resolve-release --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"",
+     "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.mjs collect", "retention-days: 7",
+      "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY", "package_version", "JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'", "--package-name '@eff3ct/agent-foundry'", "npx --yes --package", "foundry apply",
+     "release-resolve.mjs --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"",
   ], "real-agent journey is missing");
   if (text.indexOf("Resolve immutable source revision") > text.indexOf("\n  provision:\n")) fail("real-agent journey must resolve its source before provisioning");
+  if (["/generate", "bootstrap-e2e.py", "python3"].some((value) => text.includes(value))) fail("real-agent journey must use the Node empty-repository boundary");
   for (const adapter of ["provision", "agent", "assert", "cleanup"]) {
-    if (!existsSync(path.join(projectRoot, "scripts", `real-agent-journey-${adapter}.py`)) || !text.includes(`scripts/real-agent-journey-${adapter}.py`)) fail(`real-agent journey ${adapter} adapter is missing`);
+    if (!existsSync(path.join(projectRoot, "scripts", `real-agent-journey-${adapter}.mjs`)) || !text.includes(`scripts/real-agent-journey-${adapter}.mjs`)) fail(`real-agent journey ${adapter} adapter is missing`);
   }
   if (uses.filter((reference) => reference.startsWith("actions/create-github-app-token@")).length !== 4) fail("real-agent journey must mint one token per credential boundary");
   const agent = section(text, "\n  agent:\n", "\n  assert:\n");
@@ -110,27 +116,41 @@ const checkJourney = (text, projectRoot) => {
   for (const other of [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n")]) if (other.includes("OPENAI_API_KEY")) fail("agent API credentials crossed a stage boundary");
 };
 
+const checkNpmRelease = (text) => {
+  checkPins(text, releasePinnedActions, "npm release action pin is missing");
+  requireText(text, [
+    "release:\n    types: [published]", "workflow_dispatch:", "tag_name:", "permissions: {}", "id-token: write", "contents: read",
+    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
+    "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts", "npm publish \"$TARBALL\" --provenance --access public", "NODE_AUTH_TOKEN",
+    "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest", "source_sha",
+  ], "npm release workflow is missing");
+  if ((text.match(/npm publish /gu) ?? []).length !== 1) fail("npm release must publish exactly once");
+  if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
+};
+
 const checkJourneyAssertions = (text) => {
   const uses = actionReferences(text);
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("journey assertion action is not pinned to a full commit SHA");
-  requireText(text, ["workflow_call:", "permissions: {}", "actions: read", "contents: read", "JOURNEY_READ_TOKEN", "if: always()", "retention-days: 7", "scripts/real-agent-journey.py", "implementation-branch"], "journey assertion workflow is missing");
+  requireText(text, ["workflow_call:", "permissions: {}", "actions: read", "contents: read", "JOURNEY_READ_TOKEN", "if: always()", "retention-days: 7", "scripts/real-agent-journey.mjs", "implementation-branch"], "journey assertion workflow is missing");
   if (["OPENAI_API_KEY", "status:approved", "bootstrap-e2e.py template"].some((value) => text.includes(value))) fail("journey assertion workflow contains an out-of-scope authority or lifecycle operation");
 };
 
 export const check = async (projectRoot = root) => {
   const workflows = path.join(projectRoot, ".github", "workflows");
-  const [bootstrap, template, journey, assertions] = await Promise.all([
+  const [bootstrap, template, journey, assertions, npmRelease] = await Promise.all([
     readFile(path.join(workflows, "bootstrap-e2e.yml"), "utf8"),
     readFile(path.join(workflows, "template-bootstrap-e2e.yml"), "utf8"),
     readFile(path.join(workflows, "real-agent-journey.yml"), "utf8"),
     readFile(path.join(workflows, "real-agent-journey-assertions.yml"), "utf8"),
+    readFile(path.join(workflows, "npm-release.yml"), "utf8"),
   ]);
   checkBootstrap(bootstrap);
   checkTemplateBootstrap(template);
   if (bootstrap.includes("python3 scripts/report-bootstrap-failure.py") || template.includes("python3 scripts/report-bootstrap-failure.py")) fail("active reporter workflow consumers must invoke Node");
   checkJourney(journey, projectRoot);
   checkJourneyAssertions(assertions);
-  return ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK"];
+  checkNpmRelease(npmRelease);
+  return ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK"];
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

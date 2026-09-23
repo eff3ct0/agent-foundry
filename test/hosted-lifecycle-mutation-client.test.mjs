@@ -12,17 +12,17 @@ import {
 const response = (body, status = 201, headers = {}) => new Response(body, { status, headers });
 const client = (transport, token = "github_pat_secret-value") => createHostedLifecycleMutationClient({ transport, token });
 
-test("uses injected transport for exact template creation and repository deletion", async () => {
+test("uses injected transport for exact empty repository creation and repository deletion", async () => {
   const requests = [];
   const lifecycle = client(async (request) => {
     requests.push(request);
     return request.method === "POST" ? response('{"id":1}', 201) : response(null, 204);
   });
-  assert.deepEqual(await lifecycle.createTemplateRepository({ template: "eff3ct0/factory-template", owner: "acme", name: "bootstrap-e2e-1-node" }), { status: "created", payload: { id: 1 } });
+  assert.deepEqual(await lifecycle.createEmptyRepository({ owner: "acme", name: "real-agent-journey-1" }), { status: "created", payload: { id: 1 } });
   assert.deepEqual(await lifecycle.deleteRepository({ owner: "acme", name: "bootstrap-e2e-1-node" }), { status: "deleted" });
   assert.equal(requests[0].method, "POST");
-  assert.equal(requests[0].url, `${HOSTED_LIFECYCLE_ORIGIN}/repos/eff3ct0/factory-template/generate`);
-  assert.deepEqual(JSON.parse(requests[0].body), { owner: "acme", name: "bootstrap-e2e-1-node", private: true, include_all_branches: false });
+  assert.equal(requests[0].url, `${HOSTED_LIFECYCLE_ORIGIN}/orgs/acme/repos`);
+  assert.deepEqual(JSON.parse(requests[0].body), { name: "real-agent-journey-1", private: true, auto_init: false, has_issues: true, has_projects: false, has_wiki: false });
   assert.equal(requests[1].method, "DELETE");
   assert.equal(requests[1].url, `${HOSTED_LIFECYCLE_ORIGIN}/repos/acme/bootstrap-e2e-1-node`);
   assert.equal(requests[1].body, undefined);
@@ -33,8 +33,9 @@ test("uses injected transport for exact template creation and repository deletio
 test("rejects malformed ownership and template inputs before transport", async () => {
   let calls = 0;
   const lifecycle = client(async () => { calls += 1; return response("{}"); });
-  await assert.rejects(() => lifecycle.createTemplateRepository({ template: "https://example.test/repo", owner: "acme", name: "repo" }), HostedLifecycleMutationError);
-  await assert.rejects(() => lifecycle.createTemplateRepository({ template: "eff3ct0/factory-template", owner: "acme/repo", name: "repo" }), HostedLifecycleMutationError);
+    await assert.rejects(() => lifecycle.createTemplateRepository({ template: "https://example.test/repo", owner: "acme", name: "repo" }), HostedLifecycleMutationError);
+    await assert.rejects(() => lifecycle.createTemplateRepository({ template: "eff3ct0/factory-template", owner: "acme/repo", name: "repo" }), HostedLifecycleMutationError);
+    await assert.rejects(() => lifecycle.createEmptyRepository({ owner: "acme/repo", name: "repo" }), HostedLifecycleMutationError);
   await assert.rejects(() => lifecycle.deleteRepository({ owner: "acme", name: "../repo" }), HostedLifecycleMutationError);
   assert.equal(calls, 0);
 });

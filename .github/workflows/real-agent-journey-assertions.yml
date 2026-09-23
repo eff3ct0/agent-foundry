@@ -69,7 +69,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.JOURNEY_READ_TOKEN }}
         run: |
           mkdir -p journey-evidence
-          python3 scripts/real-agent-journey.py \
+           node scripts/real-agent-journey.mjs \
             --input "journey-input/${{ inputs.metadata-path }}" \
             --checkout generated \
             --cleanup-evidence "journey-cleanup/${{ inputs.cleanup-path }}" \

@@ -8,7 +8,7 @@ import { captureCommandResult, matrixCaseId, sanitizeEvidenceText } from "./loca
 const execFileAsync = promisify(execFile);
 const SHA = /^[0-9a-f]{40}$/u;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
-const PACKAGE_NAME = "factory-template-creator";
+const PACKAGE_NAME = "@eff3ct/agent-foundry";
 
 export class ReleasedValidationRunnerError extends Error {}
 
@@ -76,7 +76,7 @@ export const runReleasedValidationCase = async ({ releasePackage, matrixCase, co
   const releaseSha = sha(releasePackage.release_sha);
   const targetPath = path.join(path.resolve(outputDirectory), id, "project");
   const configPath = path.join(path.resolve(outputDirectory), id, "answers.json");
-  const commandResult = { name: "installed factory-template apply", command: "factory-template apply --non-interactive", status: "failed", exit_code: null, output: "" };
+  const commandResult = { name: "installed foundry apply", command: "foundry apply --non-interactive", status: "failed", exit_code: null, output: "" };
   const evidence = { schema_version: 1, release_sha: releaseSha, matrix_case: id, command_results: [commandResult] };
   try {
     await mkdir(path.dirname(configPath), { recursive: true });

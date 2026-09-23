@@ -6,6 +6,8 @@ export class ArtifactIdentityError extends Error {}
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const digest = (value) => `sha256:${sha256(Buffer.from(JSON.stringify(value)))}`;
+const SHA = /^[0-9a-f]{40}$/u;
+const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 
 const requiredString = (value, name) => {
   if (typeof value !== "string" || value.length === 0) {
@@ -61,5 +63,34 @@ export const packedArtifactIdentity = async ({ tarballPath, packagePath, project
     tarball_digest: `sha256:${sha256(await readFile(tarballPath))}`,
     payload_digest: payloadDigest,
     tree_digest: await generatedTreeDigest(projectPath),
+  };
+};
+
+const releaseIdentity = (value) => {
+  if (value === undefined) return { status: "unavailable", code: "release_identity_unavailable" };
+  if (typeof value !== "object" || value === null || Array.isArray(value) || value.status !== "verified"
+      || typeof value.tag !== "string" || !value.tag || typeof value.sha !== "string" || !SHA.test(value.sha)) {
+    throw new ArtifactIdentityError("release identity is absent or malformed");
+  }
+  return { status: "verified", tag: value.tag, sha: value.sha };
+};
+
+export const consumerArtifactIdentity = async ({ tarballPath, packagePath, projectPath, sourceSha, release }) => {
+  if (typeof sourceSha !== "string" || !SHA.test(sourceSha)) {
+    throw new ArtifactIdentityError("source identity is absent or malformed");
+  }
+  const base = await packedArtifactIdentity({ tarballPath, packagePath, projectPath });
+  const manifest = JSON.parse(await readFile(path.join(packagePath, "dist", "payload-manifest.json"), "utf8"));
+  if (typeof manifest.payload_version !== "string" || !DIGEST.test(base.payload_digest)) {
+    throw new ArtifactIdentityError("payload identity is absent or malformed");
+  }
+  return {
+    schema_version: 2,
+    package: base.package,
+    payload: { version: manifest.payload_version, digest: base.payload_digest },
+    tarball_digest: base.tarball_digest,
+    source_sha: sourceSha,
+    release: releaseIdentity(release),
+    tree_digest: base.tree_digest,
   };
 };

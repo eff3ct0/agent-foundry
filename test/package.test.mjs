@@ -42,7 +42,7 @@ test("manifest covers the bundled payload exactly once", async () => {
 
 test("version output exposes the package and payload identity", async () => {
   const human = await execFileAsync(process.execPath, ["dist/index.js", "--version"], { cwd: root });
-  assert.match(human.stdout, /factory-template-creator 0\.1\.0/);
+  assert.match(human.stdout, /@eff3ct\/agent-foundry 0\.1\.0/);
   assert.match(human.stdout, new RegExp(manifest.payload_digest));
 
   const json = await execFileAsync(process.execPath, ["dist/index.js", "--version", "--json"], { cwd: root });
@@ -61,8 +61,13 @@ test("compiled CLI is executable without an explicit Node interpreter", async (c
   }
   const cliPath = path.join(root, "dist/index.js");
   assert.equal((await stat(cliPath)).mode & 0o777, 0o755);
+  const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+  assert.equal(packageJson.name, "@eff3ct/agent-foundry");
+  assert.deepEqual(packageJson.bin, { foundry: "dist/index.js" });
   const result = await execFileAsync(cliPath, ["--version", "--json"]);
   assert.deepEqual(JSON.parse(result.stdout).payloadDigest, manifest.payload_digest);
+  const help = await execFileAsync(cliPath, ["--help"]);
+  assert.match(help.stdout, /Usage: foundry /u);
 });
 
 test("packaging rejects missing, undeclared, and changed integrity inputs", () => {
@@ -108,7 +113,7 @@ test("packed package preserves npm transport and startup handoff", async (contex
     await chmod(executable, 0o755);
     const config = path.join(parent, "answers.json");
     await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "npm transport", TASK_TRACKER: "github-issues" } }));
-    const installedCli = path.join(installDirectory, "node_modules", "factory-template-creator", "dist", "index.js");
+    const installedCli = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry", "dist", "index.js");
     const environment = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, FACTORY_NPM_INSTALL_ARGS: path.join(parent, "handoff-args.txt") };
     const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], { cwd: root, env: environment }).then((value) => ({ ...value, code: 0 })).catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code }));
     assert.equal(result.code, 0, result.stderr);
@@ -149,7 +154,7 @@ test("two packed artifacts preserve complete package and generated-tree identity
       const tarballPath = path.join(packageDirectory, tarballName);
       await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, tarballPath], { cwd: root });
       await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "artifact identity", TASK_TRACKER: "github-issues" } }));
-      const packagePath = path.join(installDirectory, "node_modules", "factory-template-creator");
+      const packagePath = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry");
       const installedCli = path.join(packagePath, "dist", "index.js");
       const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--non-interactive"], { cwd: root })
         .then((value) => ({ ...value, code: 0 }))

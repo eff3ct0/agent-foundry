@@ -4,11 +4,11 @@ The package CLI uses the immutable payload produced by #105 as its only source
 of template files. It does not make network calls or mutate the payload.
 
 ```sh
-factory-template plan --target ./new-project --config answers.json --non-interactive
-factory-template dry-run --target ./new-project --config answers.json --non-interactive
-factory-template apply --target ./new-project --config answers.json --non-interactive
-factory-template verify --target ./new-project --config answers.json --non-interactive
-factory-template doctor --target ./new-project --config answers.json --non-interactive
+foundry plan --target ./new-project --config answers.json --non-interactive
+foundry dry-run --target ./new-project --config answers.json --non-interactive
+foundry apply --target ./new-project --config answers.json --non-interactive
+foundry verify --target ./new-project --config answers.json --non-interactive
+foundry doctor --target ./new-project --config answers.json --non-interactive
 ```
 
 ## Provider-aware setup
@@ -88,10 +88,42 @@ unknown files are never removed or overwritten.
 options used by the focused tests. The former must roll back creator-owned
 changes; the latter intentionally leaves staging for `doctor` to report.
 
+## Exact-version package consumers
+
+The release verifier exercises both consumer commands from fresh directories:
+
+```sh
+pnpm verify:package-consumer --package @eff3ct/agent-foundry --version 0.1.0 \
+  --source-sha <full-source-sha> --output ./package-consumer-evidence
+```
+
+Without `--tarball`, the verifier first reads the exact `name@version` from the
+registry and then runs `pnpm dlx --package name@version` and
+`npx --yes name@version`. A missing publication, unavailable registry, or
+authentication failure produces a machine-readable `blocked` result; it is
+never reported as a published-package success. For offline verification, pass
+the exact local tarball with `--tarball`. That mode still installs the package
+in isolated directories and checks package, payload, tarball, source, release,
+and generated-tree identities, followed by apply, verify, rerun `noop`, and a
+selected Codex startup.
+
 ## Startup routing
 
 The packaged payload includes `start.mjs`, the canonical offline router for
-`SELF`, `SETUP`, and `WORK` modes. It reads only the workspace and its local Git
-remote; it never calls the network or launches an agent. Use `node start.mjs`
-manually when hooks are unavailable. The retained `python3 start.py` command is
-a compatibility wrapper for the same Node router.
+`SELF`, `SETUP`, and `WORK` modes. It reads only local workspace files and uses
+a strict source marker; it does not infer source mode from a GitHub remote, call
+the network, or launch an agent. Use `node start.mjs` manually when hooks are
+unavailable.
+
+## Exact-version creation and rollback
+
+The package exact-version command is the primary creation path:
+
+```sh
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --config answers.json --non-interactive --yes
+```
+
+GitHub Template mode remains enabled only as a rollback safety valve until
+published-consumer verification passes. If the package path fails, re-enable
+Template mode and repair the package path. Published npm bytes are immutable;
+publish a correcting version instead of replacing an existing version.

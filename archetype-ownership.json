@@ -52,13 +52,10 @@
     "providers/task/jira.md",
     "providers/task/linear.md",
     "scripts/check-delivery-contract.mjs",
-    "scripts/check-delivery-contract.py",
-    "scripts/check-determinism.py",
-    "scripts/check-factory-layout.py",
+    "scripts/check-factory-layout.mjs",
     "scripts/check-pr-governance.mjs",
     "scripts/sync-github-labels.mjs",
     "start.mjs",
-    "start.py",
     "odd/tasks/issue-124-opencode-startup-race.md",
     "templates/adr.md",
     "templates/agent-runbook.md",
@@ -66,23 +63,19 @@
     "templates/handoff.md",
     "templates/pull-request.md",
     "templates/spec.md",
-    "templates/ticket.md",
-    "test_factory_bootstrap.py",
-    "test_init.py"
+    "templates/ticket.md"
   ],
   "categories": {
     "archetype_governance": {
       "disposition": "removed",
       "paths": [
-        {"path": "init.py", "kind": "file"},
         {"path": "archetype-ownership.json", "kind": "file"},
-        {"path": "factory_bootstrap.py", "kind": "file"},
         {"path": "MAINTAINERS.md", "kind": "file"},
         {"path": "odd/tasks/issue-98-journey-reporting.md", "kind": "file"},
         {"path": "odd/tasks/issue-96-runtime-catalog.md", "kind": "file"},
         {"path": "odd/tasks/issue-97-release-trigger.md", "kind": "file"},
         {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
-        {"path": "scripts/check-determinism.py", "kind": "file"},
+        {"path": "scripts/check-determinism.mjs", "kind": "file"},
         {"path": "odd", "kind": "directory"}
       ]
     },
@@ -90,6 +83,7 @@
       "disposition": "removed",
       "paths": [
         {"path": ".github/workflows/bootstrap-e2e.yml", "kind": "file"},
+        {"path": ".github/workflows/npm-release.yml", "kind": "file"},
         {"path": ".github/workflows/template-bootstrap-e2e.yml", "kind": "file"},
         {"path": "docs/smoke-test.md", "kind": "file"},
         {"path": "docs/real-agent-journey.md", "kind": "file"},
@@ -105,26 +99,26 @@
         {"path": "scripts/release-prepare.mjs", "kind": "file"},
         {"path": "scripts/resource-provision-and-proof.mjs", "kind": "file"},
         {"path": "scripts/released-validation-runner.mjs", "kind": "file"},
+        {"path": "scripts/package-consumer-verify.mjs", "kind": "file"},
+        {"path": "scripts/npm-release.mjs", "kind": "file"},
         {"path": "scripts/resource-proof-cleanup.mjs", "kind": "file"},
         {"path": "scripts/check-bootstrap-workflow.mjs", "kind": "file"},
         {"path": "scripts/release-ref.mjs", "kind": "file"},
-        {"path": "scripts/release_ref.py", "kind": "file"},
+        {"path": "scripts/release-resolve.mjs", "kind": "file"},
         {"path": "scripts/triage-bootstrap-failure.mjs", "kind": "file"},
         {"path": "scripts/report-bootstrap-failure.mjs", "kind": "file"},
         {"path": ".github/workflows/real-agent-journey-assertions.yml", "kind": "file"},
         {"path": ".github/workflows/real-agent-e2e.yml", "kind": "file"},
-        {"path": "scripts/real-agent-e2e.py", "kind": "file"},
+        {"path": "scripts/real-agent-e2e.mjs", "kind": "file"},
         {"path": "scripts/real-agent-decisions.json", "kind": "file"},
-        {"path": "scripts/check-real-agent-workflow.py", "kind": "file"},
-        {"path": "scripts/test-real-agent-e2e.py", "kind": "file"},
+        {"path": "scripts/check-real-agent-workflow.mjs", "kind": "file"},
         {"path": ".github/workflows/real-agent-journey.yml", "kind": "file"},
-        {"path": "scripts/real-agent-journey.py", "kind": "file"},
+        {"path": "scripts/real-agent-journey.mjs", "kind": "file"},
         {"path": "scripts/real-agent-runtime-catalog.json", "kind": "file"},
-        {"path": "scripts/test-real-agent-journey.py", "kind": "file"},
-        {"path": "scripts/real-agent-journey-provision.py", "kind": "file"},
-        {"path": "scripts/real-agent-journey-agent.py", "kind": "file"},
-        {"path": "scripts/real-agent-journey-assert.py", "kind": "file"},
-        {"path": "scripts/real-agent-journey-cleanup.py", "kind": "file"}
+        {"path": "scripts/real-agent-journey-provision.mjs", "kind": "file"},
+        {"path": "scripts/real-agent-journey-agent.mjs", "kind": "file"},
+        {"path": "scripts/real-agent-journey-assert.mjs", "kind": "file"},
+        {"path": "scripts/real-agent-journey-cleanup.mjs", "kind": "file"}
       ]
     },
     "initializer_inputs": {
@@ -173,7 +167,6 @@
         {"path": "AGENT.md", "kind": "file"},
         {"path": "CLAUDE.md", "kind": "file"},
         {"path": "README.md", "kind": "file"},
-        {"path": "checks/phase_state_check.py", "kind": "file"},
         {"path": "docs/agent-init.md", "kind": "file"},
         {"path": "docs/bootstrap.md", "kind": "file"},
         {"path": "docs/determinism.md", "kind": "file"},
@@ -185,15 +178,11 @@
         {"path": "hooks", "kind": "directory"},
         {"path": "openspec/config.yaml", "kind": "file"},
         {"path": "scripts/check-delivery-contract.mjs", "kind": "file"},
-        {"path": "scripts/check-delivery-contract.py", "kind": "file"},
-        {"path": "scripts/check-factory-layout.py", "kind": "file"},
         {"path": "scripts/check-pr-governance.mjs", "kind": "file"},
         {"path": "scripts/sync-github-labels.mjs", "kind": "file"},
         {"path": "start.mjs", "kind": "file"},
-        {"path": "start.py", "kind": "file"},
         {"path": "templates", "kind": "directory"},
-        {"path": "test_factory_bootstrap.py", "kind": "file"},
-        {"path": "test_init.py", "kind": "file"}
+        {"path": "scripts/check-factory-layout.mjs", "kind": "file"}
       ]
     },
     "generated_outputs": {

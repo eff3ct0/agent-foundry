@@ -8,7 +8,7 @@ import { buildReleasePackage, runReleasedValidationCase, verifyReleaseSource } f
 const sha = "a".repeat(40);
 const identity = {
   schema_version: 1,
-  package: { name: "factory-template-creator", version: "0.1.0" },
+  package: { name: "@eff3ct/agent-foundry", version: "0.1.0" },
   tarball_digest: `sha256:${"a".repeat(64)}`,
   payload_digest: `sha256:${"b".repeat(64)}`,
   tree_digest: `sha256:${"c".repeat(64)}`,
@@ -18,7 +18,7 @@ const sourceRunner = (calls, head = sha, dirty = "") => async (name, arguments_,
   calls.push([name, arguments_, Object.keys(options.env).sort()]);
   if (name === "git" && arguments_[0] === "rev-parse") return { stdout: `${head}\n` };
   if (name === "git") return { stdout: dirty };
-  if (arguments_[0] === "pack") await writeFile(path.join(arguments_.at(-1), "factory-template-creator-0.1.0.tgz"), "package");
+  if (arguments_[0] === "pack") await writeFile(path.join(arguments_.at(-1), "eff3ct-agent-foundry-0.1.0.tgz"), "package");
   return { stdout: "" };
 };
 
@@ -28,7 +28,7 @@ test("release package build verifies the exact clean SHA before fixed build comm
   try {
     const result = await buildReleasePackage({ sourcePath: directory, releaseSha: sha, outputDirectory: path.join(directory, "evidence"), environment: { PATH: process.env.PATH, TOKEN: "secret" }, execute: sourceRunner(calls) });
     assert.equal(result.release_sha, sha);
-    assert.match(result.tarball_path, /release-package\/factory-template-creator-0\.1\.0\.tgz$/u);
+    assert.match(result.tarball_path, /release-package\/eff3ct-agent-foundry-0\.1\.0\.tgz$/u);
     assert.deepEqual(calls.map(([name, arguments_]) => [name, arguments_]), [
       ["git", ["rev-parse", "HEAD"]], ["git", ["status", "--porcelain"]],
       ["pnpm", ["install", "--frozen-lockfile"]], ["pnpm", ["build"]], ["pnpm", ["pack", "--ignore-scripts", "--pack-destination", path.join(directory, "evidence", "release-package")]],

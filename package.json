@@ -1,10 +1,10 @@
 {
-  "name": "factory-template-creator",
+  "name": "@eff3ct/agent-foundry",
   "version": "0.1.0",
-  "description": "Immutable, versioned, transactional project creator for the factory template.",
+  "description": "Immutable, versioned, transactional project creator for Agent Foundry.",
   "type": "commonjs",
   "bin": {
-    "factory-template": "dist/index.js"
+    "foundry": "dist/index.js"
   },
   "files": [
     "dist",
@@ -21,7 +21,9 @@
     "test:creator": "pnpm build && node --test test/creator.test.mjs",
     "test:local-matrix": "pnpm build && node --test test/local-matrix.test.mjs",
     "test:installed-runner": "pnpm build && node --test test/installed-runner.test.mjs",
+    "test:package-consumer": "pnpm build && node --test test/package-consumer-verify.test.mjs",
     "test:local-release-e2e": "pnpm build && node --test test/local-release-e2e.test.mjs",
+    "verify:package-consumer": "pnpm build && node scripts/package-consumer-verify.mjs",
     "release-e2e:local": "pnpm build && node scripts/local-release-e2e.mjs",
     "test:workflow-contract": "pnpm build && node --test test/check-bootstrap-workflow.test.mjs",
     "test:installer-ux": "pnpm build && node --test test/installer-ui.test.mjs test/installer-pty.test.mjs test/creator.test.mjs",

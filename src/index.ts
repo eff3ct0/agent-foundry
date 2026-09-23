@@ -45,7 +45,7 @@ interface ParsedArgs extends Omit<CreatorOptions, "command" | "target"> {
   reducedMotion: boolean;
 }
 
-const usage = "Usage: factory-template <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive] [--yes] [--no-color] [--reduced-motion] [--json]\n       factory-template github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
+const usage = "Usage: foundry <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive] [--yes] [--no-color] [--reduced-motion] [--json]\n       foundry github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
 const errorStatuses = new Set(["error", "conflict", "failed", "not-created", "unhealthy", "cancelled", "verification-failed", "handoff-failed"]);
 
 const isProvisioningCommand = (value: string | undefined): boolean => value === "github-provision" || value === "provision-github";

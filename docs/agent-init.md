@@ -1,205 +1,65 @@
 # Agent mode - initialize a project from the template
 
-Procedure for an **agent** turning this template into a real project: propose
-`<PLACEHOLDER>` values with judgment, including CI stack mapping, then present
-the complete configuration for explicit confirmation before applying it. Complements
-[`bootstrap.md`](bootstrap.md), which gives the overview; this is the operating
-step-by-step.
-
-> Entry point: `node start.mjs` routes to this document in **SETUP** mode (the
-> retained `python3 start.py` command is a compatibility fallback; an
-> uninitialized instance). It is the first command an agent runs in a repository.
-
-**Prerequisite:** read [`AGENT.md`](../AGENT.md) and
-[`placeholders.json`](../placeholders.json). `placeholders.json` is the single
-source of project-level placeholders and their `kind` (`mechanical` = known
-value; `judgment` = decision to justify).
+The exact-version Node creator is the canonical initialization boundary. It
+reads the immutable payload and requires explicit configuration before writing.
+Read [`AGENT.md`](../AGENT.md), [`docs/bindings.md`](bindings.md), and this
+document in order.
 
 ## Step 1 - Detect the stack
-- **Greenfield** (empty repo): ask for languages/frameworks, package manager, and base commands.
-- **Brownfield** (existing repo): use repository files as proposals and ask for confirmation; do not treat
-  existing metadata as consent:
-  - `Cargo.toml` -> `rust`
-  - `package.json` / `tsconfig.json` -> `typescript`
-  - `pyproject.toml` / `requirements.txt` -> `python`
-  - `go.mod` -> `go`
-- Derive `<CI_STACKS>` (comma-separated, e.g. `rust,typescript`) and base commands (`<BUILD_CMD>`, `<TEST_CMD>`, `<LINT_CMD>`, `<TYPECHECK_CMD>`, `<RUN_CMD>`).
-- Set `<REPO_LANGUAGE>` to the language for persisted project content. The agent may use another language in conversation.
 
-## Step 2 - Choose providers (bindings)
-Fix the **bound capabilities** (provider contract) before filling values:
-- **Tasks:** `<TASK_TRACKER>` (`jira` / `github-issues` / `github-projects` / `linear` / `custom`) and board `<TRACKER_KEY>`.
-- **Secrets:** `<SECRETS_PROVIDER>` (`infisical` / `vault` / `doppler` / `none` / `custom`) and `<SECRETS_PATH>` when applicable.
-- **Code intelligence:** `<CODE_INTELLIGENCE>` (`none` / `codegraph` / `custom`), defaulting to `none` so the template adds no dependency unless selected.
-- **Brownfield:** choose from explicit project configuration or ask the user. Repository files may suggest candidates, but the owner must explicitly choose each provider. A local `.github/` directory contains repository-local templates/workflows and is not proof of a separate organization `.github` repository or a GitHub Issues/Projects provider. Do not trust stale provider text. Repository identity is checked against the local Git `origin` before initialization continues.
+- Greenfield: ask for languages/frameworks, package manager, and base commands.
+- Brownfield: treat `Cargo.toml`, `package.json`, `tsconfig.json`,
+  `pyproject.toml`, `requirements.txt`, and `go.mod` as proposals only.
+- Derive `<CI_STACKS>` and base commands from repository evidence, then show the
+  complete proposal to the owner.
+- Set `<REPO_LANGUAGE>` independently from the agent's conversation language.
 
-The shape of each fragment is defined by the abstract capability contracts:
-[`providers/task/_contract.md`](../providers/task/_contract.md),
-[`providers/secrets/_contract.md`](../providers/secrets/_contract.md), and
-[`providers/code-intel/_contract.md`](../providers/code-intel/_contract.md) when
-code intelligence is selected, plus
-[`ci/_contract.md`](../ci/_contract.md). Concrete fragments are instances of
-those contracts; `_contract.md` is never a selectable provider.
+The Python stack remains supported as generated-project data: selecting
+`python` composes the Python CI recipe. This source repository no longer uses
+Python maintainer tooling.
 
-When `init.py` runs, these enums select catalog fragments from [`providers/`](../providers/)
-and compose [`docs/bindings.md`](bindings.md), whose header restates the shape
-source. The agent is then **bound by that contract** and must use it exclusively. Code intelligence is
-optional: `none` uses native repository tools and does not compose a provider fragment.
-The selected task provider also composes its pull-request reference into
-`.github/pull_request_template.md` and `templates/pull-request.md`; GitHub issue
-label validation is retained only for GitHub task providers.
+## Step 2 - Choose providers and agents
 
-## Step 2b - Prepare an optional agent handoff
+Select the task tracker, secrets provider, optional code intelligence, and
+agent handoff providers explicitly. A local `.github/` directory is not proof
+of a GitHub provider. The selected provider fragments and CI recipes are
+composed into generated outputs and then removed from the generated project.
 
-Agent runtime setup is separate from task, secrets, and code-intelligence
-bindings. The creator catalog supports `claude-code`, `opencode`, `codex`, and
-`pi`. Choose none, one, or several providers explicitly; the non-interactive
-equivalents are `--agent <id>` and `--agents <id,...>`. The default is none.
+Agent selection uses `--agent <id>` or `--agents <id,...>`. The creator checks
+the selected executable before writing, owns only catalog-listed workspace
+files, and writes `.factory/provider-manifest.json`. `--launch-agent` is an
+explicit post-verify action and never converts a failed handoff into success.
 
-The creator checks the selected executable before writing and fails closed when
-it is unavailable. It renders only the selected provider's workspace-owned
-files and writes `.factory/provider-manifest.json`; unknown or user-managed
-files are never overwritten. With no selection, no provider workspace files
-are generated.
+## Step 3 - Review and apply
 
-The provider manifest is the installer output contract. It contains the
-catalog version, selected provider metadata, workspace ownership, manual
-prerequisites, and the exact next-step command shape. It contains no
-credentials, API keys, or machine-specific executable paths. Install and
-authenticate the preferred runtime separately, and configure models and global
-preferences outside project creation.
-
-Launching is an explicit post-setup action, disabled by default. Add
-`--launch-agent` only when exactly one selected provider is installed. The
-creator runs the catalog's argument array without a shell after apply and
-verify, then reports the agent exit outcome separately from repository
-readiness. A non-zero agent exit is not converted into a successful handoff.
-
-## Step 2b - Prepare an optional agent handoff
-
-Agent runtime setup is separate from task, secrets, and code-intelligence
-bindings. The creator catalog supports `claude-code`, `opencode`, `codex`, and
-`pi`. Choose none, one, or several providers explicitly; the non-interactive
-equivalents are `--agent <id>` and `--agents <id,...>`. The default is none.
-
-The creator checks the selected executable before writing and fails closed when
-it is unavailable. It renders only the selected provider's workspace-owned
-files and writes `.factory/provider-manifest.json`; unknown or user-managed
-files are never overwritten. With no selection, no provider workspace files
-are generated.
-
-The provider manifest is the installer output contract. It contains the
-catalog version, selected provider metadata, workspace ownership, manual
-prerequisites, and the exact next-step command shape. It contains no
-credentials, API keys, or machine-specific executable paths. Install and
-authenticate the preferred runtime separately, and configure models and global
-preferences outside project creation.
-
-Launching is an explicit post-setup action, disabled by default. Add
-`--launch-agent` only when exactly one selected provider is installed. The
-creator runs the catalog's argument array without a shell after apply and
-verify, then reports the agent exit outcome separately from repository
-readiness. A non-zero agent exit is not converted into a successful handoff.
-
-## Step 2a - Generate a custom binding
-
-If the selected provider is not in the catalog, do not invent a binding from
-model memory or silently map it to another provider. Select `custom` and create
-the instance in the agent layer before running `init.py`:
-
-1. Copy the capability contract shape and complete `providers/<capability>/custom.md` in the destination project.
-2. Ground every operational statement in official provider documentation and, when available, an official skill. Record the exact URL or identifier, source version or date, and consultation date; do not cite sources you did not consult.
-3. Add provenance and status:
-
-   ```markdown
-   ## Status and provenance
-
-   - Status: `DRAFT`
-   - Provider: `<PROVIDER>`
-   - Source: `<OFFICIAL_DOC_URL_OR_ID>` (version/date: `<VERSION_OR_DATE>`)
-   - Skill: `<OFFICIAL_SKILL_OR_NONE>` (version/date: `<VERSION_OR_DATE>`)
-   - Consulted: `<YYYY-MM-DD>`
-   - Human review: pending
-   ```
-
-4. Verify the draft against the relevant `_contract.md`: identity, binding, harness mechanism versus semantic rules, read/create/update and comments, state cycle, references, and prohibitions. For secrets, also verify that the fragment contains no secret values.
-5. Run a safe provider test (sandbox, test account, or documented simulation) and leave evidence with the change. The test must not create, delete, or modify real data.
-6. Dry-run assembly without approving the binding:
-
-   ```
-   python3 init.py --dry-run --no-clean --defaults --set PROJECT_NAME=Example --set TASK_TRACKER=custom
-   ```
-
-   Confirm that `init.py` only announces composition of `custom.md`; it does not change `init.py` or add network access or dependencies. A dry-run does not turn `DRAFT` into an active contract.
-7. Request human review. Until approval, the custom provider is blocked for operational use. After approval, set the status to `VERIFIED`, record reviewer and date, and only then run `init.py` to compose `docs/bindings.md`; that instance becomes the mandatory and exclusive project binding.
-
-This flow only produces the fragment. It does not add provider fetching,
-authentication, dependencies, or provider logic to `init.py`. Catalog providers
-continue through the curated fast path.
-
-## Step 3 - Fill mechanical values
-Run the script with `kind: mechanical` values (including `TASK_TRACKER`,
-`SECRETS_PROVIDER`, `CI_STACKS`, `CI_SYSTEM`, and `REPO_LANGUAGE`):
-
-```
-python3 init.py --set PROJECT_NAME=<...> --set REPO_LANGUAGE=en --set CI_STACKS=rust,typescript --set CI_SYSTEM='GitHub Actions' --confirm ...
+```sh
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./project --config answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./project --config answers.json --non-interactive --yes
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry verify --target ./project --config answers.json --non-interactive
 ```
 
-For non-interactive use, every required decision must be supplied and the final
-configuration must be confirmed. `--confirm` confirms CLI values and defaults;
-an answers file keeps the existing flat key/value shape and adds a JSON boolean:
+The creator validates required, enum, conditional, duplicate, and unknown
+configuration keys before any target write. It composes bindings, CI, and PR
+governance in stable order. Use `doctor` after an interrupted apply or when
+owned files drift.
 
-```json
-{
-  "PROJECT_NAME": "Example",
-  "TASK_TRACKER": "github-issues",
-  "confirm": true
-}
-```
+## Step 4 - Verify
 
-Run it with `python3 init.py --answers answers.json`. Missing confirmation or
-missing required decisions fails closed before provider, tracker, repository,
-CI, workflow, replacement, or cleanup actions. Interactive runs show the same
-proposal and ask `Apply this configuration? [y/N]`. Manifest defaults and
-existing `AGENT.md` values are proposals only.
+Verify required placeholders, generated bindings, CI jobs, links, startup mode,
+and the configured base commands. A successful `apply` is not a substitute for
+`verify`; a provider handoff is reported separately from repository readiness.
 
-If `REPO_URLS` or an existing rendered `AGENT.md` repository value conflicts
-with the local `origin`, initialization stops before any write. Resolve the
-value explicitly and confirm it. `init.py` reads only local git metadata and
-never creates or verifies a remote repository.
+## Step 5 - Finish and recover
 
-## Step 4 - Resolve judgment values
-Provide one sentence of justification for each, aligned with existing
-brownfield practice:
-- `<BRANCHING_MODEL>` - actual team branching model.
-- `<TDD_POLICY>` - sustainable testing policy.
-- `<COVERAGE_TARGET>` - realistic coverage target.
-- `<APPROVAL_GATED_ACTIONS>` - hard-to-reverse actions requiring human approval.
+Commit the initialized project with a conventional commit. If creation fails,
+preserve the diagnostic envelope and run `doctor`; do not manually delete
+unknown or user-managed files. Restore local state from version control when
+needed.
 
-## Step 5 - CI
-`init.py` composes `.github/workflows/ci.yml` from `<CI_STACKS>` (one job per
-language), mapping each stack to a recipe in [`ci/recipes.json`](../ci/recipes.json).
-Each recipe is an instance of [`ci/_contract.md`](../ci/_contract.md); the
-contract file is not a recipe and is excluded from selection. Check that jobs
-match real languages and adjust commands if the project uses custom scripts.
+## Rollback and Template mode
 
-## Step 6 - Verify before auto-cleanup
-- `python3 init.py --check` -> **0 pending** required manifest placeholders (nonzero when any required keys remain). Optional keys may remain intentionally empty.
-- Base commands pass.
-- Run [`scripts/check-determinism.py`](../scripts/check-determinism.py) to verify offline dry-runs, binding/CI composition, bootstrap planning, label synchronization, startup, and governance checks.
-- Remember: local `templates/` tokens (`<TICKET_ID>`, `<CRITERION_1>`, ...) are intentional, not manifest placeholders.
-- Confirm persisted project content uses `<REPO_LANGUAGE>`.
-
-## Step 7 - Finish
-- Make the first commit using conventional commits.
-- The script applies the source ownership contract during cleanup: archetype-only governance, release tooling, initializer inputs, and provider/CI recipes are removed after use; generic contracts and generated `.github/workflows/ci.yml` plus `docs/bindings.md` remain.
-- No required manifest `<KEY>` should remain unresolved; optional keys may remain intentionally empty.
-
-## Anti-error note
-- Do not fill local template tokens; they are completed when each `templates/*.md` file is used.
-- Do not delete `.git` unless you want a separate history: `rm -rf .git && git init`.
-
-## Feedback to the archetype
-If initialization exposes a gap or ambiguity in the source template, open a
-`type:dx-feedback` issue in the template repository (the one named by
-`FACTORY_SPEC`). Usage improves the archetype.
+GitHub Template mode is not a normal creation path. It remains enabled only as
+a rollback safety valve until the package and published-consumer checks pass.
+If the package path fails, re-enable Template mode and repair the package path.
+Published npm versions are immutable; publish a correcting version instead of
+trying to replace bytes at an existing version.

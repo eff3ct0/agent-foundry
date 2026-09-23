@@ -13,8 +13,8 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(root, "scripts", "check-bootstrap-workflow.mjs");
 const workflows = path.join(".github", "workflows");
-const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml" });
-const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK"];
+const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml" });
+const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK"];
 
 const fixture = async (callback) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bootstrap-workflow-contract-"));
@@ -221,7 +221,7 @@ test("real-agent journey rejects weak pins, missing adapters, and crossed stages
     await reject(directory, "real-agent journey action is not pinned to a full commit SHA");
   });
   await fixture(async (directory) => {
-    await replace(directory, "journey", "scripts/real-agent-journey-provision.py", "scripts/missing.py");
+     await replace(directory, "journey", "scripts/real-agent-journey-provision.mjs", "scripts/missing.mjs");
     await reject(directory, "real-agent journey provision adapter is missing");
   });
   await fixture(async (directory) => {
@@ -300,5 +300,16 @@ test("journey assertion workflow rejects malformed pins and authority", async ()
   await fixture(async (directory) => {
     await append(directory, "assertions", "\n# bootstrap-e2e.py template\n");
     await reject(directory, "journey assertion workflow contains an out-of-scope authority or lifecycle operation");
+  });
+});
+
+test("npm release workflow is explicit, immutable, and publish-once", async () => {
+  await fixture(async (directory) => {
+    await replace(directory, "npmRelease", "npm publish \"$TARBALL\" --provenance --access public", "npm publish \"$TARBALL\" --provenance --access public\nnpm publish \"$TARBALL\" --provenance --access public");
+    await reject(directory, "npm release must publish exactly once");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "npmRelease", "release:\n    types: [published]", "push:\n    branches: [main]");
+    await reject(directory, "npm release workflow is missing release:\n    types: [published]");
   });
 });
