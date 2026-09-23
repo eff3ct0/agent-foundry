@@ -61,7 +61,8 @@ Make the exact-version Node package the primary creator path, prove its determin
 - Local slice 5: `0f67a2f` — `docs(creator): document package-first cutover (#112)`. Updates onboarding, creator, maintainer, recovery, hook, smoke, layout, and PR guidance for the exact-version package path. No remote delivery performed.
 - Local slice 6: `97f8c34` — `refactor(creator): retire maintained Python automation (#112)`. Removes maintained Python creator/check/release/workflow tools and aligns payload ownership/manifests with Node replacements. Post-cutover `pnpm typecheck`, `pnpm test` (173/173), and `node scripts/check-determinism.mjs` passed.
 - Final verification: `pnpm typecheck` passed; `pnpm test` passed 173/173; `node start.mjs` reported `SELF`; delivery-contract self-check, determinism/Python-removal audit, bootstrap workflow, real-agent workflow, and factory-layout checks passed; `pnpm test:package-consumer` passed 3/3; `git diff --check` passed.
-- Work-unit commits on `feat/issue-112-cutover`: `9a75ef4`, `34973ee`, `4f96211`, `1f8b8f5`, `0f67a2f`, `97f8c34`. All are local; no `Co-Authored-By` trailer, push, PR, or merge.
+- Work-unit commits on `feat/issue-112-cutover`: `9a75ef4`, `34973ee`, `4f96211`, `1f8b8f5`, `0f67a2f`, `97f8c34`. No `Co-Authored-By` trailer; branch pushed and PR opened; no merge or deployment.
+- Pull request: [#182](https://github.com/eff3ct0/factory-template/pull/182), base `main`, head `feat/issue-112-cutover`, labels `type:feature` and explicitly accepted `size:exception`. The PR is draft/not merge-ready until the external package and hosted verification gates pass.
 
 ## Progress
 
@@ -76,4 +77,4 @@ package is actually published and read back.
 
 ## Next step
 
-Local implementation is complete. Six work-unit commits plus task-ledger commits are on `feat/issue-112-cutover`. User explicitly accepted `size:exception` and authorized one PR to `main`; PR URL is pending creation. npm publication/registry readback (`npm view` previously returned 404; `npm whoami` returned `ENEEDAUTH`), exact published-package consumer execution, hosted real-agent execution, and final GitHub Template-mode readback/mutation remain blocked. Template mode stays enabled until those issue acceptance gates pass.
+Local implementation is complete. Six work-unit commits plus task-ledger commits are on `feat/issue-112-cutover`. Draft PR [#182](https://github.com/eff3ct0/factory-template/pull/182) targets `main` with the user-approved `size:exception`; it must remain unmerged until npm publication/registry readback, exact published-package consumer execution, hosted real-agent execution, and the final Template-mode readback/mutation gates pass. Template mode remains enabled.
