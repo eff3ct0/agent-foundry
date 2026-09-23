@@ -17,7 +17,7 @@ completion, require Linear confirmation and fresh readback of the intended issue
 identifier, state, and comment/handoff before claiming success. Local files
 (including `odd/*.md`) and task UIs are optional derived projections, never
 required or fallback stores. If an operation is unsupported or fails, issue
-identity is ambiguous, or readback is unavailable or mismatched, stop and record
+identity is ambiguous, or readback is unavailable, malformed, or mismatched, stop and record
 the exact Linear operation, issue identifier, and evidence needed to resume.
 Do not substitute GitHub Issues.
 

@@ -17,7 +17,7 @@ require Jira confirmation and fresh readback of the intended issue key, state,
 and comment/handoff before claiming success. Local files (including `odd/*.md`)
 and task UIs are optional derived projections, never required or fallback stores.
 If an operation is unsupported or fails, the issue identity is ambiguous, or
-readback is unavailable or mismatched, stop and record the exact Jira operation,
+readback is unavailable, malformed, or mismatched, stop and record the exact Jira operation,
 issue key, and evidence needed to resume. Do not substitute GitHub Issues.
 
 **Mandatory template:** creating an issue MUST use the project/provider's

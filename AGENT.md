@@ -86,7 +86,7 @@ after the bound provider confirms the operation **and** a fresh readback verifie
 state (including the intended comment/handoff). A local file or task UI, including `odd/*.md`, is an optional,
 derived, non-authoritative projection of provider-confirmed state; no projection is required or a fallback.
 Ephemeral scratch notes are not durable tasks. If an operation is unsupported, fails, has ambiguous identity,
-or its readback is unavailable or mismatched, stop without claiming a checkpoint, transition, or completion.
+or its readback is unavailable, malformed, or mismatched, stop without claiming a checkpoint, transition, or completion.
 Record the exact missing or failed provider-native operation, target identity, and evidence needed to resume;
 request a supported path rather than silently writing locally or mapping a non-GitHub binding to GitHub.
 Use [`templates/handoff.md`](templates/handoff.md) for the handoff shape. Do not create a second tracker or

@@ -42,7 +42,7 @@ and task identity, and evidence needed to resume. Never substitute GitHub.
 commits/PRs and checkpoints.
 Local files (including `odd/*.md`) and task UIs are optional derived projections,
 never required or fallback stores. An unsupported or failed operation, ambiguous
-identity, or unavailable/mismatched readback blocks the transition; record the
+identity, or unavailable/malformed/mismatched readback blocks the transition; record the
 exact provider-native operation, task identity, and evidence needed to resume.
 
 **Protected `status:approved` gate:** the provider MUST keep this gate fail
