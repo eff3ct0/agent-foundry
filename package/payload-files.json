@@ -54,6 +54,7 @@
     "providers/task/linear.md",
     "scripts/check-delivery-contract.mjs",
     "scripts/check-pr-governance.mjs",
+    "scripts/task-adapter.mjs",
     "scripts/sync-github-labels.mjs",
     "start.mjs",
     "templates/adr.md",

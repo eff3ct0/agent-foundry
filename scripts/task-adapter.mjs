@@ -1,0 +1,134 @@
+// @ts-check
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+/** @typedef {{ provider: string, tracker: string, trackerKey: string, nativeId: string }} TaskIdentity */
+/** @typedef {{ operationId: string, kind: string, content: string }} TaskEntry */
+/** @typedef {{ identity: TaskIdentity, status: string, entries: TaskEntry[] }} TaskSnapshot */
+/** @typedef {{ phase: string, status: string, completedWork: string, nextAction: string, branch: string, commit: string, verification: string, resumeEvidence: string, resumePhase?: string, blocker?: string }} TaskHandoff */
+/** @typedef {{ kind: 'update'|'status'|'comment'|'handoff'|'checkpoint'|'close', operationId: string, status: string, content: string|TaskHandoff }} TaskWrite */
+/** @typedef {{ read: (identity: TaskIdentity) => Promise<TaskSnapshot>, idempotentByOperationId?: true, write?: (identity: TaskIdentity, entry: TaskEntry, status: string) => Promise<{accepted: true}> }} TaskPort */
+
+export class TaskAdapterError extends Error {
+  /** @param {string} code @param {string} message */
+  constructor(code, message) {
+    super(message);
+    this.name = "TaskAdapterError";
+    this.code = code;
+  }
+}
+
+/** @param {string} code @param {string} message */
+const fail = (code, message) => { throw new TaskAdapterError(code, message); };
+/** @param {unknown} value */
+const nonempty = (value) => typeof value === "string" && value.length > 0 && value === value.trim() && !/[\r\n]/u.test(value);
+const providers = new Set(["jira", "github-issues", "github-projects", "linear", "custom"]);
+
+/** Parse ONLY the identity section emitted by creator's composeBindings. */
+export const parseTaskBinding = (text) => {
+  if (typeof text !== "string") fail("binding_invalid", "Generated docs/bindings.md is unavailable or malformed");
+  const sections = text.split(/^## Bound task identity\s*$/mu);
+  if (sections.length !== 2) fail("binding_invalid", "Expected one generated Bound task identity section in docs/bindings.md");
+  const section = sections[1].split(/^## /mu)[0];
+  const fields = [
+    ["provider", "Task provider (TASK_TRACKER)"],
+    ["tracker", "Tracker (TRACKER)"],
+    ["trackerKey", "Project/board (TRACKER_KEY)"],
+  ];
+  /** @type {Record<string, string>} */
+  const binding = {};
+  for (const [key, label] of fields) {
+    const matches = [...section.matchAll(new RegExp(`^- ${label.replace(/[()]/gu, "\\$&")}: (.*)$`, "gmu"))];
+    if (matches.length !== 1 || !nonempty(matches[0][1]) || matches[0][1].includes("<")
+        || matches[0][1] === "not configured; resolve before durable task operations") {
+      fail("binding_invalid", `Generated binding ${label} is missing, duplicated or unconfigured`);
+    }
+    binding[key] = matches[0][1];
+  }
+  if (!providers.has(binding.provider)) fail("provider_unsupported", `Unsupported TASK_TRACKER ${binding.provider}; configure a supported native task provider`);
+  return /** @type {{provider: string, tracker: string, trackerKey: string}} */ (binding);
+};
+
+/** @param {TaskHandoff} value */
+const handoffContent = (value) => {
+  if (!value || typeof value !== "object") fail("handoff_invalid", "Handoff requires phase, status and resume evidence");
+  const required = ["phase", "status", "completedWork", "nextAction", "branch", "commit", "verification", "resumeEvidence"];
+  if (required.some((key) => !nonempty(value[/** @type {keyof TaskHandoff} */ (key)]))
+      || !["DEFINITION", "IMPLEMENTATION", "TESTING/TDD", "VERIFICATION", "EVIDENCE/DELIVERY", "BLOCKED", "DONE"].includes(value.phase)
+      || !["ACTIVE", "BLOCKED", "BLOCKED: requires approval", "DONE"].includes(value.status)
+      || (value.status.startsWith("BLOCKED") && (!nonempty(value.resumePhase) || !nonempty(value.blocker)))) {
+    fail("handoff_invalid", "Handoff fields or blocked continuation are missing or malformed");
+  }
+  return JSON.stringify(value);
+};
+
+/** @param {TaskSnapshot} snapshot @param {TaskIdentity} identity */
+const checked = (snapshot, identity) => {
+  const actual = snapshot?.identity;
+  if (!actual || Object.keys(identity).some((key) => actual[/** @type {keyof TaskIdentity} */ (key)] !== identity[/** @type {keyof TaskIdentity} */ (key)])
+      || !nonempty(snapshot.status) || !Array.isArray(snapshot.entries)
+      || snapshot.entries.some((entry) => !nonempty(entry?.operationId) || !nonempty(entry.kind) || !nonempty(entry.content))) {
+    fail("readback_mismatch", `Readback identity/status/evidence mismatched ${identity.provider} ${identity.tracker}/${identity.trackerKey}/${identity.nativeId}; inspect native target`);
+  }
+  return snapshot;
+};
+
+/**
+ * Reads the generated binding from the project, never a harness preference or local task projection.
+ * Ports are injected native capabilities; absence of a mapping is unsupported, not a fallback.
+ * @param {{projectRoot: string, ports: Partial<Record<string, TaskPort>>}} options
+ */
+export const createTaskAdapter = async ({ projectRoot, ports }) => {
+  if (!nonempty(projectRoot)) fail("binding_invalid", "A generated project root is required");
+  let text;
+  try { text = await readFile(path.join(projectRoot, "docs/bindings.md"), "utf8"); }
+  catch { fail("binding_invalid", "Read generated docs/bindings.md before any native task operation"); }
+  const binding = parseTaskBinding(text);
+  const port = ports?.[binding.provider];
+  if (!port || typeof port.read !== "function") fail("native_unsupported", `${binding.provider}: configure native task read and readback access for ${binding.tracker}/${binding.trackerKey}`);
+
+  /** @param {TaskIdentity} identity */
+  const read = async (identity) => {
+    if (!identity || !nonempty(identity.nativeId) || Object.entries(binding).some(([key, value]) => identity[/** @type {keyof TaskIdentity} */ (key)] !== value)) {
+      fail("identity_invalid", `${binding.provider}: supply the exact bound tracker/board and native task identity`);
+    }
+    let snapshot;
+    try { snapshot = await port.read(identity); }
+    catch { fail("readback_unavailable", `${binding.provider}: read native task ${identity.nativeId} and retry only after confirming identity`); }
+    return checked(snapshot, identity);
+  };
+
+  /** @param {TaskIdentity} identity @param {TaskWrite} operation */
+  const write = async (identity, operation) => {
+    if (!operation || !["update", "status", "comment", "handoff", "checkpoint", "close"].includes(operation.kind)
+        || !nonempty(operation.operationId) || !nonempty(operation.status)) {
+      fail("operation_invalid", `${binding.provider}: supply a unique operation ID, kind and expected native status`);
+    }
+    const content = operation.kind === "handoff" || operation.kind === "checkpoint"
+      ? handoffContent(/** @type {TaskHandoff} */ (operation.content)) : operation.content;
+    if (!nonempty(content)) fail("operation_invalid", `${binding.provider}: supply expected native content for readback`);
+    const entry = { operationId: operation.operationId, kind: operation.kind, content: /** @type {string} */ (content) };
+    const before = await read(identity);
+    const previous = before.entries.filter((item) => item.operationId === entry.operationId);
+    if (previous.length) {
+      if (previous.length === 1 && JSON.stringify(previous[0]) === JSON.stringify(entry) && before.status === operation.status) return before;
+      fail("correlation_conflict", `${binding.provider}: reconcile operation ${entry.operationId} on native task ${identity.nativeId} before retry`);
+    }
+    // A pre-read showing no correlation is not proof that an earlier timed-out write was rejected.
+    // The native port must enforce the same operation ID atomically across sessions and retries.
+    if (typeof port.write !== "function" || port.idempotentByOperationId !== true) {
+      fail("native_unsupported", `${binding.provider}: configure native ${operation.kind} with atomic operation-ID idempotency and readback for task ${identity.nativeId}`);
+    }
+    let acknowledgement;
+    try { acknowledgement = await port.write(identity, entry, operation.status); }
+    catch { fail("unknown_write_outcome", `${binding.provider}: ${operation.kind} ${entry.operationId} may have reached ${identity.nativeId}; read native target before retry`); }
+    if (acknowledgement?.accepted !== true) fail("unknown_write_outcome", `${binding.provider}: ${operation.kind} ${entry.operationId} outcome unknown on ${identity.nativeId}; read native target before retry`);
+    const after = await read(identity);
+    const matches = after.entries.filter((item) => item.operationId === entry.operationId);
+    if (after.status !== operation.status || matches.length !== 1 || JSON.stringify(matches[0]) !== JSON.stringify(entry)) {
+      fail("readback_mismatch", `${binding.provider}: verify native ${operation.kind} ${entry.operationId}, status and content on task ${identity.nativeId}`);
+    }
+    return after;
+  };
+  return { binding, read, write };
+};

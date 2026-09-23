@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8872,
-      "sha256": "0798884ca6362c6f6b6f058c33cd1a5360c792361b61dcb1abe047fce358696f"
+      "size": 8934,
+      "sha256": "f9cfb15897d490ef641e0533aa6998cbbe5dd830fd7b8b8f1db3070367dd0428"
     },
     {
       "path": "ci/_contract.md",
@@ -329,6 +329,12 @@
       "sha256": "181618275724d6f48b42b0f38aa85490ed7fc47a6767c00937950516540ad776"
     },
     {
+      "path": "scripts/task-adapter.mjs",
+      "mode": "100644",
+      "size": 8927,
+      "sha256": "5c5154df2023c92ac507582c44709257657f9f0dfba35faca8d286641893148c"
+    },
+    {
       "path": "start.mjs",
       "mode": "100644",
       "size": 10603,
@@ -377,5 +383,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:c31bb2713ba7a94cd06968f5fe119142fcbefcc238b96d8fb08f71cf25fb9070"
+  "payload_digest": "sha256:6aeeec1b05619687b4431890d6d2704d435541bee6ea2b43f08a0b193ff3c20f"
 }
