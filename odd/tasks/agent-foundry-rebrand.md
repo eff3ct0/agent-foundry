@@ -3,7 +3,7 @@
 ## Status and next action
 
 - Phase: `EVIDENCE/DELIVERY` for the local R4 unit; #183 remains open with R2, R3, and R5 outstanding. Parent-reported issue [#183](https://github.com/eff3ct0/agent-foundry/issues/183) readback on 2026-09-23 was `OPEN`, `status:approved`; this unit did not contact GitHub.
-- Isolated worktree: `/home/steam/git/agent-foundry-worktrees/issue-183`; branch `feat/issue-183-rebrand`; base commit `d6b0f68a961ab4a312f2a2dbbae332a408ff5a5d` (local `HEAD` at planning). No #183 implementation commit or PR yet.
+- Isolated worktree: `/home/steam/git/agent-foundry-worktrees/issue-183`; branch `feat/issue-183-rebrand`; base commit `d6b0f68a961ab4a312f2a2dbbae332a408ff5a5d`; local R4 work-unit commit `d56c665c4add6a3fc967075e29d2b85bda8adb8d`. No PR or remote delivery.
 - Owner already renamed the repository to `eff3ct0/agent-foundry` and left Template mode enabled (`isTemplate: true`), per the parent's live readback. Package/CLI change #112 was merged through PR #182 at `d6b0f68`; older draft-PR and pending-publication notes below are historical, not current release evidence.
 - **Next action:** review this local R4 work unit, then plan R2's active copy separately. Do not start a hosted #184 journey or change repository metadata under this unit. If remaining #183 work forecasts more than 400 authored lines, ask the owner for a delivery strategy before any next commit.
 
@@ -64,6 +64,7 @@ Delivery strategy: `ask-on-risk`. R2/R4 touch cross-cutting docs, runtime, workf
 - `pnpm test`: exit 0, 177/177 passed (including build/payload validation). `pnpm test:workflow-contract`: exit 0, 18/18 passed. `pnpm test:package-consumer`: exit 0, 3/3 passed. Hosted workflow: not run; no hosted dispatch, repository metadata mutation, release, or PR.
 - `git diff --check`: exit 0. Against `d6b0f68`, this unit is 208 authored additions+deletions plus 6 generated payload-lock lines (214 total); below the 400-line work-unit guard. A scoped audit found no old slug in active `.github/workflows/*.yml` or `scripts/*.mjs`; old-slug strings retained in negative tests, generic provisioning fixtures, and historical records are intentional.
 - Rollback boundary: revert only this R4 runtime/checker/test/nearby `MAINTAINERS.md` unit and regenerate `package/payload-manifest.json` from the restored `start.mjs`; keep the earlier R1 plan and all historical `odd/tasks/` records. The commit contains this tracker as the implementation receipt. Delivery is local-only; R2/R3/R5 remain open and metadata remains `BLOCKED: exact owner-reviewed wording`.
+- Commit evidence: `d56c665c4add6a3fc967075e29d2b85bda8adb8d` (`fix(journey): cut over source repository coordinates (#183)`). This passive tracker-only follow-up records the immutable work-unit SHA; it changes no runtime behavior.
 
 ## Historical note (not a current gate)
 
