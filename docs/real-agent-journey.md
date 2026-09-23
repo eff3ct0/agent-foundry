@@ -80,7 +80,7 @@ releases.
    publish a release.
 2. The workflow creates a run-scoped empty private repository through the
    guarded Node GitHub API boundary, applies the exact published
-   `factory-template-creator@<EXACT_VERSION>` package, and passes it through
+   `@eff3ct/agent-foundry@<EXACT_VERSION>` package, and passes it through
    the four stage interfaces below.
 3. Read the bounded artifact and GitHub/checkout readback before treating the
    run as successful.
@@ -171,7 +171,7 @@ triggering `github.sha` before recording both identities. For manual and
 scheduled runs, it records the triggering `github.sha`. Provisioning fails
 before repository creation unless the source repository's default-branch
 revision matches that SHA. The agent job then reads back the exact published
-package metadata, applies `factory-template-creator@<EXACT_VERSION>` to the
+package metadata, applies `@eff3ct/agent-foundry@<EXACT_VERSION>` to the
 empty repository, records package/source identity, initializes `main`, and
 pushes only that run-scoped repository before the cold agent starts.
 
@@ -183,7 +183,7 @@ Configure these repository settings:
   generated repository.
 - Actions variable `OPENAI_MODEL`: an available bounded model identifier.
 - Actions variable `REAL_AGENT_PACKAGE_VERSION`: exact published
-  `factory-template-creator` version for scheduled runs.
+  `@eff3ct/agent-foundry` version for scheduled runs.
 - Actions secret `BOOTSTRAP_E2E_APP_ID` and
   `BOOTSTRAP_E2E_PRIVATE_KEY`: dedicated GitHub App credentials used to mint
   separate provisioning, agent, readback, and cleanup tokens.

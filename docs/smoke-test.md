@@ -31,7 +31,7 @@ the repeatable template-level check. A manual run checks out the trusted
 `github.workflow_sha`, builds one immutable package with pinned Corepack/pnpm,
 and uploads it as a run-scoped artifact. Each `ci/recipes.json` case downloads
 that exact package and validates the installed creator: it installs offline with
-scripts disabled, runs `factory-template apply --non-interactive`, and requires
+scripts disabled, runs `foundry apply --non-interactive`, and requires
 the creator's verified JSON envelope. It does not use GitHub's template-
 generation endpoint or create a disposable repository.
 
@@ -127,7 +127,7 @@ https://developers.openai.com/api/docs/guides/structured-outputs.
 ## 1. Create a project from the package
 ```
 mkdir factory-smoke-test && cd factory-smoke-test
-pnpm dlx factory-template@<EXACT_VERSION> apply --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --non-interactive
 ```
 
 ## 2. Minimal kickoff (NEW agent session inside the repo)
@@ -145,7 +145,7 @@ Note: `eff3ct0/factory` (the org instance) does not exist yet, so leave
 ## 3. Success criteria
 - [ ] The kickoff was sufficient; no process explanation was needed.
 - [ ] `node start.mjs` reports the expected setup/work mode.
-- [ ] `factory-template apply --non-interactive` returns a successful JSON envelope.
+- [ ] `foundry apply --non-interactive` returns a successful JSON envelope.
 - [ ] `docs/bindings.md` contains the selected task and secrets providers.
 - [ ] `.github/workflows/ci.yml` has one job per stack language.
 - [ ] Generated output contains no `ci/`, `providers/`, `MAINTAINERS.md`, or maintainer-only release tooling.

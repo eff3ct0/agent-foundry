@@ -122,7 +122,7 @@ The template bootstrap workflow is a manual, maintainer-only check. Its trusted
 Corepack/pnpm, then uploads that package as a run-scoped artifact. Each recipe
 job downloads exactly that artifact and validates the installed creator: it
 installs the package offline with scripts disabled, runs
-`factory-template apply --non-interactive`, and requires the verified creator
+`foundry apply --non-interactive`, and requires the verified creator
 JSON envelope. It does not call the Template API or create a disposable
 repository.
 

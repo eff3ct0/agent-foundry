@@ -22,7 +22,7 @@ test("offline package consumers verify exact identity, apply/verify, noop, start
     await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packages], { cwd: root });
     const tarball = path.join(packages, (await readdir(packages)).find((entry) => entry.endsWith(".tgz")) ?? "");
     const result = await verifyPackageConsumers({
-      packageName: "factory-template-creator",
+      packageName: "@eff3ct/agent-foundry",
       packageVersion: "0.1.0",
       tarballPath: tarball,
       sourceSha,
@@ -31,12 +31,12 @@ test("offline package consumers verify exact identity, apply/verify, noop, start
     });
 
     assert.equal(result.status, "passed");
-    assert.deepEqual(result.package, { name: "factory-template-creator", version: "0.1.0" });
+    assert.deepEqual(result.package, { name: "@eff3ct/agent-foundry", version: "0.1.0" });
     assert.deepEqual(result.release, { status: "verified", tag: "v0.1.0", sha: sourceSha });
     assert.deepEqual(result.consumers.map(({ consumer }) => consumer), ["pnpm-dlx", "npx"]);
     for (const consumer of result.consumers) {
       assert.equal(consumer.mode, "local-tarball");
-      assert.equal(consumer.package_spec, "factory-template-creator@0.1.0");
+      assert.equal(consumer.package_spec, "@eff3ct/agent-foundry@0.1.0");
       assert.equal(consumer.apply.status, "applied");
       assert.equal(consumer.verify.status, "verified");
       assert.equal(consumer.rerun.status, "noop");
@@ -58,7 +58,7 @@ test("unavailable registry execution is a precise blocked result, not a publishe
   const calls = [];
   try {
     const result = await verifyPackageConsumers({
-      packageName: "factory-template-creator",
+      packageName: "@eff3ct/agent-foundry",
       packageVersion: "0.1.0",
       sourceSha,
       outputDirectory: parent,
@@ -70,10 +70,10 @@ test("unavailable registry execution is a precise blocked result, not a publishe
     });
     assert.equal(result.status, "blocked");
     assert.equal(result.code, "registry_unavailable");
-    assert.deepEqual(result.package, { name: "factory-template-creator", version: "0.1.0" });
+    assert.deepEqual(result.package, { name: "@eff3ct/agent-foundry", version: "0.1.0" });
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0][0], "npm");
-    assert.deepEqual(calls[0][1].at(-1), "factory-template-creator@0.1.0");
+    assert.deepEqual(calls[0][1].at(-1), "@eff3ct/agent-foundry@0.1.0");
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
@@ -81,11 +81,11 @@ test("unavailable registry execution is a precise blocked result, not a publishe
 
 test("invalid exact versions and release identities fail closed", async () => {
   await assert.rejects(
-    verifyPackageConsumers({ packageName: "factory-template-creator", packageVersion: "^0.1.0", sourceSha, outputDirectory: os.tmpdir() }),
+    verifyPackageConsumers({ packageName: "@eff3ct/agent-foundry", packageVersion: "^0.1.0", sourceSha, outputDirectory: os.tmpdir() }),
     /exact semver/u,
   );
   await assert.rejects(
-    verifyPackageConsumers({ packageName: "factory-template-creator", packageVersion: "0.1.0", sourceSha, release: { status: "declared", tag: "v0.1.0", sha: sourceSha }, outputDirectory: os.tmpdir() }),
+    verifyPackageConsumers({ packageName: "@eff3ct/agent-foundry", packageVersion: "0.1.0", sourceSha, release: { status: "declared", tag: "v0.1.0", sha: sourceSha }, outputDirectory: os.tmpdir() }),
     /verified tag/u,
   );
 });

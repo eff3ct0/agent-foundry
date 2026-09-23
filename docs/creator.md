@@ -4,11 +4,11 @@ The package CLI uses the immutable payload produced by #105 as its only source
 of template files. It does not make network calls or mutate the payload.
 
 ```sh
-factory-template plan --target ./new-project --config answers.json --non-interactive
-factory-template dry-run --target ./new-project --config answers.json --non-interactive
-factory-template apply --target ./new-project --config answers.json --non-interactive
-factory-template verify --target ./new-project --config answers.json --non-interactive
-factory-template doctor --target ./new-project --config answers.json --non-interactive
+foundry plan --target ./new-project --config answers.json --non-interactive
+foundry dry-run --target ./new-project --config answers.json --non-interactive
+foundry apply --target ./new-project --config answers.json --non-interactive
+foundry verify --target ./new-project --config answers.json --non-interactive
+foundry doctor --target ./new-project --config answers.json --non-interactive
 ```
 
 ## Provider-aware setup
@@ -93,7 +93,7 @@ changes; the latter intentionally leaves staging for `doctor` to report.
 The release verifier exercises both consumer commands from fresh directories:
 
 ```sh
-pnpm verify:package-consumer --package factory-template-creator --version 0.1.0 \
+pnpm verify:package-consumer --package @eff3ct/agent-foundry --version 0.1.0 \
   --source-sha <full-source-sha> --output ./package-consumer-evidence
 ```
 
@@ -120,7 +120,7 @@ unavailable.
 The package exact-version command is the primary creation path:
 
 ```sh
-pnpm dlx factory-template-creator@<EXACT_VERSION> apply --target ./new-project --config answers.json --non-interactive --yes
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --config answers.json --non-interactive --yes
 ```
 
 GitHub Template mode remains enabled only as a rollback safety valve until

@@ -30,7 +30,7 @@ test("installed runner executes an exact offline tarball through its installed C
 
     assert.equal(result.creator.status, "applied");
     assert.equal(result.creator.verification, "verified");
-    assert.deepEqual(result.identity.package, { name: "factory-template-creator", version: "0.1.0" });
+    assert.deepEqual(result.identity.package, { name: "@eff3ct/agent-foundry", version: "0.1.0" });
     for (const digest of [result.identity.tarball_digest, result.identity.payload_digest, result.identity.tree_digest]) assert.match(digest, /^sha256:[0-9a-f]{64}$/u);
   } finally {
     await rm(parent, { recursive: true, force: true });

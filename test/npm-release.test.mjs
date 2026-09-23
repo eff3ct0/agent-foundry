@@ -25,10 +25,10 @@ test("local and registry identities require matching package, payload, and tarba
     await writeFile(tarball, "exact-package-bytes\n");
     const expected = await readPackageIdentity({ packageRoot: directory, tarballPath: tarball, tag: "v0.1.0", sourceSha });
     const registry = structuredClone(expected);
-    const verified = validateRegistryReadback({ metadata: { name: "factory-template-creator", version: "0.1.0" }, registryIdentity: registry, expected });
+    const verified = validateRegistryReadback({ metadata: { name: "@eff3ct/agent-foundry", version: "0.1.0" }, registryIdentity: registry, expected });
     assert.equal(verified.status, "verified");
-    assert.throws(() => validateRegistryReadback({ metadata: { name: "factory-template-creator", version: "0.1.0" }, registryIdentity: { ...registry, tarball_digest: "sha256:" + "0".repeat(64) }, expected }), /tarball identity/u);
-    assert.deepEqual(JSON.parse(await readFile(path.join(directory, "package.json"), "utf8")).name, "factory-template-creator");
+    assert.throws(() => validateRegistryReadback({ metadata: { name: "@eff3ct/agent-foundry", version: "0.1.0" }, registryIdentity: { ...registry, tarball_digest: "sha256:" + "0".repeat(64) }, expected }), /tarball identity/u);
+    assert.deepEqual(JSON.parse(await readFile(path.join(directory, "package.json"), "utf8")).name, "@eff3ct/agent-foundry");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

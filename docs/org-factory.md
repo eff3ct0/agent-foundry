@@ -6,7 +6,7 @@ factory. v1 uses two native, complementary mechanisms.
 > **Naming (source != instance).** `factory-template` is the **source archetype**
 > (this repo, retained as a *Template repository* for rollback). `<ORG>/factory`
 > is the organization factory **implementation**: create an empty repository,
-> apply `factory-template-creator@<EXACT_VERSION>`, version it with
+> apply `@eff3ct/agent-foundry@<EXACT_VERSION>`, version it with
 > tags (`v1`, `v2`, ...), and reference it by projects through
 > `FACTORY_SPEC = <ORG>/factory@vX`.
 
@@ -27,8 +27,8 @@ apply/verify; use an explicitly approved `gh repo create` command for the
 organization repository mutation:
 
 ```sh
-factory-template plan --target ./factory --config answers.json --non-interactive
-factory-template apply --target ./factory --config answers.json --non-interactive --yes
+foundry plan --target ./factory --config answers.json --non-interactive
+foundry apply --target ./factory --config answers.json --non-interactive --yes
 gh repo create <ORG>/.github --private
 ```
 
@@ -42,7 +42,7 @@ repeat-run, rollback, and approval-boundary matrix.
 
 ## 2. Package + `FACTORY_SPEC` pin
 - The **source archetype** is this repo (`<ORG>/factory-template`), marked as a *Template repository* only for rollback.
-- The **instance** `<ORG>/factory` is an empty repository initialized with `factory-template-creator@<EXACT_VERSION>` and versioned with tags (`v1`, `v2`, ...); it is the organization's living baseline.
+- The **instance** `<ORG>/factory` is an empty repository initialized with `@eff3ct/agent-foundry@<EXACT_VERSION>` and versioned with tags (`v1`, `v2`, ...); it is the organization's living baseline.
 - Each project applies the exact creator package and declares its governing baseline in [`AGENT.md`](../AGENT.md): `FACTORY_SPEC = <ORG>/factory@v1`.
 - The repository follows its `FACTORY_SPEC`; local content **overrides** the baseline when it differs. To adopt a new spec version, repin `FACTORY_SPEC` and reconcile changes.
 - The deterministic `FACTORY_REQUIRED` configuration makes the creator fail

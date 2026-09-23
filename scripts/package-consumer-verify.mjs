@@ -113,7 +113,7 @@ const packagePathFor = async (installation, name, version) => {
   if (metadata.name !== name || metadata.version !== version || !object(metadata.bin)) {
     fail("package_identity_mismatch", "installed package identity does not match the requested exact version");
   }
-  const entry = metadata.bin["factory-template"];
+  const entry = metadata.bin.foundry;
   if (typeof entry !== "string" || !entry || path.isAbsolute(entry) || entry.split(/[\\/]/u).includes("..")) {
     fail("package_identity_mismatch", "installed package CLI entry is unsafe or absent");
   }
@@ -165,8 +165,8 @@ const cliInvocation = ({ consumer, spec, cliPath, command, target, configPath, s
   if (selectedAgent) suffix.push("--agent", "codex");
   if (command === "apply" && launchAgent) suffix.push("--launch-agent");
   if (cliPath) return { name: process.execPath, args: [cliPath, ...suffix] };
-  if (consumer === "pnpm-dlx") return { name: "pnpm", args: ["dlx", "--package", spec, "factory-template", ...suffix.slice(1)] };
-  return { name: "npx", args: ["--yes", spec, ...suffix.slice(1)] };
+  if (consumer === "pnpm-dlx") return { name: "pnpm", args: ["dlx", "--package", spec, "foundry", ...suffix.slice(1)] };
+  return { name: "npx", args: ["--yes", "--package", spec, "foundry", ...suffix.slice(1)] };
 };
 
 const runConsumer = async ({ consumer, spec, tarballPath, localTarballPath, packageName, packageVersion, outputDirectory, configuration, sourceSha, release, environment, executeCommand }) => {

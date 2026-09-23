@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const PACKAGE_NAME = "factory-template-creator";
+const PACKAGE_NAME = "@eff3ct/agent-foundry";
 const SHA = /^[0-9a-f]{40}$/u;
 const VERSION = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;

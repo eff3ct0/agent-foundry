@@ -9,10 +9,10 @@ the same content and reports `noop` for unchanged files.
 | Operation | Classification | Repeat-run contract |
 | --- | --- | --- |
 | `start.mjs` | Read-only, offline | Same local marker, mode, and message for unchanged files |
-| `factory-template plan` / `dry-run` | Read-only, offline | No target mutation; same JSON envelope |
-| `factory-template apply` | Local write, transactional | Stable payload/config identity; failed writes roll back |
-| `factory-template verify` | Read-only, offline | Revalidates generated contracts and ownership |
-| `factory-template doctor` | Read-only, offline | Reports interrupted staging, payload mismatch, and drift |
+| `foundry plan` / `dry-run` | Read-only, offline | No target mutation; same JSON envelope |
+| `foundry apply` | Local write, transactional | Stable payload/config identity; failed writes roll back |
+| `foundry verify` | Read-only, offline | Revalidates generated contracts and ownership |
+| `foundry doctor` | Read-only, offline | Reports interrupted staging, payload mismatch, and drift |
 | `scripts/check-determinism.mjs` | Source-only static audit | Same result for unchanged source and package contracts |
 | `scripts/check-delivery-contract.mjs` | Node structural contract | Validates docs, providers, and CI recipe data |
 | `scripts/check-factory-layout.mjs` | Node layout contract | Validates initialized-project support boundaries |

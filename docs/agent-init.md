@@ -33,9 +33,9 @@ explicit post-verify action and never converts a failed handoff into success.
 ## Step 3 - Review and apply
 
 ```sh
-pnpm dlx factory-template-creator@<EXACT_VERSION> plan --target ./project --config answers.json --non-interactive
-pnpm dlx factory-template-creator@<EXACT_VERSION> apply --target ./project --config answers.json --non-interactive --yes
-pnpm dlx factory-template-creator@<EXACT_VERSION> verify --target ./project --config answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./project --config answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./project --config answers.json --non-interactive --yes
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry verify --target ./project --config answers.json --non-interactive
 ```
 
 The creator validates required, enum, conditional, duplicate, and unknown

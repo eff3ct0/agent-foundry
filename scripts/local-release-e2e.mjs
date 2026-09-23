@@ -9,7 +9,7 @@ import { captureCommandResult, enumerateMatrix, matrixConfiguration, runLocalMat
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const command = "npm install --offline --ignore-scripts <packed tarball> && factory-template apply --non-interactive";
+const command = "npm install --offline --ignore-scripts <packed tarball> && foundry apply --non-interactive";
 
 const fail = (message) => { throw new Error(message); };
 
@@ -51,7 +51,7 @@ const executeCase = async ({ tarballPath, directory, configuration, runCreator, 
       commands: [command],
       release_e2e: {
         schema_version: 1,
-        command_results: [captureCommandResult({ name: "installed factory-template apply", command, status: "passed", exit_code: 0, output: "creator applied and verified" })],
+        command_results: [captureCommandResult({ name: "installed foundry apply", command, status: "passed", exit_code: 0, output: "creator applied and verified" })],
       },
     };
   } catch (error) {
@@ -62,7 +62,7 @@ const executeCase = async ({ tarballPath, directory, configuration, runCreator, 
       failure,
       release_e2e: {
         schema_version: 1,
-        command_results: [captureCommandResult({ name: "installed factory-template apply", command, status: "failed", exit_code: null, output: failure })],
+        command_results: [captureCommandResult({ name: "installed foundry apply", command, status: "failed", exit_code: null, output: failure })],
       },
     };
   }

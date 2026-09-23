@@ -102,7 +102,7 @@ const checkJourney = (text, projectRoot) => {
   for (const [action, sha] of Object.entries(pinnedActions)) if (!uses.includes(`${action}@${sha}`)) fail(`real-agent journey is missing required action pin: ${action}`);
   requireText(text, [
      "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.mjs collect", "retention-days: 7",
-     "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY", "package_version", "npx --yes --package", "factory-template apply",
+      "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY", "package_version", "JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'", "--package-name '@eff3ct/agent-foundry'", "npx --yes --package", "foundry apply",
      "release-resolve.mjs --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"",
   ], "real-agent journey is missing");
   if (text.indexOf("Resolve immutable source revision") > text.indexOf("\n  provision:\n")) fail("real-agent journey must resolve its source before provisioning");
@@ -120,7 +120,7 @@ const checkNpmRelease = (text) => {
   checkPins(text, releasePinnedActions, "npm release action pin is missing");
   requireText(text, [
     "release:\n    types: [published]", "workflow_dispatch:", "tag_name:", "permissions: {}", "id-token: write", "contents: read",
-    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2",
+    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
     "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts", "npm publish \"$TARBALL\" --provenance --access public", "NODE_AUTH_TOKEN",
     "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest", "source_sha",
   ], "npm release workflow is missing");

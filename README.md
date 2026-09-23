@@ -18,14 +18,14 @@ from this archetype.
 
 ## Exact-version creator
 
-The package is `factory-template-creator` and requires Node.js 20.19 or newer.
+The package is `@eff3ct/agent-foundry` and requires Node.js 20.19 or newer.
 Always pin the exact version in onboarding and release verification:
 
 ```sh
-pnpm dlx factory-template-creator@<EXACT_VERSION> plan --target ./new-project --config answers.json --non-interactive
-pnpm dlx factory-template-creator@<EXACT_VERSION> apply --target ./new-project --config answers.json --non-interactive --yes
-pnpm dlx factory-template-creator@<EXACT_VERSION> verify --target ./new-project --config answers.json --non-interactive
-pnpm dlx factory-template-creator@<EXACT_VERSION> doctor --target ./new-project --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./new-project --config answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --config answers.json --non-interactive --yes
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry verify --target ./new-project --config answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry doctor --target ./new-project --non-interactive
 ```
 
 Maintainers publish only through `.github/workflows/npm-release.yml`. The

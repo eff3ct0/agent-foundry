@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "package_name": "factory-template-creator",
+  "package_name": "@eff3ct/agent-foundry",
   "package_version": "0.1.0",
   "payload_version": "1.0.0",
   "files": [
@@ -43,8 +43,8 @@
     {
       "path": ".github/pull_request_template.md",
       "mode": "100644",
-      "size": 1660,
-      "sha256": "4f0569bd5ab46e7fbd2e5b4e87edbcca6f11f4bb6151e6bda66c1b2a0be63def"
+      "size": 1657,
+      "sha256": "4411f482f5e2fb3cb1f217ee4269ca20e562ce8c0837083bf3f0bdd7c6c58e29"
     },
     {
       "path": ".github/workflows/governance.yml",
@@ -79,8 +79,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 3667,
-      "sha256": "58c49f37d314ebf86f792c4bcd3da9a5ca470c47875bfa7ec08ad302d41789d8"
+      "size": 3724,
+      "sha256": "6a6e23af7dd3fd48fbe84562e2493b5a036daa616d5301502247f76b729a585e"
     },
     {
       "path": "archetype-ownership.json",
@@ -103,20 +103,20 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 3144,
-      "sha256": "8f7790d9cbd99006cf50f3f3ce0d07e56df97da39eee83279f6139dac0c08c7d"
+      "size": 3189,
+      "sha256": "a2c5902d967f314df6eb812100aef4529de95ef33ebeaefe876204241cef0c07"
     },
     {
       "path": "docs/bootstrap.md",
       "mode": "100644",
-      "size": 3393,
-      "sha256": "ded371e74e8fb0861db6d414d62f738e894f37591adaefcbcf43e724c957da4c"
+      "size": 3468,
+      "sha256": "0e3dd820e03110b5708888c9f530591b2e3b44a9028aa39a571f436300f97e9a"
     },
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 2704,
-      "sha256": "899c4f03c82286b75e9704fce135718e431e38b99d64659f10effb1588ec6885"
+      "size": 2668,
+      "sha256": "b29acd1b711be1d0f0be4e6016bf72485f6035ae4097fda612b0bdec7e381205"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -139,8 +139,8 @@
     {
       "path": "docs/org-factory.md",
       "mode": "100644",
-      "size": 3214,
-      "sha256": "436fd3f2cd875dd476a26b6824501dac683654d56fb8a3529410ff1ecdf636a1"
+      "size": 3190,
+      "sha256": "47491c546032bcedea46c0e83eae579455cb3d45133d5e1eda8229839b8ac79c"
     },
     {
       "path": "docs/workflow.md",
@@ -361,8 +361,8 @@
     {
       "path": "templates/pull-request.md",
       "mode": "100644",
-      "size": 1525,
-      "sha256": "cc617711c3f1488587db13fbd6bdeb45eb4b9999b3c41d8203a172db9c093f76"
+      "size": 1522,
+      "sha256": "1e31c40954982a72f12aa6d7ad88d28d93746f2fbcc529e12197a349482d9dd6"
     },
     {
       "path": "templates/spec.md",
@@ -377,5 +377,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:7a1f61ed8f66f05c2493f61bdccffe55ac876b1ffdfdfc1069d74741b0112f8f"
+  "payload_digest": "sha256:d7691a03bb4142c331f82d13c0a80647ef0083cb4f852c0a05ef9a5ff45c5b20"
 }

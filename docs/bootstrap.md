@@ -10,7 +10,7 @@ Create an empty repository with the intended owner, name, visibility, and
 default branch. Do not use GitHub Template mode for normal creation.
 
 ```sh
-pnpm dlx factory-template-creator@<EXACT_VERSION> apply --target ./new-project --non-interactive --yes
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --non-interactive --yes
 ```
 
 The package does not call GitHub or create a remote repository. Create the
@@ -23,10 +23,10 @@ Use a configuration file for repeatable answers. Review before writing, then
 apply, verify, and inspect recovery state with `doctor`:
 
 ```sh
-pnpm dlx factory-template-creator@<EXACT_VERSION> plan --target ./new-project --config answers.json --non-interactive
-pnpm dlx factory-template-creator@<EXACT_VERSION> apply --target ./new-project --config answers.json --non-interactive --yes
-pnpm dlx factory-template-creator@<EXACT_VERSION> verify --target ./new-project --config answers.json --non-interactive
-pnpm dlx factory-template-creator@<EXACT_VERSION> doctor --target ./new-project --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./new-project --config answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --config answers.json --non-interactive --yes
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry verify --target ./new-project --config answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry doctor --target ./new-project --non-interactive
 ```
 
 The configuration contract is defined by `placeholders.json`. Required values

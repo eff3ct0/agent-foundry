@@ -93,7 +93,7 @@ jobs:
       - name: Read back npm metadata, tarball, and payload identity
         working-directory: release-source
         env:
-          PACKAGE_SPEC: factory-template-creator@${{ steps.release.outputs.version }}
+          PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
