@@ -68,7 +68,7 @@ jobs:
           DECISIONS_FILE: ${{ inputs.decisions_file || github.event.inputs.decisions_file }}
         run: |
           mkdir -p evidence
-          python3 harness/scripts/real-agent-e2e.py run \
+          node harness/scripts/real-agent-e2e.mjs run \
             --repository "$REPOSITORY" \
             --workspace "$GITHUB_WORKSPACE/journey" \
             --expected-sha "$EXPECTED_SHA" \

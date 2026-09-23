@@ -5,7 +5,7 @@
     {
       "id": "codex-cli",
       "label": "OpenAI Codex CLI",
-      "adapter": "scripts/real-agent-journey-agent.py",
+      "adapter": "scripts/real-agent-journey-agent.mjs",
       "package": "@openai/codex",
       "version": "0.148.0",
       "required_credentials": [
@@ -18,7 +18,7 @@
     {
       "id": "codex-cli-disabled",
       "label": "OpenAI Codex CLI (disabled)",
-      "adapter": "scripts/real-agent-journey-agent.py",
+      "adapter": "scripts/real-agent-journey-agent.mjs",
       "package": "@openai/codex",
       "version": "0.148.0",
       "required_credentials": [

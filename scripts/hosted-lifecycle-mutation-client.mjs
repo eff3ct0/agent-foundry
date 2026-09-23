@@ -104,6 +104,17 @@ export const createHostedLifecycleMutationClient = ({ transport, token }) => {
         expectedPayload: true,
       });
     },
+    async createEmptyRepository({ owner, name }) {
+      owner = valid(owner, OWNER, "invalid_owner", "repository owner is invalid");
+      name = valid(name, NAME, "invalid_name", "repository name is invalid");
+      return mutate({
+        method: "POST",
+        endpoint: `/orgs/${owner}/repos`,
+        payload: { name, private: true, auto_init: false, has_issues: true, has_projects: false, has_wiki: false },
+        expectedStatus: 201,
+        expectedPayload: true,
+      });
+    },
     async deleteRepository({ owner, name }) {
       owner = valid(owner, OWNER, "invalid_owner", "repository owner is invalid");
       name = valid(name, NAME, "invalid_name", "repository name is invalid");

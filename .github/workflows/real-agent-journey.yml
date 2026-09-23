@@ -13,6 +13,10 @@ on:
         type: choice
         options:
           - codex-cli
+      package_version:
+        description: Exact published factory-template-creator version to execute
+        required: true
+        type: string
 
 permissions: {}
 
@@ -25,6 +29,8 @@ env:
   JOURNEY_TEMPLATE: eff3ct0/factory-template
   JOURNEY_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
   JOURNEY_RUNTIME: ${{ inputs.runtime || 'codex-cli' }}
+  JOURNEY_PACKAGE_NAME: factory-template-creator
+  JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || vars.REAL_AGENT_PACKAGE_VERSION || '' }}
   JOURNEY_CONTRACT_VERSION: real-agent-journey/v1
   JOURNEY_REPOSITORY: ${{ vars.BOOTSTRAP_E2E_OWNER && format('{0}/real-agent-journey-{1}', vars.BOOTSTRAP_E2E_OWNER, github.run_id) || '' }}
 
@@ -38,6 +44,7 @@ jobs:
       repository: ${{ steps.plan.outputs.repository }}
       source_sha: ${{ steps.source.outputs.sha }}
       source_tag: ${{ steps.source.outputs.tag }}
+      package_version: ${{ steps.source.outputs.package_version }}
     steps:
       - name: Check out trusted journey contract
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -46,12 +53,11 @@ jobs:
           persist-credentials: false
       - name: Validate parent contract
         run: |
-          python3 scripts/real-agent-journey.py --self-check
-          python3 scripts/test-real-agent-journey.py
-          python3 scripts/real-agent-journey-provision.py --self-check
-          python3 scripts/real-agent-journey-agent.py --self-check
-          python3 scripts/real-agent-journey-assert.py --self-check
-          python3 scripts/real-agent-journey-cleanup.py --self-check
+          node scripts/real-agent-journey.mjs --self-check
+          node scripts/real-agent-journey-provision.mjs --self-check
+          node scripts/real-agent-journey-agent.mjs --self-check
+          node scripts/real-agent-journey-assert.mjs --self-check
+          node scripts/real-agent-journey-cleanup.mjs --self-check
       - name: Resolve immutable source revision
         id: source
         env:
@@ -60,19 +66,23 @@ jobs:
           SOURCE_TAG: ${{ github.event.release.tag_name || '' }}
           SOURCE_SHA: ${{ github.sha }}
           EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
+          PACKAGE_VERSION: ${{ env.JOURNEY_PACKAGE_VERSION }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "$EVENT_NAME" = "release" ]; then
-            resolved="$(python3 scripts/bootstrap-e2e.py resolve-release --repository "$REPOSITORY" --tag "$SOURCE_TAG")"
+            resolved="$(node scripts/release-resolve.mjs --repository "$REPOSITORY" --tag "$SOURCE_TAG")"
             source_sha="${resolved#sha=}"
             source_tag="$SOURCE_TAG"
           else
             source_sha="$SOURCE_SHA"
             source_tag=""
           fi
-          python3 -c 'import re, sys; assert re.fullmatch(r"[0-9a-f]{40}", sys.argv[1]), "source SHA must be a full lowercase SHA"' "$source_sha"
-          printf 'sha=%s\ntag=%s\n' "$source_sha" "$source_tag" >> "$GITHUB_OUTPUT"
+          package_version="$PACKAGE_VERSION"
+          if [ -n "$source_tag" ]; then package_version="${source_tag#v}"; fi
+          node -e 'if (!/^[0-9a-f]{40}$/.test(process.argv[1])) throw new Error("source SHA must be a full lowercase SHA")' "$source_sha"
+          node -e 'if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(process.argv[1])) throw new Error("package version must be exact")' "$package_version"
+          printf 'sha=%s\ntag=%s\npackage_version=%s\n' "$source_sha" "$source_tag" "$package_version" >> "$GITHUB_OUTPUT"
       - name: Write run plan
         id: plan
         env:
@@ -82,12 +92,13 @@ jobs:
           RUNTIME: ${{ env.JOURNEY_RUNTIME }}
           SOURCE_SHA: ${{ steps.source.outputs.sha }}
           SOURCE_TAG: ${{ steps.source.outputs.tag }}
+          PACKAGE_VERSION: ${{ steps.source.outputs.package_version }}
         run: |
           test -n "$OWNER" || { printf 'BOOTSTRAP_E2E_OWNER is missing\n' >&2; exit 1; }
           mkdir -p journey
-          args=(plan --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" --runtime "$RUNTIME" --source-sha "$SOURCE_SHA" --output journey/contract.json)
+           args=(plan --run-id "$RUN_ID" --template "$TEMPLATE" --owner "$OWNER" --runtime "$RUNTIME" --source-sha "$SOURCE_SHA" --package-name factory-template-creator --package-version "$PACKAGE_VERSION" --output journey/contract.json)
           if [ -n "$SOURCE_TAG" ]; then args+=(--source-tag "$SOURCE_TAG"); fi
-          python3 scripts/real-agent-journey.py "${args[@]}"
+          node scripts/real-agent-journey.mjs "${args[@]}"
           printf 'repository=%s\n' "$JOURNEY_REPOSITORY" >> "$GITHUB_OUTPUT"
       - name: Upload run plan
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -125,7 +136,7 @@ jobs:
           JOURNEY_OUTPUT: stage/provision.json
         run: |
           mkdir -p stage
-          python3 scripts/real-agent-journey-provision.py \
+           node scripts/real-agent-journey-provision.mjs \
             --template "$JOURNEY_TEMPLATE" --owner "$JOURNEY_OWNER" \
             --run-id "$JOURNEY_RUN_ID" --expected-source-sha "${{ needs.prepare.outputs.source_sha }}" \
             --output "$JOURNEY_OUTPUT"
@@ -160,7 +171,7 @@ jobs:
       - name: Read generated default branch
         id: provision
         run: |
-          branch=$(python3 -c 'import json; print(json.load(open("stage-input/provision.json", encoding="utf-8"))["identifiers"]["default_branch"])')
+           branch=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("stage-input/provision.json", "utf8")).identifiers.default_branch)')
           case "$branch" in
             [A-Za-z0-9._/-]*) printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT" ;;
             *) printf 'generated default branch is invalid\n' >&2; exit 1 ;;
@@ -174,17 +185,41 @@ jobs:
           owner: ${{ env.JOURNEY_OWNER }}
           permission-contents: write
           permission-issues: write
-      - name: Check out generated repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          repository: ${{ needs.prepare.outputs.repository }}
-          token: ${{ steps.app-token.outputs.token }}
-          ref: ${{ steps.provision.outputs.branch }}
-          fetch-depth: 0
-          persist-credentials: false
-          path: generated
+      - name: Create initial branch and apply the exact published creator package
+        env:
+          JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_PACKAGE_SPEC: ${{ env.JOURNEY_PACKAGE_NAME }}@${{ needs.prepare.outputs.package_version }}
+          JOURNEY_REPOSITORY: ${{ needs.prepare.outputs.repository }}
+          JOURNEY_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+        run: |
+          mkdir generated
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+          import { deterministicConfiguration } from "./scripts/package-consumer-verify.mjs";
+          await writeFile("answers.json", `${JSON.stringify(deterministicConfiguration, null, 2)}\n`);
+          NODE
+          npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          const metadata = JSON.parse(await readFile("package-metadata.json", "utf8"));
+          const [name, version] = process.env.JOURNEY_PACKAGE_SPEC.split("@");
+          if (metadata.name !== name || metadata.version !== version) throw new Error("published package metadata does not match the exact journey package");
+          await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: process.env.JOURNEY_PACKAGE_SPEC }, null, 2)}\n`);
+          NODE
+          npx --yes --package "$JOURNEY_PACKAGE_SPEC" factory-template apply --target generated --config answers.json --non-interactive --yes
+          git -C generated init -b main
+          git -C generated config user.name "real-agent-journey"
+          git -C generated config user.email "real-agent-journey@users.noreply.github.com"
+          git -C generated add -A
+          git -C generated commit -m "chore: apply published factory template"
+          git -C generated remote add origin "https://github.com/$JOURNEY_REPOSITORY.git"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: bearer $JOURNEY_TOKEN"
+          git -C generated push origin HEAD:main
+          unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
       - name: Install selected runtime
-        run: python3 scripts/real-agent-journey.py install --runtime "$JOURNEY_RUNTIME"
+        run: node scripts/real-agent-journey.mjs install --runtime "$JOURNEY_RUNTIME"
       - name: Run cold-agent adapter
         env:
           JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -197,10 +232,12 @@ jobs:
             JOURNEY_RUN_ID="$JOURNEY_RUN_ID" JOURNEY_REPOSITORY="${{ needs.prepare.outputs.repository }}" \
             JOURNEY_RUNTIME="$JOURNEY_RUNTIME" JOURNEY_TOKEN="$JOURNEY_TOKEN" \
             OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" \
-            python3 scripts/real-agent-journey.py invoke-agent --runtime "$JOURNEY_RUNTIME" -- \
+             node scripts/real-agent-journey.mjs invoke-agent --runtime "$JOURNEY_RUNTIME" -- \
               --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
               --runtime "$JOURNEY_RUNTIME" --provision stage-input/provision.json \
-              --workspace generated --decisions scripts/real-agent-decisions.json --output "$JOURNEY_OUTPUT"
+               --workspace generated --decisions scripts/real-agent-decisions.json --output "$JOURNEY_OUTPUT" \
+               --source-identity generated/.journey-source.json --package-name "$JOURNEY_PACKAGE_NAME" \
+               --package-version "${{ needs.prepare.outputs.package_version }}"
       - name: Upload agent evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -231,12 +268,18 @@ jobs:
           name: real-agent-journey-${{ github.run_id }}-agent
           path: stage-input
           if-no-artifact-found: error
+      - name: Download provisioning evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: real-agent-journey-${{ github.run_id }}-provision
+          path: provision-input
+          if-no-artifact-found: error
       - name: Read implementation branch
         id: metadata
         env:
           AGENT_EVIDENCE: stage-input/agent.json
         run: |
-          branch=$(python3 -c 'import json, os; print(json.load(open(os.environ["AGENT_EVIDENCE"], encoding="utf-8"))["identifiers"]["branch"])')
+           branch=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.AGENT_EVIDENCE, "utf8")).identifiers.branch)')
           case "$branch" in
             feature/[0-9]*-[a-z0-9-]*) printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT" ;;
             *) printf 'agent branch is invalid\n' >&2; exit 1 ;;
@@ -264,12 +307,13 @@ jobs:
       - name: Run independent assertion adapter
         env:
           JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_READ_TOKEN: ${{ steps.app-token.outputs.token }}
           JOURNEY_OUTPUT: stage/assert.json
         run: |
           mkdir -p stage
-          python3 scripts/real-agent-journey-assert.py \
-            --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
-            --agent stage-input/agent.json --workspace generated \
+             node scripts/real-agent-journey-assert.mjs \
+             --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
+             --agent stage-input/agent.json --provision provision-input/provision.json --workspace generated \
             --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --artifact-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --output "$JOURNEY_OUTPUT"
@@ -312,7 +356,7 @@ jobs:
           JOURNEY_OUTPUT: stage/cleanup.json
         run: |
           mkdir -p stage
-          python3 scripts/real-agent-journey-cleanup.py \
+           node scripts/real-agent-journey-cleanup.mjs \
             --template "$JOURNEY_TEMPLATE" --owner "$JOURNEY_OWNER" --run-id "$JOURNEY_RUN_ID" \
             --output "$JOURNEY_OUTPUT"
       - name: Upload cleanup evidence
@@ -353,7 +397,7 @@ jobs:
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           mkdir -p evidence
-          python3 scripts/real-agent-journey.py collect \
+           node scripts/real-agent-journey.mjs collect \
             --run-id "$JOURNEY_RUN_ID" --repository "$JOURNEY_REPOSITORY" \
             --runtime "$JOURNEY_RUNTIME" \
             --stage-dir stage --workflow-url "$WORKFLOW_URL" --output evidence/journey.json
@@ -371,6 +415,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          python3 scripts/real-agent-journey.py report \
+           node scripts/real-agent-journey.mjs report \
             --input evidence/journey.json --repository "$JOURNEY_TEMPLATE" \
             --artifact-url "$WORKFLOW_URL"
