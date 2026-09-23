@@ -42,7 +42,7 @@ Make the exact-version Node package the primary creator path, prove its determin
 - [x] T3: Replace Template/API and maintained Python automation paths with verified Node paths. Route: delegated direct. Checks: source-mode bootstrap without Template API, workflow/governance checks, Python/tooling removal audit, generated Python recipe preservation.
 - [x] T4: Update user and maintainer documentation and rollback procedure. Route: delegated direct. Checks: active instruction audit for package-first onboarding, no obsolete Template creation command, recovery/doctor/release/contributor consistency.
 - [x] T5: Run the complete local verification matrix and repository Definition of Done. Route: delegated direct. Checks: `pnpm typecheck`, `pnpm test`, package/payload/determinism/workflow checks, `noop`, source bootstrap, cleanup, digest evidence, and exact blocked external steps.
-- [ ] T6: Commit each coherent work unit with a Conventional Commit referencing `#112`. Route: inline commit state checks. Checks: `git diff --check`, clean commit boundaries, no `Co-Authored-By`, and exact evidence recorded here.
+- [x] T6: Commit each coherent work unit with a Conventional Commit referencing `#112`. Route: inline commit state checks. Checks: `git diff --check`, clean commit boundaries, no `Co-Authored-By`, and exact evidence recorded here.
 
 ## Evidence log
 
@@ -58,6 +58,10 @@ Make the exact-version Node package the primary creator path, prove its determin
 - Local slice 2: `34973ee` — `feat(release): add immutable npm release evidence (#112)`. Adds pinned npm release workflow, deterministic local/registry identity tooling, and focused tests. `node --test test/npm-release.test.mjs` passed 2/2; no remote operation was invoked.
 - Local slice 3: `4f96211` — `feat(journey): migrate real-agent automation to Node (#112)`. Replaces hosted journey orchestration/adapters and adds bounded report validation and regression coverage. Latest full suite and static journey checks passed; no remote services were called.
 - Local slice 4: `1f8b8f5` — `feat(checks): add Node repository audit tools (#112)`. Adds Node checker entrypoints and migrates startup detection away from origin/template inference; `node start.mjs` and all repository checks passed.
+- Local slice 5: `0f67a2f` — `docs(creator): document package-first cutover (#112)`. Updates onboarding, creator, maintainer, recovery, hook, smoke, layout, and PR guidance for the exact-version package path. No remote delivery performed.
+- Local slice 6: `97f8c34` — `refactor(creator): retire maintained Python automation (#112)`. Removes maintained Python creator/check/release/workflow tools and aligns payload ownership/manifests with Node replacements. Post-cutover `pnpm typecheck`, `pnpm test` (173/173), and `node scripts/check-determinism.mjs` passed.
+- Final verification: `pnpm typecheck` passed; `pnpm test` passed 173/173; `node start.mjs` reported `SELF`; delivery-contract self-check, determinism/Python-removal audit, bootstrap workflow, real-agent workflow, and factory-layout checks passed; `pnpm test:package-consumer` passed 3/3; `git diff --check` passed.
+- Work-unit commits on `feat/issue-112-cutover`: `9a75ef4`, `34973ee`, `4f96211`, `1f8b8f5`, `0f67a2f`, `97f8c34`. All are local; no `Co-Authored-By` trailer, push, PR, or merge.
 
 ## Progress
 
@@ -72,4 +76,4 @@ package is actually published and read back.
 
 ## Next step
 
-Remaining local work: retire the Python tooling, update payload ownership and active docs/templates, create the resulting commit slices, then verify final commit boundaries and record identities. Slices 1–4 are `9a75ef4` (consumer verifier), `34973ee` (npm release evidence), `4f96211` (real-agent journey), and `1f8b8f5` (Node audit tools). The selected chain strategy is `stacked-to-main`; commits remain local and no PR will be opened. Separately authorized npm publication, registry-consumer verification, hosted real-agent execution, and Template-mode setting mutation remain explicit external blockers while authorization or credentials remain unavailable.
+Local implementation is complete and the six work-unit commits are recorded. The updated task tracker remains to be committed. The selected chain strategy is `stacked-to-main`; commits remain local and no PR will be opened. npm publication/registry readback (`npm view` previously returned 404; `npm whoami` returned `ENEEDAUTH`), exact published-package consumer execution, hosted real-agent execution, and final GitHub Template-mode readback/mutation remain blocked pending credentials and explicit authorization.
