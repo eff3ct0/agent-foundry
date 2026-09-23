@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,12 +15,14 @@ import {
 import { packedArtifactIdentity } from "../scripts/artifact-identity.mjs";
 import emitter from "../dist/typed-module-emitter.js";
 import policy from "../dist/module-policy.js";
+import sourcePolicy from "../dist/module-policy-source.js";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(await readFile(path.join(root, "dist/payload-manifest.json"), "utf8"));
 const { emitTypedModules } = emitter;
 const { checkModulePolicy } = policy;
+const { inventorySourceModules, checkSourceModulePolicy } = sourcePolicy;
 
 const walk = async (directory, relative = "") => {
   const result = [];
@@ -219,6 +221,87 @@ test("module policy accepts executable type-derived output but not nearby genera
     ]);
   } finally {
     await rm(parent, { recursive: true, force: true });
+  }
+});
+
+const sourceFixture = async () => {
+  const repository = await mkdtemp(path.join(os.tmpdir(), "module-source-inventory-"));
+  await execFileAsync("git", ["init", "-q"], { cwd: repository });
+  await mkdir(path.join(repository, "package"));
+  await mkdir(path.join(repository, "scripts", "nested"), { recursive: true });
+  await mkdir(path.join(repository, "hooks"));
+  const files = ["scripts/nested/rogue.js", "scripts/nested/start.mjs", "scripts/nested/typed.mts", "hooks/start.ts"];
+  for (const file of files) await writeFile(path.join(repository, file), "export {};\n");
+  await chmod(path.join(repository, "scripts/nested/start.mjs"), 0o755);
+  await writeFile(path.join(repository, "package/payload-files.json"), JSON.stringify({ paths: ["scripts/nested/start.mjs", "hooks/start.ts"] }));
+  await writeFile(path.join(repository, "package/payload-manifest.json"), JSON.stringify({ files: [
+    { path: "scripts/nested/start.mjs", mode: "100755" },
+    { path: "hooks/start.ts", mode: "100644" },
+  ] }));
+  await execFileAsync("git", ["add", "--", "."], { cwd: repository });
+  return repository;
+};
+
+test("source inventory uses Git index modes and exact payload identities with stable policy output", async () => {
+  const repository = await sourceFixture();
+  try {
+    const inventory = await inventorySourceModules(repository);
+    assert.deepEqual(inventory.tracked.map(({ path: file }) => file), [
+      "hooks/start.ts", "package/payload-files.json", "package/payload-manifest.json",
+      "scripts/nested/rogue.js", "scripts/nested/start.mjs", "scripts/nested/typed.mts",
+    ]);
+    assert.deepEqual(inventory.payload, [
+      { path: "hooks/start.ts", kind: "file", mode: "100644" },
+      { path: "scripts/nested/start.mjs", kind: "file", mode: "100755" },
+    ]);
+    await writeFile(path.join(repository, "scripts/nested/untracked.mjs"), "export {};\n");
+    assert.deepEqual(await checkSourceModulePolicy(repository), [
+      { scope: "payload", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
+      { scope: "tracked", path: "scripts/nested/rogue.js", reason: "untyped JavaScript module" },
+      { scope: "tracked", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
+    ]);
+  } finally {
+    await rm(repository, { recursive: true, force: true });
+  }
+});
+
+test("source inventory fails closed on symlinks, modes, and malformed payload declarations", async () => {
+  const repository = await sourceFixture();
+  try {
+    const manifestPath = path.join(repository, "package/payload-manifest.json");
+    const original = await readFile(manifestPath, "utf8");
+    const manifest = JSON.parse(original);
+    for (const files of [
+      [...manifest.files, manifest.files[0]],
+      [{ path: "../outside.mjs", mode: "100644" }],
+      [{ path: "scripts/nested/rogue.js", mode: "100755" }],
+      [manifest.files[0]],
+    ]) {
+      await writeFile(manifestPath, JSON.stringify({ files }));
+      await assert.rejects(inventorySourceModules(repository), /duplicate payload identity|invalid source inventory path|payload is not a matching tracked file|payload manifest and declaration differ/u);
+    }
+    await writeFile(manifestPath, original);
+    await chmod(path.join(repository, "scripts/nested/start.mjs"), 0o644);
+    await assert.rejects(inventorySourceModules(repository), /source inventory mode mismatch/u);
+    await chmod(path.join(repository, "scripts/nested/start.mjs"), 0o755);
+    await rm(path.join(repository, "scripts/nested/rogue.js"));
+    await symlink(path.join(repository, "hooks/start.ts"), path.join(repository, "scripts/nested/rogue.js"));
+    await assert.rejects(inventorySourceModules(repository), /source inventory symlink/u);
+    await rm(path.join(repository, "scripts/nested/rogue.js"));
+    await writeFile(path.join(repository, "scripts/nested/rogue.js"), "export {};\n");
+    await rm(path.join(repository, "scripts/nested"), { recursive: true });
+    await symlink(path.join(repository, "hooks"), path.join(repository, "scripts/nested"));
+    await assert.rejects(inventorySourceModules(repository), /source inventory symlink/u);
+    await rm(path.join(repository, "scripts/nested"));
+    await mkdir(path.join(repository, "scripts/nested"));
+    await writeFile(path.join(repository, "scripts/nested/start.mjs"), "export {};\n");
+    await chmod(path.join(repository, "scripts/nested/start.mjs"), 0o755);
+    await writeFile(path.join(repository, "scripts/nested/typed.mts"), "export {};\n");
+    await symlink(path.join(repository, "hooks/start.ts"), path.join(repository, "scripts/nested/rogue.js"));
+    await execFileAsync("git", ["add", "--", "scripts/nested/rogue.js"], { cwd: repository });
+    await assert.rejects(inventorySourceModules(repository), /invalid source inventory mode/u);
+  } finally {
+    await rm(repository, { recursive: true, force: true });
   }
 });
 
