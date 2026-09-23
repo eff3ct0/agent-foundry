@@ -89,7 +89,20 @@ export const PUBLISH_CLAIM_ASSET = "npm-publish-attempt";
 const CLAIM_MAX_BYTES = 1024;
 const CLAIM_LIST_MAX_BYTES = 64 * 1024;
 const CLAIM_TIMEOUT_MS = 5000;
+// GitHub documents this domain for release-asset downloads; other origins must fail closed.
+// https://docs.github.com/en/actions/reference/runners/self-hosted-runners#accessible-domains-by-function
+const CLAIM_DOWNLOAD_ORIGIN = "https://release-assets.githubusercontent.com";
 const blocked = (code) => ({ status: "blocked", code });
+
+const claimDownloadUrl = (location) => {
+  if (typeof location !== "string" || !location.startsWith(`${CLAIM_DOWNLOAD_ORIGIN}/`)) return "";
+  try {
+    const url = new URL(location);
+    return url.origin === CLAIM_DOWNLOAD_ORIGIN && !url.username && !url.password && !url.hash ? url.href : "";
+  } catch {
+    return "";
+  }
+};
 
 const claimBytes = async (response, limit) => {
   if (!object(response) || !Number.isInteger(response.status)) throw new Error("invalid response");
@@ -119,7 +132,7 @@ const uploadedAsset = (asset, name, size) => object(asset) && Number.isSafeInteg
 
 // Only call for a verified NEW release ID, under per-tag serialization. No previous claim grants a publish.
 // The caller supplies an authenticated transport; this module never reads credentials or retries writes.
-export const claimPublishAttempt = async ({ transport, repository, releaseId, tag, sourceSha, packageName, version, runId, timeoutMs = CLAIM_TIMEOUT_MS }) => {
+export const claimPublishAttempt = async ({ transport, downloadTransport, repository, releaseId, tag, sourceSha, packageName, version, runId, timeoutMs = CLAIM_TIMEOUT_MS }) => {
   if (typeof transport !== "function") throw new ReleaseReadbackError("invalid_client", "claim transport is required");
   repository = repositoryName(repository);
   tag = validateTag(tag);
@@ -134,9 +147,9 @@ export const claimPublishAttempt = async ({ transport, repository, releaseId, ta
 
   const base = `/repos/${repository}/releases/${releaseId}`;
   const controller = new AbortController();
-  const request = async (method, url, options = {}) => {
+  const request = async (method, url, options = {}, send = transport) => {
     if (controller.signal.aborted) throw new Error("claim deadline");
-    const response = await transport({ method, url, signal: controller.signal, ...options });
+    const response = await send({ method, url, signal: controller.signal, ...options });
     if (controller.signal.aborted || !object(response) || !Number.isInteger(response.status)) throw new Error("invalid response");
     return response;
   };
@@ -161,9 +174,14 @@ export const claimPublishAttempt = async ({ transport, repository, releaseId, ta
       if (matches.length !== 1 || !uploadedAsset(matches[0], PUBLISH_CLAIM_ASSET, body.length)
         || matches[0].id !== asset.id) return blocked("claim_unverified");
 
-      const downloaded = await request("GET", `https://api.github.com/repos/${repository}/releases/assets/${asset.id}`, {
+      let downloaded = await request("GET", `https://api.github.com/repos/${repository}/releases/assets/${asset.id}`, {
         headers: { Accept: "application/octet-stream" }, redirect: "manual",
       });
+      if (downloaded.status === 302) {
+        const url = claimDownloadUrl(downloaded.headers?.get?.("location"));
+        if (!url || typeof downloadTransport !== "function" || downloadTransport === transport) return blocked("claim_unverified");
+        downloaded = await request("GET", url, { redirect: "manual", credentials: "omit" }, downloadTransport);
+      }
       if (downloaded.status !== 200 || !(await claimBytes(downloaded, CLAIM_MAX_BYTES)).equals(body)) return blocked("claim_unverified");
       if (controller.signal.aborted) return blocked("claim_unknown");
       return { status: "claimed", releaseId, assetId: asset.id };
