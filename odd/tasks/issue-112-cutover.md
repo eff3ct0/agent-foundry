@@ -14,7 +14,7 @@
 - Base: `origin/main` at the current verified checkout revision
 - Route: delegated direct for multi-file implementation; one writer per work unit
 - Delivery strategy: `ask-on-risk`; initial chained PR strategy: `stacked-to-main`; the user later explicitly accepted `size:exception` for one PR to `main`.
-- Review-size forecast: 10,016 changed lines against `origin/main` (2,169 additions, 7,847 deletions). User explicitly accepted the `size:exception` label for a single PR.
+- Review-size forecast: 10,170 changed lines against `origin/main` (2,280 additions, 7,890 deletions). User explicitly accepted the `size:exception` label for a single PR.
 - Delivery: user authorized pushing this branch and opening one PR to `main`; merge, deploy, npm publication, and GitHub settings mutation are not included.
 
 ## Objective
@@ -60,9 +60,12 @@ Make the exact-version Node package the primary creator path, prove its determin
 - Local slice 4: `1f8b8f5` — `feat(checks): add Node repository audit tools (#112)`. Adds Node checker entrypoints and migrates startup detection away from origin/template inference; `node start.mjs` and all repository checks passed.
 - Local slice 5: `0f67a2f` — `docs(creator): document package-first cutover (#112)`. Updates onboarding, creator, maintainer, recovery, hook, smoke, layout, and PR guidance for the exact-version package path. No remote delivery performed.
 - Local slice 6: `97f8c34` — `refactor(creator): retire maintained Python automation (#112)`. Removes maintained Python creator/check/release/workflow tools and aligns payload ownership/manifests with Node replacements. Post-cutover `pnpm typecheck`, `pnpm test` (173/173), and `node scripts/check-determinism.mjs` passed.
+- Local slice 7: `2e0a827` — `feat(creator): rename package and CLI to Agent Foundry (#112)`. Changes the npm package to `@eff3ct/agent-foundry` and executable to `foundry`, updates consumer/release/hosted identity checks and package-facing docs, and regenerates the payload manifest.
+- Local task record: `6e46ebf` — creates `odd/tasks/agent-foundry-rebrand.md` as the separate five-task broad rebrand plan and records the new package identity/TDD choice.
 - Final verification: `pnpm typecheck` passed; `pnpm test` passed 173/173; `node start.mjs` reported `SELF`; delivery-contract self-check, determinism/Python-removal audit, bootstrap workflow, real-agent workflow, and factory-layout checks passed; `pnpm test:package-consumer` passed 3/3; `git diff --check` passed.
-- Work-unit commits on `feat/issue-112-cutover`: `9a75ef4`, `34973ee`, `4f96211`, `1f8b8f5`, `0f67a2f`, `97f8c34`. No `Co-Authored-By` trailer; branch pushed and PR opened; no merge or deployment.
-- Pull request: [#182](https://github.com/eff3ct0/factory-template/pull/182), base `main`, head `feat/issue-112-cutover`, labels `type:feature` and explicitly accepted `size:exception`. The PR is draft/not merge-ready until the external package and hosted verification gates pass.
+- Work-unit commits on `feat/issue-112-cutover`: `9a75ef4`, `34973ee`, `4f96211`, `1f8b8f5`, `0f67a2f`, `97f8c34`, `2e0a827`. Task-ledger commits are `46cd7c1`, `7477105`, `0ed5d46`, `adc47a9`, and `6e46ebf`. No `Co-Authored-By` trailer; branch pushed and PR opened; no merge or deployment.
+- Latest rename verification: `pnpm build`, `pnpm typecheck`, `pnpm test` (173/173), `pnpm test:package-consumer` (3/3), `pnpm test:workflow-contract` (17/17), bootstrap and real-agent workflow checks, determinism audit, `node start.mjs` (`SELF`), and `git diff --check` passed. Independent rename review found no inconsistencies; native risk assessment is `high` due to process-boundary signals.
+- Pull request: [#182](https://github.com/eff3ct0/factory-template/pull/182), base `main`, head `feat/issue-112-cutover`, title `feat(creator): rename package and CLI to Agent Foundry (#112)`, labels `type:feature` and explicitly accepted `size:exception`. PR is draft; current PR diff is 10,170 lines.
 
 ## Progress
 
@@ -89,4 +92,4 @@ package is actually published and read back.
 
 ## Next step
 
-Local package/bin implementation now includes seven work-unit commits plus task-ledger commits on `feat/issue-112-cutover`. Update draft PR [#182](https://github.com/eff3ct0/factory-template/pull/182) with the scoped package and `foundry` command, then keep it unmerged until npm publication/registry readback, exact published-package consumer execution, hosted real-agent execution, and final Template-mode readback/mutation gates pass. Template mode remains enabled. The broader repository wording/metadata rebrand is tracked separately in `odd/tasks/agent-foundry-rebrand.md`; the user will change the repository slug manually.
+Local package/bin implementation includes seven work-unit commits; the package rename is pushed and reflected in draft PR [#182](https://github.com/eff3ct0/factory-template/pull/182). Keep the PR unmerged until the granular token's write permission for `@eff3ct/agent-foundry` is confirmed, npm publication/registry readback and exact-version consumer tests pass, hosted real-agent execution completes, and final Template-mode readback/mutation gates pass. Template mode remains enabled. The broader repository wording/metadata rebrand is tracked separately in `odd/tasks/agent-foundry-rebrand.md`; the user will change the repository slug manually.

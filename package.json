@@ -1,7 +1,7 @@
 {
   "name": "@eff3ct/agent-foundry",
   "version": "0.1.0",
-  "description": "Immutable, versioned, transactional project creator for the factory template.",
+  "description": "Immutable, versioned, transactional project creator for Agent Foundry.",
   "type": "commonjs",
   "bin": {
     "foundry": "dist/index.js"
