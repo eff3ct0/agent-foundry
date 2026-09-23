@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8828,
-      "sha256": "4fffd06aeec0bdd4719d6e5a0f5d9b67e120c961edb17a86f08dfa5943569b39"
+      "size": 8899,
+      "sha256": "0a5fdad2d264a309943252c10ee336299ede69cce4b74b530206d59113e866c3"
     },
     {
       "path": "ci/_contract.md",
@@ -377,5 +377,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:d7691a03bb4142c331f82d13c0a80647ef0083cb4f852c0a05ef9a5ff45c5b20"
+  "payload_digest": "sha256:4dc9ec31c487a739b8f2a2ff1890b39d4f221512661c52a570f6b6ddd977afeb"
 }
