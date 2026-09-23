@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> **FIRST THING when opening this repo:** run `python3 start.py` and follow its output (it detects the mode
+> **FIRST THING when opening this repo:** run `node start.mjs` and follow its output (it detects the mode
 > - initialize vs. work - and prints the next step; it does not execute actions itself).
 
 This repository is governed by **[`AGENT.md`](AGENT.md)** - the canonical operating contract

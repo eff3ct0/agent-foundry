@@ -1,9 +1,9 @@
 # Factory layout contract
 
 This document defines the target layout of a **fresh initialized repository**.
-Issue #101 records the contract only; it does not move files or change startup,
-provider, or initializer behavior. The source template keeps its current paths
-until the relocation work in issue #102 implements this contract.
+The Node creator relocates retained factory support under `.factory/`; the source
+archetype keeps maintainer-only packaging and release tooling outside the
+generated payload.
 
 ## Canonical root allowlist
 
@@ -17,7 +17,6 @@ under `.factory/`.
 | `CLAUDE.md` | Root-required | `CLAUDE.md` is Claude Code's repository entrypoint and directs the agent to `AGENT.md` and the bindings. |
 | `README.md` | Root-required | GitHub and humans discover the repository overview at the root; it is also the stable project-facing documentation entrypoint. |
 | `start.mjs` | Root-required | `start.mjs` is the canonical Node startup router and resolves its repository root from the selected working directory. |
-| `start.py` | Root-required | `start.py` is the universal compatibility startup command and delegates to `start.mjs`. Keep `python3 start.py` available. |
 | `.gitignore` | Root-required | Git discovers ignore rules from the repository root before any project or factory path is interpreted. |
 | `.github/` | Root-required | GitHub discovers issue forms, pull-request metadata, and workflows only from `.github/` at the repository root. |
 | `.opencode/` | Root-required, optional | OpenCode discovers project plugins from `.opencode/plugins/`; the generated startup adapter remains there. |
@@ -44,18 +43,17 @@ The source-template inventory maps to the target as follows:
 | Generic `docs/*.md` | `.factory`-relocatable | `.factory/docs/` |
 | `hooks/` | `.factory`-relocatable | `.factory/hooks/` |
 | `docs/bindings.md`, `.github/workflows/ci.yml`, `.opencode/plugins/factory-start.ts` | Generated project output | Keep the root-discovered output paths shown above |
-| `AGENT.md`, `CLAUDE.md`, `README.md`, `start.mjs`, `start.py`, `.gitignore`, `.github/`, `.opencode/`, `.claude/`, `.pi/`, and toolchain manifests | Root-required or application-owned | Keep at the repository root |
+| `AGENT.md`, `CLAUDE.md`, `README.md`, `start.mjs`, `.gitignore`, `.github/`, `.opencode/`, `.claude/`, `.pi/`, and toolchain manifests | Root-required or application-owned | Keep at the repository root |
 | Application source, tests, assets, and product documentation | Application-owned | Keep under project-owned paths; never classify them as factory support |
-| `init.py`, `placeholders.json`, `archetype-ownership.json`, `MAINTAINERS.md`, `providers/`, `ci/`, and release-only tooling | Consumed/removed source-only content | Not present after initialization |
+| `archetype-ownership.json`, `MAINTAINERS.md`, `providers/`, `ci/`, and release-only tooling | Consumed/removed source-only content | Not present after generation |
 
-Source-only initializer inputs and maintainer tooling (`init.py`,
-`placeholders.json`, `archetype-ownership.json`, `MAINTAINERS.md`, `ci/`,
-`providers/`, and release-only tooling) are consumed or removed by initialization
-and are not part of the initialized layout.
+Source-only composition inputs and maintainer tooling (`archetype-ownership.json`,
+`MAINTAINERS.md`, `ci/`, `providers/`, and release-only tooling) are consumed or
+removed by generation and are not part of the generated layout.
 
 ## Existing initialized repositories
 
-This relocation applies while `init.py` composes a repository from the template.
+This relocation applies while the Node creator composes a repository from the package.
 Repositories initialized before this change are not rewritten automatically: their
 existing root support paths continue to work, and their root entrypoints and
 application-owned paths are not altered. There is intentionally no migration
@@ -83,14 +81,14 @@ inventory remains authoritative for initialization lifecycle classification.
 
 | Consumer | Current source path | Contract path | Required compatibility evidence |
 | --- | --- | --- | --- |
-| Manual startup | `start.mjs` and `start.py` | `start.mjs` and `start.py` | `node start.mjs` is canonical; `python3 start.py` remains the first-command compatibility fallback and produces the same mode output. |
+| Manual startup | `start.mjs` | `start.mjs` | `node start.mjs` is the canonical mode router and produces deterministic output. |
 | Claude startup adapter | `hooks/claude-code/session-start.sh` | `.factory/hooks/claude-code/session-start.sh` plus `.claude/` host configuration | The adapter resolves the repository root and executes `node start.mjs`; Claude's discovery path is not moved into `.factory/`. |
 | Pi startup adapter | `hooks/pi/factory-start.ts` | `.factory/hooks/pi/factory-start.ts` plus `.pi/extensions/` host copy | The extension executes Node with an argv array for `start.mjs` in the harness working directory. |
 | OpenCode startup adapter | `hooks/opencode/factory-start.ts` | `.factory/hooks/opencode/factory-start.ts` plus `.opencode/plugins/factory-start.ts` | The generated plugin remains in `.opencode/plugins/` and remains opt-in. |
 | GitHub workflows/forms | `.github/` | `.github/` | GitHub's root discovery is preserved; workflows and forms are never hidden under `.factory/`. |
 | Generated bindings | `docs/bindings.md` | `docs/bindings.md` | Existing links and generated-provider content remain valid; relocation must update links atomically if this path ever changes. |
 | Generic documentation | `docs/*.md` | `.factory/docs/*.md` | Every relative Markdown link is checked after rebasing; root-facing entrypoints link to the new location. |
-| Generic commands | `scripts/*.py` | `.factory/scripts/*.py` | Commands are documented with their explicit new path or retain a deliberate root wrapper. |
+| Generic commands | `scripts/*.mjs` | `.factory/scripts/*.mjs` | Commands are documented with their explicit new path or retain a deliberate root wrapper. |
 | Provider/CI inputs | `providers/`, `ci/` | Removed after initialization | They are composition inputs, not initialized-project support assets; provider and CI semantics do not change. |
 
 The structural regression check builds a fresh fixture from this contract,
@@ -101,11 +99,11 @@ offline and performs no GitHub or provider operation.
 Run it from the source template root with:
 
 ```sh
-python3 scripts/check-factory-layout.py
+node scripts/check-factory-layout.mjs
 ```
 
 After initialization, the retained checker is available at:
 
 ```sh
-python3 .factory/scripts/check-factory-layout.py
+node .factory/scripts/check-factory-layout.mjs
 ```

@@ -3,10 +3,11 @@
 How this template (`factory-template`) becomes an organization-level GitHub
 factory. v1 uses two native, complementary mechanisms.
 
-> **Naming (template != instance).** `factory-template` is the **template** (this
-> repo, marked as a *Template repository*). `<ORG>/factory` is the organization
-> factory **implementation**: it is created from the template, versioned with
-> tags (`v1`, `v2`, ...), and referenced by projects through
+> **Naming (source != instance).** `factory-template` is the **source archetype**
+> (this repo, retained as a *Template repository* for rollback). `<ORG>/factory`
+> is the organization factory **implementation**: create an empty repository,
+> apply `factory-template-creator@<EXACT_VERSION>`, version it with
+> tags (`v1`, `v2`, ...), and reference it by projects through
 > `FACTORY_SPEC = <ORG>/factory@vX`.
 
 ## 1. `org/.github` - native organization defaults
@@ -20,31 +21,33 @@ Only those concrete files are propagated. `AGENT.md` and `CLAUDE.md` are not;
 use the pin below for the organization factory spec.
 
 ## Bootstrap tool (idempotent)
-`factory_bootstrap.py` ensures that organization repositories `org/.github`
-and `org/<factory-repo>` exist:
+The Node creator and the GitHub CLI are the supported automation boundary for
+organization repositories. Use the creator for local, offline planning and
+apply/verify; use an explicitly approved `gh repo create` command for the
+organization repository mutation:
 
-- `python3 factory_bootstrap.py --org <ORG>` - interactive; asks before creating missing repositories.
-- `--yes` - non-interactive; creates without asking.
-- `--no-create` - report only; never creates.
-- `--plan --org <ORG>` - offline; prints targets and intent without calling `gh`.
-- `--factory-repo <name>` - factory repository name (default: `factory`).
-- `--visibility public|internal|private` - creation visibility (default: `private`).
+```sh
+factory-template plan --target ./factory --config answers.json --non-interactive
+factory-template apply --target ./factory --config answers.json --non-interactive --yes
+gh repo create <ORG>/.github --private
+```
 
 Note: `gh` must be authenticated; lookup errors other than confirmed not-found stop before any creation;
-the command is idempotent (existing repositories are no-ops). Repository creation is consented (via
-`--yes`/prompt) and is separate from `init.py`.
+the command is idempotent when rerun against an unchanged target. Repository
+creation is separately consented and is not performed by the offline creator.
 
-The tool requires authenticated `gh`, is idempotent (existing repositories are
-no-ops), never deletes, and requires consent for repository creation. It is
-separate from `init.py`. See [`determinism.md`](determinism.md) for the complete
+The GitHub operation requires authenticated `gh`, never deletes, and requires
+explicit consent. See [`determinism.md`](determinism.md) for the complete
 repeat-run, rollback, and approval-boundary matrix.
 
-## 2. Template + `FACTORY_SPEC` pin
-- The **template** is this repo (`<ORG>/factory-template`), marked as a *Template repository*.
-- The **instance** `<ORG>/factory` is created from the template and versioned with tags (`v1`, `v2`, ...); it is the organization's living baseline.
-- Each project uses *Use this template* and declares its governing baseline in [`AGENT.md`](../AGENT.md): `FACTORY_SPEC = <ORG>/factory@v1`.
+## 2. Package + `FACTORY_SPEC` pin
+- The **source archetype** is this repo (`<ORG>/factory-template`), marked as a *Template repository* only for rollback.
+- The **instance** `<ORG>/factory` is an empty repository initialized with `factory-template-creator@<EXACT_VERSION>` and versioned with tags (`v1`, `v2`, ...); it is the organization's living baseline.
+- Each project applies the exact creator package and declares its governing baseline in [`AGENT.md`](../AGENT.md): `FACTORY_SPEC = <ORG>/factory@v1`.
 - The repository follows its `FACTORY_SPEC`; local content **overrides** the baseline when it differs. To adopt a new spec version, repin `FACTORY_SPEC` and reconcile changes.
-- The deterministic `FACTORY_REQUIRED` manifest flag makes `init.py` fail closed when `FACTORY_SPEC` is empty. `factory_bootstrap.py`, not `init.py`, ensures that the org repository exists.
+- The deterministic `FACTORY_REQUIRED` configuration makes the creator fail
+  closed when `FACTORY_SPEC` is empty. The creator does not infer consent or
+  create organization repositories.
 
 ## Evolution (not included in v1)
 - Merged provider defaults (`factory.defaults.json` in `org/factory`, org -> repo inheritance).

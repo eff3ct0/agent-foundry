@@ -28,6 +28,6 @@ tests, review, or repository policy.
 ## Prohibitions
 
 **Prohibition:** CodeGraph is an optional implementation, not a dependency of
-the archetype or `init.py`. Do not treat the index as permission to modify code,
+the archetype or the Node creator. Do not treat the index as permission to modify code,
 bypass repository rules, or replace verification with a graph query. Do not
 expose secrets from indexed data.

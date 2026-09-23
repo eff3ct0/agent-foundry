@@ -1,8 +1,8 @@
 # Abstract contract: CI recipe
 
 This file defines the required shape of a CI instance. It is not a recipe or a
-selectable job: `init.py` selects only keys from `ci/recipes.json`, so this file
-is never composed into a workflow.
+selectable job: the Node creator selects only keys from `ci/recipes.json`, so
+this file is never composed into a workflow.
 
 Every recipe in `ci/recipes.json` must produce a self-contained YAML job and be
 marked as an instance of this contract.

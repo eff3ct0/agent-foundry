@@ -6,7 +6,7 @@ containing `<PLACEHOLDER>` values).
 
 Release E2E and OpenAI triage automation described below is self-governance for
 this repository only. The authoritative ownership contract is
-[`archetype-ownership.json`](archetype-ownership.json); `init.py` consumes it
+[`archetype-ownership.json`](archetype-ownership.json); the exact-version creator consumes it
 during initialization and removes only entries marked `removed`. Generic
 workflows and generated project files remain.
 
@@ -14,11 +14,11 @@ workflows and generated project files remain.
 
 | Category | Lifecycle | Examples and rule |
 | --- | --- | --- |
-| Archetype governance | Removed after initialization | `init.py`, `factory_bootstrap.py`, `scripts/check-determinism.py`, this file, and source change records exist only to operate the archetype. |
+| Archetype governance | Removed after initialization | This file, source change records, and source-only verification assets exist only to operate the archetype. |
 | Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/factory-template`. |
 | Initializer inputs | Removed after initialization | `placeholders.json` is consumed before cleanup; it must not be deleted before replacement, validation, or composition. |
 | Provider and CI recipes | Removed after initialization | `providers/` and `ci/` are composition inputs. They stay available until bindings and CI are generated, then are removed as a unit. |
-| Inherited generic assets | Retained | `start.py`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic checkers that do not require source-only files belong to every initialized project. |
+| Inherited generic assets | Retained | `start.mjs`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic Node checkers belong to every initialized project. |
 | Generated outputs | Retained | `docs/bindings.md` and `.github/workflows/ci.yml` are project outputs and must never be added to cleanup. |
 
 ### Rules for adding files
@@ -30,9 +30,9 @@ workflows and generated project files remain.
 5. Do not add release E2E or OpenAI triage instructions to downstream-facing docs. Keep those procedures here, where initialization removes them.
 
 ## Hard rule
-Do NOT run `init.py` on this repo: it would consume itself, fill its
-placeholders, and remove its scaffolding. `init.py`, `placeholders.json`,
-`providers/`, `ci/`, `factory_bootstrap.py`, and the templates are the PRODUCT,
+Do NOT apply the creator package to this repo: it would consume itself, fill its
+placeholders, and remove its scaffolding. `placeholders.json`, `providers/`,
+`ci/`, and the templates are the PRODUCT,
 not this repo's configuration.
 
 ## Bindings for this repo
@@ -41,6 +41,21 @@ not this repo's configuration.
 - **Loop contract:** `templates/agent-runbook.md`. **DoD:** `templates/definition-of-done.md`.
 
 ## Release bootstrap E2E configuration
+
+The immutable npm release contract is `.github/workflows/npm-release.yml`. It
+has only the published-release and explicit tag-dispatch paths. The workflow
+resolves the tag to one full commit SHA, requires `v<package-version>`, builds
+and packs that checkout with Node 20.19.0/Corepack pnpm 12.4.2, and publishes
+the one tarball once with npm provenance. `NPM_TOKEN` is required at the
+publish boundary. The immediate npm metadata, tarball, payload, release-tag,
+and source-SHA readback is authoritative; any mismatch fails closed. The
+workflow never changes GitHub repository settings or Template mode.
+
+Before a maintainer authorizes a release, retain the workflow evidence artifact
+with the release tag, source SHA, package/version, payload digest, tarball
+digest, and rollback decision. npm versions are immutable: a bad release is
+rolled forward with a new version, while Template mode remains the separate
+rollback safety valve until the published-consumer checks pass.
 
 The safest trigger for release validation is `release.published`; it verifies
 the artifact after GitHub has published it. The workflow also exposes a manual
@@ -120,8 +135,10 @@ redacted evidence, does not receive a lifecycle or OpenAI credential, and uses
 the bounded canonical-issue reporter.
 
 The real-agent user journey is defined in [`docs/real-agent-journey.md`](docs/real-agent-journey.md) and
-`.github/workflows/real-agent-journey.yml`. It is initially manual/nightly, not release-triggered. The parent
-workflow owns stage ordering, run identity, credential separation, fail-closed aggregation, and bounded evidence.
+`.github/workflows/real-agent-journey.yml`. It is initially manual/nightly and
+uses the exact published creator package. The parent workflow owns stage
+ordering, run identity, credential separation, fail-closed aggregation, and
+bounded evidence.
 The canonical runtime catalog is `scripts/real-agent-runtime-catalog.json`.
 Its supported `codex-cli` entry selects the pinned `@openai/codex@0.148.0`
 runtime without selecting a secret. Operators choose it from the parent
@@ -143,7 +160,7 @@ The selected runtime is Codex CLI `@openai/codex@0.148.0`, invoked with
 `codex exec --json --ephemeral --ignore-user-config --sandbox workspace-write
 --ask-for-approval never`. Each run gets a new `CODEX_HOME`; discovery is a
 read-only cold turn and execution is a second cold turn. The agent must run
-`python3 start.py` first and read `AGENT.md`, `CLAUDE.md`, and
+`node start.mjs` first and read `AGENT.md`, `CLAUDE.md`, and
 `docs/agent-init.md`. The scripted fixture supplies every required configuration
 decision explicitly, then permits exactly one feature issue, feature branch,
 implementation, commit, and test flow.
@@ -186,7 +203,7 @@ The canonical label catalog is [`.github/labels.json`](.github/labels.json); run
 
 ## Improvement cycle (one task per session)
 1. Take an actionable issue (prioritize `dx-feedback` when it blocks use). Announce `Working #<n>`.
-2. In Progress -> minimal change -> **verify**: `python3 init.py --self-check`, `python3 init.py --check`, a happy-path dry-run, the ownership-boundary check, and a coherence audit when structure changes.
+2. In Progress -> minimal change -> **verify**: the exact-version package plan/apply/verify/doctor flow, a happy-path dry-run, the ownership-boundary check, and a coherence audit when structure changes.
 3. Meet the DoD -> close the issue with evidence (commit/PR).
 4. When a coherent batch lands -> create and push a new tag (`v1.x` / `v2`).
 

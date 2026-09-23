@@ -4,11 +4,11 @@ The **primary** document for agents and humans working in `<PROJECT_NAME>`. This
 `<PLACEHOLDER>` values are filled during project initialization (see [`docs/bootstrap.md`](docs/bootstrap.md)).
 It is not tied to any language or stack.
 
-> **FIRST THING when opening this repo:** run `python3 start.py` and follow its output. It detects the mode
+> **FIRST THING when opening this repo:** run `node start.mjs` and follow its output. It detects the mode
 > (initialize vs. work) and prints the next step; it does not execute actions itself.
 >
 > If the harness supports session hooks, [`hooks/README.md`](hooks/README.md) documents an optional
-> integration that delegates to `start.mjs`; `python3 start.py` remains the universal compatibility fallback.
+> integration that delegates to `start.mjs`; the exact-version creator package is the primary project path.
 
 > Placeholder convention: `<UPPER_SNAKE>` = value to fill; `<!-- guide: ... -->` = instruction for the
 > person filling it; a section marked `OPTIONAL` is removed when it does not apply.
