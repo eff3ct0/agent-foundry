@@ -1,6 +1,6 @@
 # MAINTAINERS - archetype self-governance
 
-This repo (`eff3ct0/factory-template`) follows its OWN doctrine (dogfooding).
+This repo (`eff3ct0/agent-foundry`) follows its OWN doctrine (dogfooding).
 This layer is concrete and SEPARATE from the **product** (the template content
 containing `<PLACEHOLDER>` values).
 
@@ -15,7 +15,7 @@ workflows and generated project files remain.
 | Category | Lifecycle | Examples and rule |
 | --- | --- | --- |
 | Archetype governance | Removed after initialization | This file, source change records, and source-only verification assets exist only to operate the archetype. |
-| Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/factory-template`. |
+| Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/agent-foundry`. |
 | Initializer inputs | Removed after initialization | `placeholders.json` is consumed before cleanup; it must not be deleted before replacement, validation, or composition. |
 | Provider and CI recipes | Removed after initialization | `providers/` and `ci/` are composition inputs. They stay available until bindings and CI are generated, then are removed as a unit. |
 | Inherited generic assets | Retained | `start.mjs`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic Node checkers belong to every initialized project. |
@@ -36,7 +36,7 @@ placeholders, and remove its scaffolding. `placeholders.json`, `providers/`,
 not this repo's configuration.
 
 ## Bindings for this repo
-- **Tasks:** GitHub Issues + GitHub Projects (v2) for `eff3ct0/factory-template`.
+- **Tasks:** GitHub Issues + GitHub Projects (v2) for `eff3ct0/agent-foundry`.
 - **Secrets:** none (public template; no real secrets).
 - **Loop contract:** `templates/agent-runbook.md`. **DoD:** `templates/definition-of-done.md`.
 

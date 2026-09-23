@@ -234,6 +234,13 @@ test("real-agent journey rejects weak pins, missing adapters, and crossed stages
   });
 });
 
+test("real-agent journey rejects the retired source repository before hosted execution", async () => {
+  await fixture(async (directory) => {
+    await replace(directory, "journey", "JOURNEY_TEMPLATE: eff3ct0/agent-foundry", "JOURNEY_TEMPLATE: eff3ct0/factory-template");
+    await reject(directory, "real-agent journey source repository must be eff3ct0/agent-foundry");
+  });
+});
+
 test("real-agent journey rejects missing contract markers and source resolution", async () => {
   await fixture(async (directory) => {
     await replace(directory, "journey", "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "JOURNEY_CONTRACT_VERSION: unknown");

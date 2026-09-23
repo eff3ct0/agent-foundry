@@ -99,6 +99,7 @@ const checkTemplateBootstrap = (text) => {
 const checkJourney = (text, projectRoot) => {
   const uses = actionReferences(text);
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("real-agent journey action is not pinned to a full commit SHA");
+  if (!/^  JOURNEY_TEMPLATE: eff3ct0\/agent-foundry$/mu.test(text)) fail("real-agent journey source repository must be eff3ct0/agent-foundry");
   for (const [action, sha] of Object.entries(pinnedActions)) if (!uses.includes(`${action}@${sha}`)) fail(`real-agent journey is missing required action pin: ${action}`);
   requireText(text, [
      "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.mjs collect", "retention-days: 7",
