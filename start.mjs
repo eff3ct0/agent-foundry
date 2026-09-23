@@ -3,14 +3,13 @@ import { access, lstat, readFile, mkdtemp, mkdir, rm, writeFile } from "node:fs/
 import { constants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export const STARTUP_SCHEMA_VERSION = 1;
 export const SELF = "SELF";
 export const SETUP = "SETUP";
 export const WORK = "WORK";
-export const TEMPLATE_SLUG = "factory-template";
+export const SOURCE_MARKER = "MAINTAINERS.md";
 
 const MAX_DIAGNOSTICS = 8;
 const MAX_DIAGNOSTIC_CHARS = 512;
@@ -24,7 +23,7 @@ const REQUIRED_WORK_FILES = [
 const messages = {
   [SELF]: [
     "SELF mode - archetype development (this repo IS the template).",
-    "  - DO NOT run init.py on this repo: it would consume itself.",
+    "  - DO NOT apply the creator package to this repo: it is the source archetype.",
     "  - Follow MAINTAINERS.md + templates/agent-runbook.md.",
     "  - Next: choose the next actionable issue from the backlog",
     "    (gh issue list -R eff3ct0/factory-template --label type:product / Project #1)",
@@ -33,8 +32,8 @@ const messages = {
   [SETUP]: [
     "SETUP mode - uninitialized instance (placeholders.json exists).",
     "  - Follow docs/agent-init.md; detect the stack.",
-    "  - Run init.py with --no-clean (to verify with --check).",
-    "  - Present and explicitly confirm all configuration proposals before composing bindings + CI.",
+    "  - Use the exact-version creator package documented in docs/creator.md.",
+    "  - Review the plan, then apply and verify with the package CLI.",
     "  - No outward action without explicit approval.",
   ].join("\n"),
   [WORK]: [
@@ -65,24 +64,9 @@ const readJson = async (file, label) => {
   }
 };
 
-export const originUrl = (root) => {
-  const result = spawnSync("git", ["-C", root, "remote", "get-url", "origin"], {
-    cwd: root,
-    encoding: "utf8",
-    shell: false,
-    timeout: 5000,
-    maxBuffer: 4096,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-  });
-  if (result.error || result.status !== 0) return undefined;
-  return bounded(result.stdout.trim(), 4096) || undefined;
-};
-
-export const isTemplate = async (root, origin = originUrl(root)) => {
-  if (await exists(path.join(root, "MAINTAINERS.md"))) return true;
-  if (!origin) return false;
-  const base = origin.replace(/\/+$/u, "").split(/[/:]/u).at(-1)?.replace(/\.git$/u, "");
-  return base === TEMPLATE_SLUG;
+export const isTemplate = async (root) => {
+  const marker = await lstat(path.join(root, SOURCE_MARKER)).catch(() => undefined);
+  return marker?.isFile() === true;
 };
 
 const layoutPath = async (root, relative) => {
@@ -133,11 +117,11 @@ const workFiles = async (root) => {
   return paths;
 };
 
-export const detectMode = async (root, origin) => {
+export const detectMode = async (root) => {
   const resolved = path.resolve(root);
   const entry = await lstat(resolved).catch(() => undefined);
   if (!entry?.isDirectory()) return { mode: "ERROR", status: "error", diagnostics: [diagnostic("workspace_invalid", "startup root must be a directory")] };
-  if (await isTemplate(resolved, origin)) return { mode: SELF, status: "ready", diagnostics: [] };
+  if (await isTemplate(resolved)) return { mode: SELF, status: "ready", diagnostics: [] };
 
   const placeholders = await exists(path.join(resolved, "placeholders.json"));
   if (placeholders) {
@@ -186,10 +170,10 @@ const selfCheck = async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "factory-startup-"));
   try {
     await writeFile(path.join(directory, "MAINTAINERS.md"), "maintainer\n");
-    assert((await detectMode(directory, undefined)).mode === SELF, "source fixture is not SELF");
+    assert((await detectMode(directory)).mode === SELF, "source fixture is not SELF");
     await rm(path.join(directory, "MAINTAINERS.md"));
     await writeFile(path.join(directory, "placeholders.json"), JSON.stringify({ placeholders: [] }));
-    assert((await detectMode(directory, "git@github.com:acme/service.git")).mode === SETUP, "setup fixture is not SETUP");
+    assert((await detectMode(directory)).mode === SETUP, "setup fixture is not SETUP");
     await rm(path.join(directory, "placeholders.json"));
     for (const relative of REQUIRED_WORK_FILES) {
       await mkdir(path.dirname(path.join(directory, relative)), { recursive: true });

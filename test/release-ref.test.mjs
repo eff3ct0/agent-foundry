@@ -22,14 +22,14 @@ test("release reference validation rejects unsafe Git refs", () => {
   }
 });
 
-test("Node command validates the Python consumer boundary", async () => {
+test("Node command validates the consumer boundary", async () => {
   const selfCheck = await execFileAsync(process.execPath, [script, "--self-check"]);
   assert.equal(selfCheck.stdout, "release reference validation self-check OK\n");
 
-  const consumer = await execFileAsync("python3", ["-c", "from scripts.release_ref import validate_tag; print(validate_tag('release+build/1'))"], { cwd: root });
+  const consumer = await execFileAsync(process.execPath, ["--input-type=module", "-e", "import { validateTag } from './scripts/release-ref.mjs'; console.log(validateTag('release+build/1'));"], { cwd: root });
   assert.equal(consumer.stdout, "release+build/1\n");
   await assert.rejects(
-    execFileAsync("python3", ["-c", "from scripts.release_ref import validate_tag; validate_tag('release..candidate')"], { cwd: root }),
+    execFileAsync(process.execPath, ["--input-type=module", "-e", "import { validateTag } from './scripts/release-ref.mjs'; validateTag('release..candidate');"], { cwd: root }),
     /tag must be a safe non-empty Git ref/,
   );
 });

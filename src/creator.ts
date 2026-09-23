@@ -535,7 +535,6 @@ const relocationDestination = (relativePath: string): string => {
   if (["checks", "hooks", "scripts", "templates"].some((directory) => relativePath === directory || relativePath.startsWith(`${directory}/`))) {
     return `.factory/${relativePath}`;
   }
-  if (relativePath === "test_init.py" || relativePath === "test_factory_bootstrap.py") return `.factory/scripts/${relativePath}`;
   if (relativePath === "docs" || relativePath.startsWith("docs/")) return `.factory/${relativePath}`;
   return relativePath;
 };

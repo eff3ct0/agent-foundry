@@ -42,7 +42,7 @@ test("startup routing recognizes source, setup, work, moved, incomplete, and mal
     const originSource = path.join(parent, "origin-source");
     await mkdir(originSource);
     await writeFile(path.join(originSource, "placeholders.json"), JSON.stringify({ placeholders: [] }));
-    assert.equal((await detectMode(originSource, "git@github.com:eff3ct0/factory-template.git")).mode, SELF);
+    assert.equal((await detectMode(originSource)).mode, SETUP);
 
     const setup = path.join(parent, "setup");
     await mkdir(setup);
@@ -117,7 +117,14 @@ test("maintained adapters invoke only the canonical Node router", async () => {
   assert.match(opencode, /run\(process\.execPath/);
 });
 
-test("the compatibility Python entrypoint delegates to Node", async () => {
-  const result = await execFileAsync("python3", [path.join(root, "start.py"), "--json"], { cwd: root });
-  assert.equal(JSON.parse(result.stdout).mode, SELF);
+test("source mode uses a local marker instead of GitHub repository identity", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "factory-startup-marker-"));
+  try {
+    await writeFile(path.join(parent, "placeholders.json"), JSON.stringify({ placeholders: [] }));
+    const result = await run(["--cwd", parent, "--json"]);
+    assert.equal(JSON.parse(result.stdout).mode, SETUP);
+    assert.match(JSON.parse(result.stdout).message, /exact-version creator package/);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });
