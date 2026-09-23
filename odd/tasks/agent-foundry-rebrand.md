@@ -2,10 +2,15 @@
 
 ## Status and next action
 
-- Phase: `EVIDENCE/DELIVERY` for local R2 child 2; #183 remains open with R3 and R5 outstanding. Parent-reported issue [#183](https://github.com/eff3ct0/agent-foundry/issues/183) readback on 2026-09-23 was `OPEN`, `status:approved`; this unit did not contact GitHub.
-- Isolated worktree: `/home/steam/git/agent-foundry-worktrees/issue-183`; branch `feat/issue-183-rebrand`; base commit `d6b0f68a961ab4a312f2a2dbbae332a408ff5a5d`; local R4 work-unit commit `d56c665c4add6a3fc967075e29d2b85bda8adb8d`. No PR or remote delivery.
+- Phase: `EVIDENCE/DELIVERY`; both R4 and R2 children are delivered for review, not merged. #183 remains open with R3 and R5 outstanding. Parent-reported issue [#183](https://github.com/eff3ct0/agent-foundry/issues/183) readback on 2026-09-23 was `OPEN`, `status:approved`.
+- Isolated R2 worktree: `/home/steam/git/agent-foundry-worktrees/issue-183-copy`; branch `docs/issue-183-rebrand-copy`; base `dafac99` (R4 parent tip). R4 work-unit commit `d56c665c4add6a3fc967075e29d2b85bda8adb8d`; R2 work-unit commit `7e76335826ae3d3a8971d52537bab1d4cd4aec39`.
 - Owner already renamed the repository to `eff3ct0/agent-foundry` and left Template mode enabled (`isTemplate: true`), per the parent's live readback. Package/CLI change #112 was merged through PR #182 at `d6b0f68`; older draft-PR and pending-publication notes below are historical, not current release evidence.
-- **Next action:** review the local R2 child-2 documentation unit against `dafac99`; complete R5 after the chain is integrated. Do not start a hosted #184 journey or change repository metadata under this unit. R3 stays blocked on owner-reviewed exact values.
+- **Next action:** the user reviews and integrates [R4 PR #190](https://github.com/eff3ct0/agent-foundry/pull/190) before [R2 PR #191](https://github.com/eff3ct0/agent-foundry/pull/191), then completes R5 verification and the active-reference audit. Do not merge on the user's behalf, start a hosted #184 journey, or change repository metadata under this unit. R3 stays `BLOCKED: exact owner-reviewed description/topics/homepage values`.
+
+### Delivery checkpoint (2026-09-23)
+
+- Feature-branch chain: the tracker `feat/issue-183-integrator` was pushed at `d6b0f68` but has no PR because it is empty relative to `main`. [R4 PR #190](https://github.com/eff3ct0/agent-foundry/pull/190) is `OPEN`, head `feat/issue-183-rebrand`, base `feat/issue-183-integrator`, with sole `type:bug` label. [R2 PR #191](https://github.com/eff3ct0/agent-foundry/pull/191) is `OPEN`, head `docs/issue-183-rebrand-copy`, base `feat/issue-183-rebrand`, with sole `type:docs` label. The parent readback reported governance `validate` SUCCESS for both; this is not a claim that rerun CI is currently green. PR #191's head, base, label, and open state were also read back for this checkpoint.
+- This is a passive documentation receipt only. No merge, issue mutation, repository metadata write, Template-mode change, release, npm publication, or hosted journey is authorized. The earlier local test results and rollback boundaries below remain the evidence for their respective work units, not new test runs for this receipt.
 
 ## Outcome, authority, and exclusions
 
@@ -53,7 +58,7 @@ Proposed GitHub metadata for **owner wording review only** (not applied or impli
 | Topics | `ai-agents`, `developer-tools`, `project-template`, `scaffolding`, `typescript` |
 | Homepage | `https://github.com/eff3ct0/agent-foundry` |
 
-Delivery strategy: the owner selected a **separate feature-branch chain** for #183, superseding the earlier `ask-on-risk` forecast. Tracker `feat/issue-183-integrator` remains at `main`; child 1 is `feat/issue-183-rebrand` (R4, parent tip `dafac99`); child 2 is `docs/issue-183-rebrand-copy` (R2, based on `dafac99`), in `/home/steam/git/agent-foundry-worktrees/issue-183-copy`. Child 2 targets child 1, not `main`. No PR was created here. Keep each child cohesive, testable, and independently reversible; do not shrink docs or tests for the ~400 authored-line advisory.
+Delivery strategy: the owner selected a **separate feature-branch chain** for #183, superseding the earlier `ask-on-risk` forecast. Tracker `feat/issue-183-integrator` remains at `main`; child 1 is `feat/issue-183-rebrand` (R4, parent tip `dafac99`); child 2 is `docs/issue-183-rebrand-copy` (R2, based on `dafac99`), in `/home/steam/git/agent-foundry-worktrees/issue-183-copy`. Child 2 targets child 1, not `main`; the PR delivery is recorded in the checkpoint above. Keep each child cohesive, testable, and independently reversible; do not shrink docs or tests for the ~400 authored-line advisory.
 
 ## R2 child-2 local evidence (2026-09-23)
 
