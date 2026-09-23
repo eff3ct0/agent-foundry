@@ -74,8 +74,11 @@ Implementation and verification evidence are recorded task by task below. A chec
 - The public npm lookup for `@eff3ct/agent-foundry` returned E404 before implementation. Do not repeat the external lookup as part of this local rename; publication and registry consumer execution remain separate gates.
 - TDD mode is explicitly off for this rename, per the user's answer in this session. No strict RED phase is required; `pnpm test` is the functional runner and functional verification remains required.
 - Keep `npm publish --access public`. This work does not change the repository slug/owner (`eff3ct0/factory-template`) or the persisted `.factory-template-creator` state namespace, and it does not perform the broader product wording rebrand.
-- Implementation and verification results for this addendum will be recorded below after local checks. The user authorized a work-unit commit, pushing this existing branch, and updating draft PR #182. Release publication, hosted workflow execution, merge, GitHub settings mutation, and secret access are not authorized.
+- The user authorized a work-unit commit, pushing this existing branch, and updating draft PR #182. Release publication, hosted workflow execution, merge, GitHub settings mutation, and secret access are not authorized.
 - Local verification passed: `pnpm build`; `pnpm typecheck`; `pnpm test` (173/173); `pnpm test:package-consumer` (3/3); `pnpm test:workflow-contract` (17/17); `node scripts/check-bootstrap-workflow.mjs` (all workflow static checks); `node scripts/check-real-agent-workflow.mjs`; `node scripts/check-determinism.mjs`; `node start.mjs` (`SELF`); and `git diff --check`.
+- Independent rename-safety review found no inconsistencies. Parent spot-check `pnpm test:package-consumer` passed 3/3. Native assessment classified the changes `high` due to shell-process boundaries; writer verification and independent review both completed. RDD remains off.
+- Local slice 7: `2e0a827` — `feat(creator): rename package and CLI to Agent Foundry (#112)`. Package is `@eff3ct/agent-foundry`; executable is `foundry`. No secret access, npm publish, or hosted workflow execution.
+- The existing Actions secret `NPM_TOKEN` was not read. Confirm that its granular write permission covers the final `@eff3ct` package before any future publish; no broad token scope is assumed.
 
 The new `scripts/package-consumer-verify.mjs` entrypoint requires an exact
 package name, exact semver version, source SHA, and output directory. It emits
@@ -86,4 +89,4 @@ package is actually published and read back.
 
 ## Next step
 
-Local implementation is complete. Six work-unit commits plus task-ledger commits are on `feat/issue-112-cutover`. Draft PR [#182](https://github.com/eff3ct0/factory-template/pull/182) targets `main` with the user-approved `size:exception`; it must remain unmerged until npm publication/registry readback, exact published-package consumer execution, hosted real-agent execution, and the final Template-mode readback/mutation gates pass. Template mode remains enabled.
+Local package/bin implementation now includes seven work-unit commits plus task-ledger commits on `feat/issue-112-cutover`. Update draft PR [#182](https://github.com/eff3ct0/factory-template/pull/182) with the scoped package and `foundry` command, then keep it unmerged until npm publication/registry readback, exact published-package consumer execution, hosted real-agent execution, and final Template-mode readback/mutation gates pass. Template mode remains enabled. The broader repository wording/metadata rebrand is tracked separately in `odd/tasks/agent-foundry-rebrand.md`; the user will change the repository slug manually.
