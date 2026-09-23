@@ -34,7 +34,7 @@ const certificate = (uri) => {
 
 const cert = certificate(identity);
 const otherCert = certificate(`${repo}/.github/workflows/other.yml@${ref}`);
-const fixture = () => {
+const fixture = (legacy = false) => {
   const statement = {
     _type: "https://in-toto.io/Statement/v1", predicateType: "https://slsa.dev/provenance/v1",
     subject: [{ name: "pkg:npm/%40eff3ct/agent-foundry@0.1.0", digest: { sha512: hash("sha512", tarball) } }],
@@ -49,7 +49,9 @@ const fixture = () => {
   };
   const bundle = { dsseEnvelope: { payloadType: "application/vnd.in-toto+json",
     payload: Buffer.from(JSON.stringify(statement)).toString("base64"), signatures: [{ sig: "offline-only" }] },
-  verificationMaterial: { x509CertificateChain: { certificates: [{ rawBytes: cert }] } } };
+  verificationMaterial: legacy
+    ? { x509CertificateChain: { certificates: [{ rawBytes: cert }] } }
+    : { certificate: { rawBytes: cert } } };
   return { audit: { invalid: [], missing: [], verified: [{ name: expected.packageName,
     version: expected.version, registry: expected.registry, location: expected.location,
     attestationBundles: [{ predicateType: statement.predicateType, bundle }] }] },
@@ -63,11 +65,15 @@ const mutateStatement = (input, change) => {
   envelope.payload = Buffer.from(JSON.stringify(statement)).toString("base64");
 };
 
-test("policy matches only explicitly scoped offline fixture; no signature verification", () => {
+test("policy matches v0.3 certificate in offline fixture; no signature verification", () => {
   const result = check(fixture());
   assert.equal(result.status, "policy_matched");
   assert.equal(result.source_commit, expected.commit);
   assert.equal(result.signer_identity, identity);
+});
+
+test("policy retains v0.2 singleton certificate chain in offline fixture", () => {
+  assert.equal(check(fixture(true)).status, "policy_matched");
 });
 
 test("rejects untrusted or ambiguous npm audit evidence", () => {
@@ -83,7 +89,14 @@ test("rejects untrusted or ambiguous npm audit evidence", () => {
     (v) => { v.audit.verified[0].location = "node_modules/other"; },
     (v) => { v.audit.verified[0].attestationBundles[0].predicateType = "other"; },
     (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial = {}; },
-    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.x509CertificateChain.certificates[0].rawBytes = otherCert; },
+    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.certificate.rawBytes = otherCert; },
+    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.certificate.rawBytes = ""; },
+    (v) => { delete v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.certificate.rawBytes; },
+    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.certificate.rawBytes = "not base64"; },
+    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.certificate = {}; },
+    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.x509CertificateChain = { certificates: [{ rawBytes: cert }] }; },
+    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.x509CertificateChain = null; },
+    (v) => { v.audit.verified[0].attestationBundles[0].bundle.verificationMaterial.publicKey = {}; },
     (v) => { v.expected.workflowIdentity = `${repo}/.github/workflows/other.yml@${ref}`; },
     (v) => { v.expected.sha256 = `sha256:${"b".repeat(64)}`; },
     (v) => { v.tarball = Buffer.from("different raw download"); },
@@ -104,5 +117,22 @@ test("rejects untrusted or ambiguous npm audit evidence", () => {
     const input = fixture();
     change(input);
     assert.throws(() => check(input), /npm provenance policy did not match/u, `case ${index}`);
+  }
+});
+
+test("rejects malformed or ambiguous legacy certificate chains", () => {
+  const cases = [
+    (m) => { m.x509CertificateChain.certificates = []; },
+    (m) => { m.x509CertificateChain.certificates.push({ rawBytes: cert }); },
+    (m) => { m.x509CertificateChain.certificates[0].rawBytes = otherCert; },
+    (m) => { m.x509CertificateChain.certificates[0].rawBytes = ""; },
+    (m) => { delete m.x509CertificateChain.certificates[0].rawBytes; },
+    (m) => { m.x509CertificateChain.certificates = "invalid"; },
+    (m) => { m.certificate = { rawBytes: cert }; },
+  ];
+  for (const [index, change] of cases.entries()) {
+    const input = fixture(true);
+    change(input.audit.verified[0].attestationBundles[0].bundle.verificationMaterial);
+    assert.throws(() => check(input), /npm provenance policy did not match/u, `legacy case ${index}`);
   }
 });

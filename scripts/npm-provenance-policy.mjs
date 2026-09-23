@@ -50,9 +50,21 @@ export const validateNpmProvenancePolicy = ({ audit, tarball, expected, npmVersi
   let certificate;
   try {
     statement = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(payload));
-    const certificates = attestation.bundle.verificationMaterial?.x509CertificateChain?.certificates;
-    if (!Array.isArray(certificates) || certificates.length !== 1) reject();
-    certificate = new X509Certificate(decode(certificates[0]?.rawBytes, 8 * 1024));
+    const material = attestation.bundle.verificationMaterial;
+    if (!object(material) || Object.hasOwn(material, "publicKey")) reject();
+    const hasCertificate = Object.hasOwn(material, "certificate");
+    const hasChain = Object.hasOwn(material, "x509CertificateChain");
+    if (hasCertificate === hasChain) reject();
+    let rawBytes;
+    if (hasCertificate) {
+      if (!object(material.certificate)) reject();
+      rawBytes = material.certificate.rawBytes;
+    } else {
+      const certificates = material.x509CertificateChain?.certificates;
+      if (!Array.isArray(certificates) || certificates.length !== 1) reject();
+      rawBytes = certificates[0]?.rawBytes;
+    }
+    certificate = new X509Certificate(decode(rawBytes, 8 * 1024));
   } catch { reject(); }
   const purl = `pkg:npm/%40eff3ct/agent-foundry@${expected.version}`;
   if (!object(statement) || statement._type !== "https://in-toto.io/Statement/v1"
