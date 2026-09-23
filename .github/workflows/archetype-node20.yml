@@ -20,8 +20,7 @@ jobs:
       - name: Activate pinned package toolchain
         run: |
           test "$(node --version)" = "v20.19.0"
-          corepack enable
-          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2
+          npm install --global pnpm@12.4.2
           test "$(pnpm --version)" = "12.4.2"
           pnpm install --frozen-lockfile
       - name: Verify typed emitter and package consumers
