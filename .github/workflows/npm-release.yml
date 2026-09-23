@@ -1,0 +1,117 @@
+name: Immutable npm release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Published release tag to publish and read back
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: npm-release-${{ github.repository }}-${{ github.event.release.tag_name || inputs.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out trusted release contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up pinned Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.19.0
+          registry-url: https://registry.npmjs.org
+      - name: Resolve immutable release identity
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
+          EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFile } from "node:fs/promises";
+          import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
+          import { resolvePublishedRelease } from "./scripts/release-readback.mjs";
+          import { validateReleaseIdentity } from "./scripts/npm-release.mjs";
+          const client = createHostedLifecycleReadClient({ token: process.env.GITHUB_TOKEN, transport: ({ url, headers, signal }) => fetch(url, { headers, signal }) });
+          const release = await resolvePublishedRelease({ client: { get: (endpoint) => client.get(endpoint) }, repository: process.env.REPOSITORY, tag: process.env.TAG_NAME, expectedSha: process.env.EXPECTED_SHA });
+          if (release.status !== "ok") throw new Error(`release identity could not be verified: ${release.code}`);
+          const version = process.env.TAG_NAME.replace(/^v/u, "");
+          validateReleaseIdentity(process.env.TAG_NAME, version, release.sha);
+          await appendFile(process.env.GITHUB_OUTPUT, `tag=${process.env.TAG_NAME}\nsha=${release.sha}\nversion=${version}\n`);
+          NODE
+      - name: Check out the exact source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: release-source
+      - name: Activate pinned pnpm
+        working-directory: release-source
+        run: |
+          corepack enable
+          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2
+          test "$(pnpm --version)" = "12.4.2"
+      - name: Build and pack the exact package once
+        working-directory: release-source
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          pnpm install --frozen-lockfile
+          pnpm build
+          mkdir -p package local-package identity registry-package
+          pnpm pack --ignore-scripts --pack-destination package
+          test "$(find package -maxdepth 1 -name '*.tgz' -type f | wc -l)" = "1"
+          TARBALL="$(find package -maxdepth 1 -name '*.tgz' -type f -print -quit)"
+          tar -xzf "$TARBALL" --strip-components=1 -C local-package
+          node scripts/npm-release.mjs --command verify-local --package-root local-package --tarball "$TARBALL" --tag "$RELEASE_TAG" --source-sha "$RELEASE_SHA" --output identity/local.json
+          printf 'tarball=%s\n' "$TARBALL" >> "$GITHUB_ENV"
+      - name: Publish the exact package with npm provenance
+        working-directory: release-source
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          npm publish "$TARBALL" --provenance --access public
+      - name: Read back npm metadata, tarball, and payload identity
+        working-directory: release-source
+        env:
+          PACKAGE_SPEC: factory-template-creator@${{ steps.release.outputs.version }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          test -n "$PACKAGE_SPEC"
+          npm view "$PACKAGE_SPEC" --json > identity/registry-metadata.json
+          npm pack "$PACKAGE_SPEC" --ignore-scripts --pack-destination registry-package
+          test "$(find registry-package -maxdepth 1 -name '*.tgz' -type f | wc -l)" = "1"
+          REGISTRY_TARBALL="$(find registry-package -maxdepth 1 -name '*.tgz' -type f -print -quit)"
+          mkdir -p registry-package/extracted
+          tar -xzf "$REGISTRY_TARBALL" --strip-components=1 -C registry-package/extracted
+          node scripts/npm-release.mjs --command verify-registry --package-root registry-package/extracted --tarball "$REGISTRY_TARBALL" --metadata identity/registry-metadata.json --identity identity/local.json --output identity/registry.json
+          grep -q '"tarball_digest"' identity/registry.json
+          grep -q '"payload"' identity/registry.json
+          grep -q '"source_sha"' identity/local.json
+      - name: Upload immutable release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: npm-release-${{ github.run_id }}
+          path: release-source/identity/*.json
+          if-no-files-found: error
+          retention-days: 7
