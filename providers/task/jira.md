@@ -4,13 +4,21 @@
 > **Capability:** `task`
 > **Provider:** `jira`
 
-**Binding:** Project tasks live EXCLUSIVELY in Jira (project/board
-`<TRACKER_KEY>`). The agent MUST create, update, and transition tasks there and
-MUST NOT use another tracker.
+**Binding:** `TASK_TRACKER` selects Jira; tasks live EXCLUSIVELY in Jira
+(`<TRACKER>` project/board `<TRACKER_KEY>`). Every durable harness task/TODO
+uses this binding, never an alternate tracker.
 
 **Agent interaction:** use the harness mechanism (MCP, CLI, or API). Semantic
 operations are creating an issue, commenting, transitioning status, and linking
 to epic `<EPIC_ID>`.
+Read the Jira issue's native state and latest handoff first on cold resume. For
+create, update, transition, comment, checkpoint, phase handoff, and completion,
+require Jira confirmation and fresh readback of the intended issue key, state,
+and comment/handoff before claiming success. Local files (including `odd/*.md`)
+and task UIs are optional derived projections, never required or fallback stores.
+If an operation is unsupported or fails, the issue identity is ambiguous, or
+readback is unavailable or mismatched, stop and record the exact Jira operation,
+issue key, and evidence needed to resume. Do not substitute GitHub Issues.
 
 **Mandatory template:** creating an issue MUST use the project/provider's
 corresponding issue template for its type (`task` or `bug`); blank or free-form
@@ -37,4 +45,4 @@ issue labels for this provider.
 **Prohibitions:**
 - Do not open tasks in GitHub Issues, Linear, or another system.
 - Do not mark *Done* with pending or failed verification.
-- Do not leave state only in Jira: if it is not there, it does not exist.
+- Do not leave state only in a local file, task UI, or session: Jira readback is authoritative.

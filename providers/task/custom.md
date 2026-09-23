@@ -4,6 +4,10 @@
 > **Capability:** `task`
 > **Provider:** `custom`
 
+**Binding:** `TASK_TRACKER` selects the custom provider at `<TRACKER>` /
+`<TRACKER_KEY>`. Every durable harness task/TODO uses only this configured
+provider. Do not treat an unspecified name or board as a GitHub binding.
+
 Define the bound provider's name, task location, state operations, and prohibitions here. The provider MUST
 retain the provider-neutral phase contract:
 
@@ -14,6 +18,9 @@ retain the provider-neutral phase contract:
 - Do not mark *Done* before the Definition of Done and required review gates pass.
 - Approval-gated work stops with `BLOCKED: requires approval`; do not assign human approval labels.
 
+Until `<TASK_TRACKER_CUSTOM_RULES>` is replaced with a supported native operation
+and readback path for this tracker, stop before claiming any durable task action.
+
 **Pull-request governance:** PRs use `Task: <TICKET_ID>` unless the bound
 custom provider documents another native syntax. Approval remains an explicit
 provider-side gate; GitHub issue labels are not required.
@@ -23,10 +30,20 @@ provider-side gate; GitHub issue labels are not required.
 **Binding:** Tasks live exclusively in the system declared by the project.
 
 **Agent interaction:** the harness provides MCP, CLI, or API; these rules must
-explain how to read, create, update, and comment on tasks.
+explain how to read, create, update, transition, and comment on tasks. Read the
+native task state and latest handoff first on cold resume. Require provider-native
+confirmation and fresh readback of the intended identity, state, and
+comment/handoff for create, update, status, comment, checkpoint, phase handoff,
+and completion. If the configured provider has no supported native comment or
+handoff and readback path, stop and name the missing operation, bound tracker
+and task identity, and evidence needed to resume. Never substitute GitHub.
 
 **Rules and lifecycle:** define the status cycle and how to reference tasks in
 commits/PRs and checkpoints.
+Local files (including `odd/*.md`) and task UIs are optional derived projections,
+never required or fallback stores. An unsupported or failed operation, ambiguous
+identity, or unavailable/mismatched readback blocks the transition; record the
+exact provider-native operation, task identity, and evidence needed to resume.
 
 **Protected `status:approved` gate:** the provider MUST keep this gate fail
 closed. A current direct human instruction must name the exact issue and the

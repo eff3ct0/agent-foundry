@@ -683,7 +683,14 @@ const composeBindings = (
   const secrets = config.values.SECRETS_PROVIDER || "none";
   const codeIntel = config.values.CODE_INTELLIGENCE || "none";
   if (!task) throw new CreatorError("configuration_invalid", "TASK_TRACKER is required for binding composition");
-  const parts = [renderMarkdown(bindingHeader, "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd()];
+  const parts = [renderMarkdown(bindingHeader, "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd(),
+    `## Bound task identity
+
+- Task provider (TASK_TRACKER): ${task}
+- Tracker (TRACKER): ${config.values.TRACKER}
+- Project/board (TRACKER_KEY): ${config.values.TRACKER_KEY || "not configured; resolve before durable task operations"}
+
+Use only this provider and tracker for every durable harness task/TODO. Confirm each native operation and read back the intended task identity, state, and handoff before claiming success. Missing identity or readback blocks the operation; local files and task UIs are not fallback stores.`];
   for (const [capability, name] of [["task", task], ["secrets", secrets]] as const) {
     const source = providerFragment(sources, capability, name);
     parts.push(renderTextFile(source, "docs/bindings.md", config, new Set([source.path]), destinations, removed).toString("utf8").trimEnd());

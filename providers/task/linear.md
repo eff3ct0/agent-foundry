@@ -4,13 +4,22 @@
 > **Capability:** `task`
 > **Provider:** `linear`
 
-**Binding:** Project tasks live EXCLUSIVELY in Linear (team/project
-`<TRACKER_KEY>`). The agent MUST create, update, and transition issues there and
-MUST NOT use another tracker.
+**Binding:** `TASK_TRACKER` selects Linear; tasks live EXCLUSIVELY in Linear
+(`<TRACKER>` team/project `<TRACKER_KEY>`). Every durable harness task/TODO uses
+this binding, never an alternate tracker.
 
 **Agent interaction:** use the harness mechanism (MCP, CLI, or API). Semantic
 operations are creating an issue, commenting, changing status, and associating
 the issue with the project/cycle.
+Read the Linear issue's native state and latest handoff first on cold resume.
+For create, update, transition, comment, checkpoint, phase handoff, and
+completion, require Linear confirmation and fresh readback of the intended issue
+identifier, state, and comment/handoff before claiming success. Local files
+(including `odd/*.md`) and task UIs are optional derived projections, never
+required or fallback stores. If an operation is unsupported or fails, issue
+identity is ambiguous, or readback is unavailable or mismatched, stop and record
+the exact Linear operation, issue identifier, and evidence needed to resume.
+Do not substitute GitHub Issues.
 
 **Mandatory template:** creating an issue MUST use the project/provider's
 corresponding issue template for its type (`task` or `bug`); blank or free-form

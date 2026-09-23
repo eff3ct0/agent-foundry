@@ -4,14 +4,23 @@
 > **Capability:** `task`
 > **Provider:** `github-issues`
 
-**Binding:** Project tasks live EXCLUSIVELY in the repository's GitHub Issues
-(`<TRACKER_KEY>`). The agent MUST create, update, and close issues there and
-MUST NOT use another tracker.
+**Binding:** `TASK_TRACKER` selects GitHub Issues; tasks live EXCLUSIVELY in
+`<TRACKER>` (`<TRACKER_KEY>`). Every durable harness task/TODO uses this binding,
+never an alternate tracker.
 
 **Agent interaction:** use the mechanism provided by the harness (MCP, CLI, or
 API). Semantic operations are reading, opening, updating, commenting on,
 labeling, and closing issues. GitHub CLI examples are acceptable when the
 harness does not provide a native operation.
+Read the bound repository issue's native state and latest handoff first on cold
+resume. For create, update, status, comment, checkpoint, phase handoff, and
+completion, require GitHub Issues confirmation and fresh readback of the intended
+repository, issue number, state, and comment/handoff before claiming success.
+Local files (including `odd/*.md`) and task UIs are optional derived projections,
+never required or fallback stores. On an unsupported or failed operation,
+ambiguous issue identity, or unavailable/mismatched readback, stop and record
+the exact GitHub Issues operation, repository and issue number, and evidence
+needed to resume.
 
 **Mandatory template:** every new issue MUST use the corresponding issue form in
 `.github/ISSUE_TEMPLATE/`. In the web UI, use the corresponding form. The body must include context/problem,

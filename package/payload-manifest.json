@@ -277,32 +277,32 @@
     {
       "path": "providers/task/custom.md",
       "mode": "100644",
-      "size": 2176,
-      "sha256": "36b13256ab16c1e869b73c4a1896cbf2833be34130529b0c34abd3934a2b38b0"
+      "size": 3368,
+      "sha256": "b98c01d7219b12578049d5144405e1aaa93c26029227f3d09017da6fe44a2b5e"
     },
     {
       "path": "providers/task/github-issues.md",
       "mode": "100644",
-      "size": 3690,
-      "sha256": "911448f80a5a610701ca326c0df4f436d40bb559c4a5fc5c6f7875024484d282"
+      "size": 4337,
+      "sha256": "f5a68e8b02364db490b421e3f7749266acd3a213a272448b24d032a96f58dfbe"
     },
     {
       "path": "providers/task/github-projects.md",
       "mode": "100644",
-      "size": 3618,
-      "sha256": "14e5af09f1c859ef1179aff3bea46a5a4b912df12156334ea8e5fadbe6547461"
+      "size": 4840,
+      "sha256": "7ed23044f9f7102257908ececf2a61b7fa950d3250730504ed559f42a88a9db1"
     },
     {
       "path": "providers/task/jira.md",
       "mode": "100644",
-      "size": 2761,
-      "sha256": "a6b1ad6af24caee9cae840134702464d2951534c9224cbb8b41e76d5556256da"
+      "size": 3437,
+      "sha256": "0740cba809594fa9f9f838374063e2814b4713a8cf68428d0f59443db0d2a414"
     },
     {
       "path": "providers/task/linear.md",
       "mode": "100644",
-      "size": 2566,
-      "sha256": "1639ecf1e4f66e84405690ffe99d62104645168daa539f55c57ecdd72ed7ceda"
+      "size": 3237,
+      "sha256": "38b4b86a6c61bcb6dd04f9bc448ffbba1c8cbad8dbe3ec786175dc8e08ed7bda"
     },
     {
       "path": "scripts/check-delivery-contract.mjs",
@@ -377,5 +377,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:4fb3dda531a24b5f3a2975557d74c7be06b0d94779047bf49e4731ca4eb1cc57"
+  "payload_digest": "sha256:7f72d55084edc9d8427e0d73aef570911c11dbbe1d7ffb6e89d57bbad1a24ccf"
 }

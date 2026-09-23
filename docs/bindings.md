@@ -12,6 +12,10 @@ The shape of bindings is defined by the abstract capability contracts:
 
 During initialization, the exact-version creator replaces this content with the selected task and
 secrets instances, plus the optional code-intelligence instance when selected.
+The generated task binding explicitly records `TASK_TRACKER`, `TRACKER`, and
+`TRACKER_KEY`; if the project/board identity is not configured, resolve it
+before durable task operations. Its provider-native confirmation and fresh
+readback are authoritative; local task files or UIs are not fallback stores.
 `_contract.md` files define shape; they are not selectable providers or recipes.
 
 ## Protected `status:approved` gate

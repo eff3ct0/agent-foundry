@@ -419,6 +419,60 @@ test("composes bindings and CI recipes, then removes creator-only inputs", async
   assert.equal(json(rerun).status, "noop");
 });
 
+test("all task selections generate exclusive, readable provider-native bindings", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-task-bindings-"));
+  const selections = [
+    ["jira", "Jira workspace", "JRA"],
+    ["github-issues", "GitHub repository", "owner/repo"],
+    ["github-projects", "GitHub project", "board-42"],
+    ["linear", "Linear workspace", "LIN"],
+    ["custom", "Team tracker", "team-board"],
+  ];
+  for (const [provider, tracker, key] of selections) {
+    const directory = path.join(parent, provider);
+    await mkdir(directory);
+    const target = path.join(directory, "project");
+    const config = await configFile(directory, { TASK_TRACKER: provider, TRACKER: tracker, TRACKER_KEY: key });
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, `${provider}: ${applied.stderr}`);
+    const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+    assert.ok(bindings.includes(`Task provider (TASK_TRACKER): ${provider}`), provider);
+    assert.ok(bindings.includes(`Tracker (TRACKER): ${tracker}`), provider);
+    assert.ok(bindings.includes(`Project/board (TRACKER_KEY): ${key}`), provider);
+    assert.ok(bindings.includes(`**Provider:** \`${provider}\``), provider);
+    assert.match(bindings, /Every durable harness task\/TODO\s+uses/iu, provider);
+    assert.match(bindings, /cold\s+resume/u, provider);
+    assert.match(bindings, /confirmation and fresh readback/u, provider);
+    assert.match(bindings, /comment\/handoff/u, provider);
+    assert.match(bindings, /optional derived projections/u, provider);
+    assert.match(bindings, /unavailable\s+or\s+mismatched|unavailable\/mismatched/u, provider);
+    assert.match(bindings, /exact .*operation/u, provider);
+    assert.doesNotMatch(bindings, /Do not leave state only in Jira/u, provider);
+    if (provider === "github-projects") {
+      assert.match(bindings, /draft\s+or project-only item without a linked issue/u);
+      assert.match(bindings, /without a confirmed link and approval, block PR/u);
+    }
+    if (provider === "custom") assert.match(bindings, /no supported native comment or/u);
+    if (provider === "jira" || provider === "linear" || provider === "custom") {
+      assert.match(bindings, /(?:Do not|Never) substitute GitHub/u, provider);
+    }
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    assert.ok(agent.includes(tracker) && agent.includes(key), provider);
+    const runbook = await readFile(path.join(target, ".factory", "templates", "agent-runbook.md"), "utf8");
+    assert.ok(runbook.includes(`${provider}`) && runbook.includes(key), provider);
+    const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(verified.code, 0, `${provider}: ${verified.stderr}`);
+  }
+  const missing = path.join(parent, "missing-board");
+  await mkdir(missing);
+  const config = await configFile(missing, { TASK_TRACKER: "linear" });
+  const target = path.join(missing, "project");
+  const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(applied.code, 0, applied.stderr);
+  const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+  assert.match(bindings, /Project\/board \(TRACKER_KEY\): not configured; resolve before durable task operations/u);
+});
+
 test("compatibility fixtures produce stable plans for task, secrets, and code-intelligence bindings", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-fixtures-"));
   const fixtures = [
