@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import {
+  cliInvocation,
   deterministicConfiguration,
   verifyPackageConsumers,
 } from "../scripts/package-consumer-verify.mjs";
@@ -14,6 +15,26 @@ import {
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceSha = "a".repeat(40);
+
+test("registry invocations retain apply, verify, and noop command arguments for both consumers", () => {
+  const spec = "@eff3ct/agent-foundry@0.1.0";
+  const target = path.join(os.tmpdir(), "consumer-project");
+  const configPath = path.join(os.tmpdir(), "consumer-answers.json");
+  for (const [consumer, name, prefix] of [
+    ["pnpm-dlx", "pnpm", ["dlx", "--package", spec, "foundry"]],
+    ["npx", "npx", ["--yes", "--package", spec, "foundry"]],
+  ]) {
+    for (const [command, launchAgent, expectedStatus] of [
+      ["apply", true, "applied"],
+      ["verify", false, "verified"],
+      ["apply", false, "noop"],
+    ]) {
+      const invocation = cliInvocation({ consumer, spec, command, target, configPath, selectedAgent: true, launchAgent });
+      assert.equal(invocation.name, name);
+      assert.deepEqual(invocation.args, [...prefix, command, "--target", target, "--config", configPath, "--non-interactive", "--agent", "codex", ...(launchAgent ? ["--launch-agent"] : [])], `${consumer} ${expectedStatus}`);
+    }
+  }
+});
 
 test("offline package consumers verify exact identity, apply/verify, noop, startup, and tree equality", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "factory-package-consumer-"));

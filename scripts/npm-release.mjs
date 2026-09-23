@@ -85,6 +85,7 @@ export const validateRegistryMetadata = (metadata, expected) => {
 
 export const validateRegistryReadback = ({ metadata, registryIdentity, expected }) => {
   validateRegistryMetadata(metadata, expected);
+  if (registryIdentity.release?.sha !== expected.release.sha) fail("registry_release_mismatch", "registry release SHA differs from the published source revision");
   for (const field of ["name", "version"]) {
     if (registryIdentity.package[field] !== expected.package[field]) fail("registry_identity_mismatch", `registry package ${field} differs from the published package`);
   }

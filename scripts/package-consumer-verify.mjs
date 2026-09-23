@@ -160,13 +160,13 @@ const createAgentFixture = async (directory) => {
   return { bin, log };
 };
 
-const cliInvocation = ({ consumer, spec, cliPath, command, target, configPath, selectedAgent, launchAgent }) => {
+export const cliInvocation = ({ consumer, spec, cliPath, command, target, configPath, selectedAgent, launchAgent }) => {
   const suffix = [command, "--target", target, "--config", configPath, "--non-interactive"];
   if (selectedAgent) suffix.push("--agent", "codex");
   if (command === "apply" && launchAgent) suffix.push("--launch-agent");
   if (cliPath) return { name: process.execPath, args: [cliPath, ...suffix] };
-  if (consumer === "pnpm-dlx") return { name: "pnpm", args: ["dlx", "--package", spec, "foundry", ...suffix.slice(1)] };
-  return { name: "npx", args: ["--yes", "--package", spec, "foundry", ...suffix.slice(1)] };
+  if (consumer === "pnpm-dlx") return { name: "pnpm", args: ["dlx", "--package", spec, "foundry", ...suffix] };
+  return { name: "npx", args: ["--yes", "--package", spec, "foundry", ...suffix] };
 };
 
 const runConsumer = async ({ consumer, spec, tarballPath, localTarballPath, packageName, packageVersion, outputDirectory, configuration, sourceSha, release, environment, executeCommand }) => {

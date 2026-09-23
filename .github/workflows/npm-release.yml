@@ -107,7 +107,7 @@ jobs:
           node scripts/npm-release.mjs --command verify-registry --package-root registry-package/extracted --tarball "$REGISTRY_TARBALL" --metadata identity/registry-metadata.json --identity identity/local.json --output identity/registry.json
           grep -q '"tarball_digest"' identity/registry.json
           grep -q '"payload"' identity/registry.json
-          grep -q '"source_sha"' identity/local.json
+          node --input-type=module -e 'import assert from "node:assert/strict"; import { readFileSync } from "node:fs"; assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)'
       - name: Upload immutable release evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

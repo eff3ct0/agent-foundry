@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -305,11 +305,39 @@ test("journey assertion workflow rejects malformed pins and authority", async ()
 
 test("npm release workflow is explicit, immutable, and publish-once", async () => {
   await fixture(async (directory) => {
+    const releaseShaCheck = 'assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)';
+    await replace(directory, "npmRelease", releaseShaCheck, 'grep -q \'"source_sha"\' identity/local.json');
+    await reject(directory, `npm release workflow is missing ${releaseShaCheck}`);
+  });
+  await fixture(async (directory) => {
+    await append(directory, "npmRelease", '\n# grep -q \'"source_sha"\' identity/local.json\n');
+    await reject(directory, "npm release workflow checks a nonexistent root source_sha");
+  });
+  await fixture(async (directory) => {
     await replace(directory, "npmRelease", "npm publish \"$TARBALL\" --provenance --access public", "npm publish \"$TARBALL\" --provenance --access public\nnpm publish \"$TARBALL\" --provenance --access public");
     await reject(directory, "npm release must publish exactly once");
   });
   await fixture(async (directory) => {
     await replace(directory, "npmRelease", "release:\n    types: [published]", "push:\n    branches: [main]");
     await reject(directory, "npm release workflow is missing release:\n    types: [published]");
+  });
+});
+
+test("npm release workflow checks the local release SHA against the resolved source", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
+    const command = workflow.match(/node --input-type=module -e '([^']+)'/u);
+    assert.ok(command);
+    const identity = path.join(directory, "identity");
+    await mkdir(identity);
+    const localIdentity = path.join(identity, "local.json");
+    const expectedSha = "a".repeat(40);
+    await writeFile(localIdentity, JSON.stringify({ release: { tag: "v0.1.0", sha: expectedSha } }));
+    const run = () => execFileAsync(process.execPath, ["--input-type=module", "-e", command[1]], { cwd: directory, env: { RELEASE_SHA: expectedSha } });
+    await run();
+    await writeFile(localIdentity, JSON.stringify({ release: { tag: "v0.1.0", sha: "b".repeat(40) } }));
+    await assert.rejects(run(), /AssertionError/u);
+    await writeFile(localIdentity, JSON.stringify({ source_sha: expectedSha }));
+    await assert.rejects(run(), /Cannot read properties of undefined/u);
   });
 });
