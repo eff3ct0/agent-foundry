@@ -13,10 +13,12 @@ import {
   validateDeclaredPaths,
 } from "../scripts/build-payload.mjs";
 import { packedArtifactIdentity } from "../scripts/artifact-identity.mjs";
+import emitter from "../dist/typed-module-emitter.js";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(await readFile(path.join(root, "dist/payload-manifest.json"), "utf8"));
+const { emitTypedModules } = emitter;
 
 const walk = async (directory, relative = "") => {
   const result = [];
@@ -88,6 +90,62 @@ test("packaging rejects missing, undeclared, and changed integrity inputs", () =
     /integrity contract/,
   );
 });
+
+test("typed module emitter produces runnable isolated ESM .js without .mjs output", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "typed-module-"));
+  try {
+    const source = path.join(parent, "source");
+    const output = path.join(parent, "output");
+    await mkdir(path.join(source, "nested"), { recursive: true });
+    await writeFile(path.join(source, "nested/value.mts"), "export const value: number = 40;\n");
+    await writeFile(path.join(source, "bridge.mts"), 'export { value } from "./nested/value.mjs";\n');
+    await writeFile(path.join(source, "main.mts"), [
+      'import { value } from "./bridge.mjs";',
+      'const other = await import("./nested/value.mjs");',
+      'console.log(value + other.value);',
+    ].join("\n"));
+    const written = await emitTypedModules(source, output);
+    assert.deepEqual(written.map((file) => path.relative(output, file)), ["bridge.js", "main.js", "nested/value.js"]);
+    assert.deepEqual(await walk(output), ["bridge.js", "main.js", "nested/value.js", "package.json"]);
+    assert.equal(JSON.parse(await readFile(path.join(output, "package.json"))).type, "module");
+    assert.match(await readFile(path.join(output, "main.js"), "utf8"), /\.\/bridge\.js/u);
+    assert.match(await readFile(path.join(output, "bridge.js"), "utf8"), /\.\/nested\/value\.js/u);
+    const result = await execFileAsync(process.execPath, [path.join(output, "main.js")]);
+    assert.equal(result.stdout, "80\n");
+    const cli = await execFileAsync(process.execPath, [path.join(root, "dist/index.js"), "--help"]);
+    assert.match(cli.stdout, /Usage: foundry /u);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("typed module emitter rejects unsafe or unresolved imports before writing output", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "typed-module-invalid-"));
+  try {
+    const source = path.join(parent, "source");
+    await mkdir(source);
+    const invalidImports = [
+      ['import "./missing.mjs";', /unresolved relative module specifier/u],
+      ['import "../outside.mjs";', /unresolved relative module specifier/u],
+      ['import "./value.js";', /unsafe relative module specifier/u],
+      ['export { value } from "./value.mjs?query";', /unsafe relative module specifier/u],
+      ['await import("file:///tmp/other.mjs");', /unsupported module specifier/u],
+      ['await import(`./value.mjs`);', /dynamic import must use a string literal/u],
+    ];
+    for (const [index, [statement, expected]] of invalidImports.entries()) {
+      await writeFile(path.join(source, "entry.mts"), statement);
+      const output = path.join(parent, `output-${index}`);
+      await assert.rejects(emitTypedModules(source, output), expected);
+      await assert.rejects(stat(output), { code: "ENOENT" });
+    }
+    await writeFile(path.join(source, "entry.mts"), "const value: number = 'invalid';\n");
+    await assert.rejects(emitTypedModules(source, path.join(parent, "type-error")), /Type 'string' is not assignable/u);
+    await assert.rejects(stat(path.join(parent, "type-error")), { code: "ENOENT" });
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("packed package preserves npm transport and startup handoff", async (context) => {
   if (process.platform === "win32") {
     context.skip("the isolated agent launch fixture uses a POSIX executable");
