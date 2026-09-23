@@ -36,7 +36,7 @@ It is not tied to any language or stack.
 - [`hooks/README.md`](hooks/README.md) - optional harness startup adapters; they always delegate to `start.mjs`.
 
 ## Operating rules (language-agnostic core)
-1. **Durable state lives outside the session:** in the tracker (`<TRACKER>`) and version control. Never only in session memory. A session is disposable.
+1. **Durable state lives outside the session:** every durable task/TODO mechanism required or configured by the user's harness uses only the setup-bound task provider (`<TASK_TRACKER>`, tracker/board `<TRACKER>` / `<TRACKER_KEY>`) for task state. Version control holds work artifacts, not an alternate task store. Never rely on session memory. A session is disposable.
 2. **One unit of work per session.** Take one ticket to a durable checkpoint, leave state, and finish. The project's **loop execution contract** is [`templates/agent-runbook.md`](templates/agent-runbook.md).
 3. **Always announce** what you are working on at start and close/checkpoint (`Working/CHECKPOINT/Done <TICKET_ID>`).
 4. **One implementation path per change.** No speculative abstractions (YAGNI). Use the shortest diff that solves the understood problem, not the shortest diff without understanding it.
@@ -69,9 +69,10 @@ Phase transitions are deterministic: phases are not skipped; a failed gate stays
 may enter `DONE` without every required Definition of Done item and review gate passing.
 
 ## Durable phase state and cold resumption
-After **every completed phase**, update the bound issue or project before starting the next phase. Use the
-latest tracker handoff comment as the durable source of truth, together with the project item's native state
-when the binding provides one. The update MUST include:
+Before inspecting local task lists or continuing after an interruption, read the bound provider's task identity,
+native state, and latest handoff through its configured tracker/board. The setup binding, not a harness default,
+determines where the task lives. After **every completed phase**, update that provider before starting the next
+phase. The provider-confirmed handoff and native state are authoritative. The update MUST include:
 
 - Current phase and status (`ACTIVE`, `BLOCKED`, or `DONE`)
 - Completed work
@@ -80,9 +81,16 @@ when the binding provides one. The update MUST include:
 - Verification evidence, or an explicit statement that it is not yet run
 - Required evidence to resume for the next agent
 
-The latest state and handoff comment are what a cold agent reads before inspecting the worktree or continuing;
-they replace session memory, not the bound tracker. Use [`templates/handoff.md`](templates/handoff.md) for the
-canonical comment shape. Do not create a second tracker or change the one-work-unit-per-session rule.
+Create, update, status transition, comment, checkpoint, phase handoff, and completion count as durable only
+after the bound provider confirms the operation **and** a fresh readback verifies the intended task identity and
+state (including the intended comment/handoff). A local file or task UI, including `odd/*.md`, is an optional,
+derived, non-authoritative projection of provider-confirmed state; no projection is required or a fallback.
+Ephemeral scratch notes are not durable tasks. If an operation is unsupported, fails, has ambiguous identity,
+or its readback is unavailable or mismatched, stop without claiming a checkpoint, transition, or completion.
+Record the exact missing or failed provider-native operation, target identity, and evidence needed to resume;
+request a supported path rather than silently writing locally or mapping a non-GitHub binding to GitHub.
+Use [`templates/handoff.md`](templates/handoff.md) for the handoff shape. Do not create a second tracker or
+change the one-work-unit-per-session rule.
 
 ### Protected `status:approved` gate
 An agent MAY add `status:approved` only through the bound task provider's delegated-approval protocol, and only when every condition below is satisfied:
@@ -96,7 +104,7 @@ An agent MAY add `status:approved` only through the bound task provider's delega
 Without all of that evidence, stop and ask the human to apply the label directly. This contract change does not grant approval for existing work or apply the label to any issue.
 
 ## Bindings (provider contract)
-Project capabilities are **bound to concrete providers** in [`docs/bindings.md`](docs/bindings.md): the task tracker (`<TASK_TRACKER>`) and secrets manager (`<SECRETS_PROVIDER>`). Their use is **MANDATORY and EXCLUSIVE** for every agent; alternatives are not used.
+Project capabilities are **bound to concrete providers** in [`docs/bindings.md`](docs/bindings.md): the task tracker (`<TASK_TRACKER>`, `<TRACKER>` / `<TRACKER_KEY>`) and secrets manager (`<SECRETS_PROVIDER>`). Their use is **MANDATORY and EXCLUSIVE** for every agent and every harness task/TODO mechanism; alternatives are not used.
 The **harness** provides the access mechanism (MCP / CLI / API); the **spec** provides the provider and its rules. This contract takes precedence over agent or harness preferences.
 
 ## Reading order for a cold agent

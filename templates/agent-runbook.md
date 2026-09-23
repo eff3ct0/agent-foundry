@@ -10,15 +10,23 @@ verification, not in the agent.
 
 ### Convergence rules
 1. **One task per iteration.** Monolithic and sequential; never two writers on the same work. One task = one session.
-2. **Externalized state.** Durable state lives in the bound tracker (see `docs/bindings.md` / `<TRACKER>`) and VCS. Read it at startup and update it at close or checkpoint. Never rely on session memory.
+2. **Externalized state.** Every durable task/TODO mechanism required or configured by the user's harness uses only the setup-bound task provider in `docs/bindings.md` (`<TASK_TRACKER>`, tracker/board `<TRACKER>` / `<TRACKER_KEY>`). VCS stores work artifacts, not an alternate task store. Read provider state first at startup; confirm and read back updates at close or checkpoint. Never rely on session memory.
 3. **Verification ratchet.** A task is done only when its check / Definition of Done passes. Fix root causes rather than symptoms and add a regression when useful.
 4. **Explicit stops.** Stop when no actionable task remains or a step requires human judgment or approval (`<APPROVAL_GATED_ACTIONS>`). Mark it `BLOCKED` and hand control back. Never invent consent.
 5. **Persistence language.** Conversation language is independent. All persisted work (specs, docs, tickets, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
 6. **Delegated delivery.** A delegated task authorizes routine delivery without intermediate confirmation: update the tracker, implement, verify, commit, push, open the pull request, and leave evidence in the tracker. Approval gates remain explicit.
 
 ## Principle: the session is disposable
-**Durable state** lives in `<TRACKER>` and VCS, never only in session memory.
+**Durable task state** lives in the bound provider, never only in session memory, VCS, or a local task UI.
 Each session takes one task to a durable point, leaves state, and ends.
+
+Local files (including `odd/*.md`) and task UIs are optional, derived, non-authoritative projections of
+provider-confirmed state. Never require them or use them as fallback task stores; scratch notes are ephemeral.
+For create, update, status change, comment, checkpoint, phase handoff, or completion, require provider-native
+confirmation and fresh readback of the intended task identity and state before claiming success or projecting
+it locally. On an unsupported operation, provider error, ambiguous identity, or unavailable/mismatched readback,
+stop without claiming the transition or completion. Record the exact provider-native operation, target identity,
+and evidence needed to resume; do not substitute GitHub for a non-GitHub binding.
 
 ## Ordered phases
 Run every task through these phases in order:
@@ -45,19 +53,20 @@ evidence is recorded.
 - No transition skips a phase, and no transition reaches `DONE` with pending or failed verification or review.
 
 ## Session cycle
-1. **Choose** the next actionable task: first *In Progress*, then *To Do* in order. Announce `Working <TICKET_ID>`.
-2. **Move** the task to *In Progress* and comment the plan. If a task must be created, using the corresponding issue template is MANDATORY; blank or free-form issues are prohibited.
-3. **Read** the latest phase-state handoff before inspecting code, especially after an interruption.
+1. **Read and choose** from the bound provider first: first *In Progress*, then *To Do* in its native order. Read the latest handoff and native state before inspecting local task lists or code, especially after an interruption. Announce `Working <TICKET_ID>`.
+2. **Move** the task to *In Progress* and comment the plan through the bound provider; confirm and read back both. If a task must be created, use the applicable provider-native template when one is required; never create a free-form issue where an issue template is mandatory.
+3. **Resume** only from provider-confirmed task identity, status, and handoff, not a local projection.
 4. **Execute ONLY that** task (no scope drift).
-5. **Complete one phase at a time.** After each completed phase, update the bound issue or project with the current phase, completed work, exact next action, branch/commit, verification evidence, and required resume evidence.
+5. **Complete one phase at a time.** After each completed phase, update and read back the bound provider's task with the current phase, completed work, exact next action, branch/commit, verification evidence, and required resume evidence.
 6. **Verify** with real signals (`<TEST_CMD>`, `<BUILD_CMD>`, `<TYPECHECK_CMD>`, plus e2e when applicable).
 7. **Deliver** the routine result without pausing for confirmation: create a conventional commit referencing `<TICKET_ID>`, push the ticket branch, open the PR with `.github/pull_request_template.md`, and update the ticket with the commit, PR, and verification evidence.
-8. **Close** only after the [Definition of Done](definition-of-done.md) passes; move the task to *Done* with evidence. Opening a PR is not merging it.
+8. **Close** only after the [Definition of Done](definition-of-done.md) passes; move the task to *Done* and read back the intended state and evidence from the bound provider. Opening a PR is not merging it.
 9. **Finish** the session (one task = one session).
 
 ## Durable handoff and interruption
-Use [`handoff.md`](handoff.md) for every phase completion and checkpoint. The latest handoff comment in the
-bound tracker is the cold-agent source of truth. It must include:
+Use [`handoff.md`](handoff.md) for every phase completion and checkpoint. The provider-confirmed latest handoff
+and native state are the cold-agent source of truth. A handoff counts only after provider confirmation and
+readback of the intended content on the bound task. It must include:
 
 - status and current phase
 - completed work
@@ -87,7 +96,7 @@ approval or merges the PR.
 
 ## Checkpoint before compaction (unfinished task)
 - Commit WIP.
-- Comment on the ticket: status, remaining work, branch, last commit, and next step.
+- Comment on the bound-provider task: status, remaining work, branch, last commit, and next step; confirm and read back the comment.
 - Announce `CHECKPOINT <TICKET_ID>`.
 - Finish.
 

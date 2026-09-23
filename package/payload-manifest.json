@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 10269,
-      "sha256": "d27dc57fee384d6f4abb5b371c5d7993e4acc0c2893213e7c52832ea655edef4"
+      "size": 11420,
+      "sha256": "166a7d32a299ae17f289651cfd3f4d9fc7d86ed9e268832b0a07c3e2739a234c"
     },
     {
       "path": "CLAUDE.md",
@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8828,
-      "sha256": "4fffd06aeec0bdd4719d6e5a0f5d9b67e120c961edb17a86f08dfa5943569b39"
+      "size": 8872,
+      "sha256": "0798884ca6362c6f6b6f058c33cd1a5360c792361b61dcb1abe047fce358696f"
     },
     {
       "path": "ci/_contract.md",
@@ -103,8 +103,8 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 3189,
-      "sha256": "a2c5902d967f314df6eb812100aef4529de95ef33ebeaefe876204241cef0c07"
+      "size": 4206,
+      "sha256": "e12f1ab5af68b5f227f6893d6d90f77652cbce39926c0f6b20452337e7283b81"
     },
     {
       "path": "docs/bootstrap.md",
@@ -271,8 +271,8 @@
     {
       "path": "providers/task/_contract.md",
       "mode": "100644",
-      "size": 2296,
-      "sha256": "c268e2eed3654e768c74647317751c9f2d26fd6feb8d176fbd553608fb23f4eb"
+      "size": 3409,
+      "sha256": "a9fb33f452d656f37fc49d97e03acce66e318b6c2bb59f28854dc06ff7b20060"
     },
     {
       "path": "providers/task/custom.md",
@@ -343,8 +343,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 7375,
-      "sha256": "ae2383f49e2a694df369b15906afe65f653d54d63efc9c33f432120be87b668d"
+      "size": 8828,
+      "sha256": "2912e498928c9fb746b87ecc087793f1d726b6a968edb2123ee11d7b3fb65136"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -355,8 +355,8 @@
     {
       "path": "templates/handoff.md",
       "mode": "100644",
-      "size": 938,
-      "sha256": "ed71fc4f5169c110a159a33cc4662da29166fc4f810ce728695f6eadd4806adc"
+      "size": 2027,
+      "sha256": "f5b7998117ae90a90ec7bf7acc2355c5fa9ebf9046589b75d5d284615c02ebd5"
     },
     {
       "path": "templates/pull-request.md",
@@ -377,5 +377,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:d7691a03bb4142c331f82d13c0a80647ef0083cb4f852c0a05ef9a5ff45c5b20"
+  "payload_digest": "sha256:4fb3dda531a24b5f3a2975557d74c7be06b0d94779047bf49e4731ca4eb1cc57"
 }

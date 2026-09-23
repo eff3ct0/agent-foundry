@@ -25,6 +25,16 @@ agent handoff providers explicitly. A local `.github/` directory is not proof
 of a GitHub provider. The selected provider fragments and CI recipes are
 composed into generated outputs and then removed from the generated project.
 
+Bind `TASK_TRACKER` and its `TRACKER` / `TRACKER_KEY` identity at setup. Every durable task/TODO mechanism
+required or configured by the selected harness MUST use that provider exclusively, including create, update,
+status, comment, checkpoint, phase handoff, and completion. Harness access (MCP, CLI, API, or task UI) does not
+change the bound provider. Verify provider confirmation and readback of the intended task identity and state
+after each durable operation. At cold resume, read provider state and the latest handoff before local task data.
+Local files such as `odd/*.md` and task UIs may project confirmed state but are optional and non-authoritative;
+they are neither required nor fallback stores. If a native operation is unsupported, fails, identifies an
+ambiguous task, or cannot be read back with matching state, stop and record the exact provider-native operation
+and target identity needed to resume. Never substitute GitHub for a non-GitHub provider.
+
 Agent selection uses `--agent <id>` or `--agents <id,...>`. The creator checks
 the selected executable before writing, owns only catalog-listed workspace
 files, and writes `.factory/provider-manifest.json`. `--launch-agent` is an
@@ -45,8 +55,8 @@ owned files drift.
 
 ## Step 4 - Verify
 
-Verify required placeholders, generated bindings, CI jobs, links, startup mode,
-and the configured base commands. A successful `apply` is not a substitute for
+Verify required placeholders, generated bindings (selected provider and tracker/board identity), CI jobs,
+links, startup mode, and the configured base commands. A successful `apply` is not a substitute for
 `verify`; a provider handoff is reported separately from repository readiness.
 
 ## Step 5 - Finish and recover

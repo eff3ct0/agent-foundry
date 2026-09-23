@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,19 @@ const fixture = async (callback) => {
 
 test("the repository delivery contract remains structurally valid", async () => {
   assert.deepEqual(await check(), []);
+});
+
+test("the required task contracts make provider readback and local projections explicit", async () => {
+  for (const relative of ["AGENT.md", "templates/agent-runbook.md", "templates/handoff.md", "docs/agent-init.md", "providers/task/_contract.md"]) {
+    const text = await readFile(path.join(root, relative), "utf8");
+    assert.match(text, /every durable task\/TODO mechanism[\s\S]*?harness/iu, relative);
+    assert.match(text, /(?:<TASK_TRACKER>|`TASK_TRACKER`)/u, relative);
+    assert.match(text, /(?:<TRACKER_KEY>|`TRACKER_KEY`)/u, relative);
+    assert.match(text, /confirm(?:ation|ed|s)?[\s\S]*?readback/iu, relative);
+    assert.match(text, /optional[\s\S]*?(?:non-authoritative|fallback)/iu, relative);
+    assert.match(text, /(?:cold|resum)[\s\S]*?provider|provider[\s\S]*?(?:cold|resum)/iu, relative);
+    assert.match(text, /(?:unsupported|fails?)[\s\S]*?(?:ambiguous|mismatch)/iu, relative);
+  }
 });
 
 test("a missing selected file reports a root-relative deterministic error", async () => {
