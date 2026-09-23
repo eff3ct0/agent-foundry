@@ -1,6 +1,6 @@
-# MAINTAINERS - archetype self-governance
+# MAINTAINERS - Agent Foundry source governance
 
-This repo (`eff3ct0/agent-foundry`) follows its OWN doctrine (dogfooding).
+Agent Foundry (`eff3ct0/agent-foundry`) follows its own doctrine (dogfooding).
 This layer is concrete and SEPARATE from the **product** (the template content
 containing `<PLACEHOLDER>` values).
 
@@ -208,7 +208,7 @@ The canonical label catalog is [`.github/labels.json`](.github/labels.json); run
 4. When a coherent batch lands -> create and push a new tag (`v1.x` / `v2`).
 
 ## Improve while using
-Every project bootstrapped from the template that finds a gap opens a
+Every project created with Agent Foundry that finds a gap opens a
 `type:dx-feedback` issue here (its `FACTORY_SPEC` records provenance). Usage
 feeds the backlog.
 
