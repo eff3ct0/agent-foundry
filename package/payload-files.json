@@ -16,7 +16,6 @@
     "CLAUDE.md",
     "README.md",
     "archetype-ownership.json",
-    "checks/phase_state_check.py",
     "ci/_contract.md",
     "ci/recipes.json",
     "docs/agent-init.md",
@@ -54,12 +53,9 @@
     "providers/task/jira.md",
     "providers/task/linear.md",
     "scripts/check-delivery-contract.mjs",
-    "scripts/check-delivery-contract.py",
-    "scripts/check-factory-layout.py",
     "scripts/check-pr-governance.mjs",
     "scripts/sync-github-labels.mjs",
     "start.mjs",
-    "start.py",
     "templates/adr.md",
     "templates/agent-runbook.md",
     "templates/definition-of-done.md",
@@ -67,7 +63,6 @@
     "templates/pull-request.md",
     "templates/spec.md",
     "templates/ticket.md",
-    "test_factory_bootstrap.py",
-    "test_init.py"
+    "scripts/check-factory-layout.mjs"
   ]
 }
