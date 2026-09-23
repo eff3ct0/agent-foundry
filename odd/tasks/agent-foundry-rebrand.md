@@ -3,6 +3,7 @@
 ## Status
 
 - Phase: `PLANNED`
+- Ticket: [#183](https://github.com/eff3ct0/factory-template/issues/183)
 - Worktree: `/home/steam/git/project-archetype-worktrees/issue-112-cutover`
 - Branch: `feat/issue-112-cutover`
 - Base: `main`
@@ -42,9 +43,10 @@ Rebrand active repository/product-facing materials consistently to “Agent Foun
 
 - Initial scope map completed. It identified active references in `README.md`, `AGENT.md`, `MAINTAINERS.md`, `start.mjs`, `docs/`, `templates/`, `.github/workflows/real-agent-journey.yml`, tests, and scripts.
 - The user confirmed the npm scope is `@eff3ct`, selected package `@eff3ct/agent-foundry`, and CLI command `foundry`. Package/bin implementation is tracked separately under issue #112.
-- The public registry returned E404 for `@eff3ct/agent-foundry`; no package identity changes for this rebrand task have been made yet.
+- The public registry returned E404 for `@eff3ct/agent-foundry` before implementation; the package/bin identity is now implemented separately under issue #112 and draft PR #182.
+- This task begins with broader repository copy and metadata only.
 - GitHub repository slug and metadata remain unchanged.
 
 ## Next step
 
-Finish issue #112 package/bin rename first. Then execute R1/R2 as a separate rebrand change; request the exact repository slug from the owner after they perform the manual rename, and obtain separate approval before any GitHub metadata write.
+Execute R1/R2 as a separate rebrand change; request the exact repository slug from the owner after they perform the manual rename, and obtain separate approval before any GitHub metadata write.
