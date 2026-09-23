@@ -45,8 +45,8 @@ not this repo's configuration.
 The immutable npm release contract is `.github/workflows/npm-release.yml`. It
 has only the published-release and explicit tag-dispatch paths. The workflow
 resolves the tag to one full commit SHA, requires `v<package-version>`, builds
-and packs that checkout with Node 20.19.0/Corepack pnpm 12.4.2, and publishes
-the one tarball once with npm provenance. `NPM_TOKEN` is required at the
+and packs that checkout with Node 20.19.0 and npm-installed pnpm 12.4.2, then
+publishes the one tarball once with npm provenance. `NPM_TOKEN` is required at the
 publish boundary. The immediate npm metadata, tarball, payload, release-tag,
 and source-SHA readback is authoritative; any mismatch fails closed. The
 workflow never changes GitHub repository settings or Template mode.

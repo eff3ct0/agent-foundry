@@ -65,8 +65,8 @@ jobs:
       - name: Activate pinned pnpm
         working-directory: release-source
         run: |
-          corepack enable
-          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2
+          test "$(node --version)" = "v20.19.0"
+          npm install --global pnpm@12.4.2
           test "$(pnpm --version)" = "12.4.2"
       - name: Build and pack the exact package once
         working-directory: release-source
