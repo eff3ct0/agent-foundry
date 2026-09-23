@@ -13,9 +13,9 @@
 - Branch: `feat/issue-112-cutover`
 - Base: `origin/main` at the current verified checkout revision
 - Route: delegated direct for multi-file implementation; one writer per work unit
-- Delivery strategy: `ask-on-risk`; chained PR strategy: `stacked-to-main` (selected by the user)
-- Review-size forecast: exceeds the approximately 400-line planning budget; preserve package tooling, Python retirement, and docs/workflow cutover as coherent local commit slices. No PR creation is authorized.
-- Delivery: local commits only; no merge, deploy, push, npm publication, or GitHub settings mutation is authorized by this request
+- Delivery strategy: `ask-on-risk`; initial chained PR strategy: `stacked-to-main`; the user later explicitly accepted `size:exception` for one PR to `main`.
+- Review-size forecast: 10,016 changed lines against `origin/main` (2,169 additions, 7,847 deletions). User explicitly accepted the `size:exception` label for a single PR.
+- Delivery: user authorized pushing this branch and opening one PR to `main`; merge, deploy, npm publication, and GitHub settings mutation are not included.
 
 ## Objective
 
@@ -76,4 +76,4 @@ package is actually published and read back.
 
 ## Next step
 
-Local implementation is complete. Six work-unit commits plus this task-ledger commit are local on `feat/issue-112-cutover`; no PR was opened. The selected chain strategy is `stacked-to-main`. npm publication/registry readback (`npm view` previously returned 404; `npm whoami` returned `ENEEDAUTH`), exact published-package consumer execution, hosted real-agent execution, and final GitHub Template-mode readback/mutation remain blocked pending credentials and explicit authorization.
+Local implementation is complete. Six work-unit commits plus task-ledger commits are on `feat/issue-112-cutover`. User explicitly accepted `size:exception` and authorized one PR to `main`; PR URL is pending creation. npm publication/registry readback (`npm view` previously returned 404; `npm whoami` returned `ENEEDAUTH`), exact published-package consumer execution, hosted real-agent execution, and final GitHub Template-mode readback/mutation remain blocked. Template mode stays enabled until those issue acceptance gates pass.
