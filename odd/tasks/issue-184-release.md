@@ -76,6 +76,7 @@ One writer per task; tests and docs travel with each eventual behavior work unit
 - Rollback: revert child #1's three script changes, workflow change, three regression test changes and this R184-02a evidence without modifying any npm artifact, GitHub ref/Release, #181 migration or #183 metadata. Existing release history stays untouched.
 - Child #1 dependency: `feat/issue-184-integrator` (`d6b0f68`) → **📍 `feat/issue-184-release` / R184-02a** → future release-contract, changelog and gated publication children (not started here). Follow-up: reconcile the same regressions after #181, then implement R184-02 and subsequent gates; no #184 issue closure at this checkpoint.
 - **Checkpoint R184-02a:** all eight requested local commands passed, including `git diff --check`; the seven modified tracked paths and this task record are the entire child #1 boundary. Measured **148 additions + 6 deletions = 154 authored changed lines** against main `d6b0f68` / the empty integrator, under the 400-line review budget. This is offline preflight proof only, not final release verification or authorization.
+- First work-unit commit: `b044905d7f2e8e34b873ddfc11b9081ab9a41bb1` (`fix(release): close offline identity and consumer gaps (#184)`). This passive SHA evidence adds one documentation line; the cumulative child #1 diff is 149 additions + 6 deletions = **155 authored changed lines**.
 
 ## Acceptance and staged rollback
 
