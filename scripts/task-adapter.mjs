@@ -7,7 +7,9 @@ import path from "node:path";
 /** @typedef {{ identity: TaskIdentity, status: string, entries: TaskEntry[] }} TaskSnapshot */
 /** @typedef {{ phase: string, status: string, completedWork: string, nextAction: string, branch: string, commit: string, verification: string, resumeEvidence: string, resumePhase?: string, blocker?: string }} TaskHandoff */
 /** @typedef {{ kind: 'update'|'status'|'comment'|'handoff'|'checkpoint'|'close', operationId: string, status: string, content: string|TaskHandoff }} TaskWrite */
-/** @typedef {{ read: (identity: TaskIdentity) => Promise<TaskSnapshot>, idempotentByOperationId?: true, write?: (identity: TaskIdentity, entry: TaskEntry, status: string) => Promise<{accepted: true}> }} TaskPort */
+// claim must be a durable atomic insert-if-absent scoped to the native target and operation ID.
+// Only the inserting caller receives claimed:true; a crash after claim blocks blind retries.
+/** @typedef {{ read: (identity: TaskIdentity) => Promise<TaskSnapshot>, claim?: (identity: TaskIdentity, entry: TaskEntry, status: string) => Promise<{claimed: true}|{claimed: false}>, write?: (identity: TaskIdentity, entry: TaskEntry, status: string) => Promise<{accepted: true}> }} TaskPort */
 
 export class TaskAdapterError extends Error {
   /** @param {string} code @param {string} message */
@@ -114,10 +116,20 @@ export const createTaskAdapter = async ({ projectRoot, ports }) => {
       if (previous.length === 1 && JSON.stringify(previous[0]) === JSON.stringify(entry) && before.status === operation.status) return before;
       fail("correlation_conflict", `${binding.provider}: reconcile operation ${entry.operationId} on native task ${identity.nativeId} before retry`);
     }
-    // A pre-read showing no correlation is not proof that an earlier timed-out write was rejected.
-    // The native port must enforce the same operation ID atomically across sessions and retries.
-    if (typeof port.write !== "function" || port.idempotentByOperationId !== true) {
-      fail("native_unsupported", `${binding.provider}: configure native ${operation.kind} with atomic operation-ID idempotency and readback for task ${identity.nativeId}`);
+    // The port must reserve before any write; interrupted writes require reconciliation.
+    if (typeof port.write !== "function" || typeof port.claim !== "function") {
+      fail("native_unsupported", `${binding.provider}: configure a native atomic operation-ID claim, ${operation.kind} and readback for task ${identity.nativeId}`);
+    }
+    let reservation;
+    try { reservation = await port.claim(identity, entry, operation.status); }
+    catch { fail("unknown_write_outcome", `${binding.provider}: claim for ${entry.operationId} on ${identity.nativeId} is unknown; reconcile native reservation and readback before any write`); }
+    if (reservation?.claimed !== true) {
+      if (reservation?.claimed === false) {
+        const existing = await read(identity);
+        const matches = existing.entries.filter((item) => item.operationId === entry.operationId);
+        if (matches.length === 1 && JSON.stringify(matches[0]) === JSON.stringify(entry) && existing.status === operation.status) return existing;
+      }
+      fail("unknown_write_outcome", `${binding.provider}: ${entry.operationId} is claimed or claim result is unknown on ${identity.nativeId}; reconcile native reservation and readback before any write`);
     }
     let acknowledgement;
     try { acknowledgement = await port.write(identity, entry, operation.status); }
