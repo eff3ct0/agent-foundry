@@ -403,8 +403,8 @@ export const report = async (options, environment = process.env) => {
 
 export const selfCheck = () => {
   const sha = "a".repeat(40);
-  const markerText = markerWithFingerprints("eff3ct0/factory-template", sha, ["python"], [failureFingerprint(sha, "python", "initializer_failed", "bootstrap-e2e/python")]);
-  validateIssueBody(buildBody("eff3ct0/factory-template", "v1.0.0", sha, ["python"], "https://github.com/eff3ct0/factory-template/actions/runs/123", "https://github.com/eff3ct0/factory-template/actions/runs/123", markerText));
+  const markerText = markerWithFingerprints("eff3ct0/agent-foundry", sha, ["python"], [failureFingerprint(sha, "python", "initializer_failed", "bootstrap-e2e/python")]);
+  validateIssueBody(buildBody("eff3ct0/agent-foundry", "v1.0.0", sha, ["python"], "https://github.com/eff3ct0/agent-foundry/actions/runs/123", "https://github.com/eff3ct0/agent-foundry/actions/runs/123", markerText));
 };
 
 export const main = async (values = process.argv.slice(2)) => {

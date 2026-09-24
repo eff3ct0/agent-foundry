@@ -1,10 +1,10 @@
 # Factory OS - organization layer (GitHub)
 
-How this template (`factory-template`) becomes an organization-level GitHub
-factory. v1 uses two native, complementary mechanisms.
+How the Agent Foundry archetype supports an organization-level GitHub factory.
+v1 uses two native, complementary mechanisms.
 
-> **Naming (source != instance).** `factory-template` is the **source archetype**
-> (this repo, retained as a *Template repository* for rollback). `<ORG>/factory`
+> **Naming (source != instance).** `eff3ct0/agent-foundry` is the **source archetype**
+> (retained as a *Template repository* for rollback). `<ORG>/factory`
 > is the organization factory **implementation**: create an empty repository,
 > apply `@eff3ct/agent-foundry@<EXACT_VERSION>`, version it with
 > tags (`v1`, `v2`, ...), and reference it by projects through
@@ -41,7 +41,7 @@ explicit consent. See [`determinism.md`](determinism.md) for the complete
 repeat-run, rollback, and approval-boundary matrix.
 
 ## 2. Package + `FACTORY_SPEC` pin
-- The **source archetype** is this repo (`<ORG>/factory-template`), marked as a *Template repository* only for rollback.
+- The **source archetype** is `eff3ct0/agent-foundry`, retained as a *Template repository* only for rollback.
 - The **instance** `<ORG>/factory` is an empty repository initialized with `@eff3ct/agent-foundry@<EXACT_VERSION>` and versioned with tags (`v1`, `v2`, ...); it is the organization's living baseline.
 - Each project applies the exact creator package and declares its governing baseline in [`AGENT.md`](../AGENT.md): `FACTORY_SPEC = <ORG>/factory@v1`.
 - The repository follows its `FACTORY_SPEC`; local content **overrides** the baseline when it differs. To adopt a new spec version, repin `FACTORY_SPEC` and reconcile changes.
