@@ -26,7 +26,7 @@ const messages = {
     "  - DO NOT apply the creator package to this repo: it is the source archetype.",
     "  - Follow MAINTAINERS.md + templates/agent-runbook.md.",
     "  - Next: choose the next actionable issue from the backlog",
-    "    (gh issue list -R eff3ct0/factory-template --label type:product / Project #1)",
+    "    (gh issue list -R eff3ct0/agent-foundry --label type:product / Project #1)",
     "    and announce 'Working #<n>'.",
   ].join("\n"),
   [SETUP]: [
