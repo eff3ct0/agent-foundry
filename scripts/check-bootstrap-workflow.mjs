@@ -135,14 +135,54 @@ const checkJourneyAssertions = (text) => {
   if (["OPENAI_API_KEY", "status:approved", "bootstrap-e2e.py template"].some((value) => text.includes(value))) fail("journey assertion workflow contains an out-of-scope authority or lifecycle operation");
 };
 
+// This source-only PR job executes untrusted code; keep its entire authority and command surface fixed.
+const checkArchetypeNode20 = (text) => {
+  const expected = `name: Archetype Node 20 verification
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@${pinnedActions["actions/checkout"]} # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@${bootstrapPinnedActions["actions/setup-node"]} # v4.4.0
+        with:
+          node-version: 20.19.0
+      - name: Activate pinned package toolchain
+        run: |
+          test "$(node --version)" = "v20.19.0"
+          npm install --global pnpm@12.4.2
+          test "$(pnpm --version)" = "12.4.2"
+          pnpm install --frozen-lockfile
+      - name: Verify typed emitter and package consumers
+        run: |
+          pnpm typecheck
+          pnpm test
+          node scripts/typed-runtime/check-real-agent-workflow.js
+          node --test --test-name-pattern='typed module emitter' test/package.test.mjs
+          pnpm test:package-consumer
+          node scripts/check-determinism.mjs
+`;
+  if (text !== expected) fail("archetype Node 20 PR workflow differs from its read-only contract");
+};
+
 export const check = async (projectRoot = root) => {
   const workflows = path.join(projectRoot, ".github", "workflows");
-  const [bootstrap, template, journey, assertions, npmRelease] = await Promise.all([
+  const [bootstrap, template, journey, assertions, npmRelease, archetypeNode20] = await Promise.all([
     readFile(path.join(workflows, "bootstrap-e2e.yml"), "utf8"),
     readFile(path.join(workflows, "template-bootstrap-e2e.yml"), "utf8"),
     readFile(path.join(workflows, "real-agent-journey.yml"), "utf8"),
     readFile(path.join(workflows, "real-agent-journey-assertions.yml"), "utf8"),
     readFile(path.join(workflows, "npm-release.yml"), "utf8"),
+    readFile(path.join(workflows, "archetype-node20.yml"), "utf8"),
   ]);
   checkBootstrap(bootstrap);
   checkTemplateBootstrap(template);
@@ -150,7 +190,8 @@ export const check = async (projectRoot = root) => {
   checkJourney(journey, projectRoot);
   checkJourneyAssertions(assertions);
   checkNpmRelease(npmRelease);
-  return ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK"];
+  checkArchetypeNode20(archetypeNode20);
+  return ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
