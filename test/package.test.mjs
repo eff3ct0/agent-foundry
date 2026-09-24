@@ -574,6 +574,51 @@ test("packed package preserves npm transport and startup handoff", async (contex
   }
 });
 
+test("packed generated governance self-check uses its relocated template and fails closed", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-governance-package-"));
+  try {
+    const packageDirectory = path.join(parent, "package");
+    const installDirectory = path.join(parent, "install");
+    const target = path.join(parent, "project");
+    const config = path.join(parent, "answers.json");
+    await mkdir(packageDirectory);
+    await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packageDirectory], { cwd: root });
+    const tarballName = (await readdir(packageDirectory)).find((entry) => entry.endsWith(".tgz"));
+    assert.ok(tarballName, "pnpm pack did not produce a tarball");
+    await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, path.join(packageDirectory, tarballName)], { cwd: root });
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "governance fixture", TASK_TRACKER: "github-issues" } }));
+    const cli = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry", "dist", "index.js");
+    const create = async (command) => JSON.parse((await execFileAsync(process.execPath,
+      [cli, command, "--target", target, "--config", config, "--non-interactive"], { cwd: root })).stdout);
+    assert.equal((await create("plan")).status, "planned");
+    assert.equal((await create("apply")).status, "applied");
+    assert.equal((await create("verify")).status, "verified");
+    assert.equal((await create("apply")).status, "noop");
+    assert.equal(JSON.parse((await execFileAsync(process.execPath,
+      [path.join(target, "start.mjs"), "--cwd", target, "--json"])).stdout).mode, "WORK");
+    assert.equal((await execFileAsync(process.execPath, [path.join(root, "scripts/check-pr-governance.mjs"), "--self-check"])).stdout, "self-check OK\n");
+
+    const checker = path.join(target, ".factory/scripts/check-pr-governance.mjs");
+    const relocated = path.join(target, ".factory/templates/pull-request.md");
+    const original = await readFile(relocated, "utf8");
+    assert.equal((await execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
+    await mkdir(path.join(target, "templates"));
+    await writeFile(path.join(target, "templates/pull-request.md"), original);
+    await rm(relocated);
+    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /ENOENT/u);
+    await writeFile(relocated, "# Invalid template\n");
+    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /provider-governance:start/u);
+    await rm(relocated);
+    await symlink(path.join(target, "templates/pull-request.md"), relocated);
+    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /symlink/u);
+    await rm(relocated);
+    await writeFile(relocated, original);
+    assert.equal((await execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("two packed artifacts preserve complete package and generated-tree identity", async (context) => {
   if (process.platform === "win32") {
     context.skip("the package installation fixture uses a POSIX executable");
