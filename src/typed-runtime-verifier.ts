@@ -15,7 +15,7 @@ const filesIn = async (root: string, relative = ""): Promise<string[]> => {
 };
 
 /** Compare a fresh compiler result with checked-in runtime bytes; never rewrite them. */
-export const verifyTypedRuntime = async (source: string, committed: string): Promise<void> => {
+export const verifyTypedRuntime = async (source: string, committed: string): Promise<string[]> => {
   if (!(await lstat(committed)).isDirectory()) throw new Error("typed runtime must be a directory");
   const scratch = await mkdtemp(path.join(os.tmpdir(), "typed-runtime-verify-"));
   try {
@@ -31,6 +31,7 @@ export const verifyTypedRuntime = async (source: string, committed: string): Pro
       const checkedIn = await readFile(path.join(committed, file));
       if (!compiled.equals(checkedIn)) throw new Error(`typed runtime bytes differ: ${file}`);
     }
+    return expected;
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }

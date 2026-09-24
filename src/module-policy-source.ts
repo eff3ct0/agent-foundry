@@ -4,6 +4,7 @@ import { constants } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { checkModulePolicy, type ModulePolicyDiagnostic } from "./module-policy";
+import { verifyTypedRuntime } from "./typed-runtime-verifier";
 
 const execFileAsync = promisify(execFile);
 const outside = (root: string, candidate: string): boolean => {
@@ -152,8 +153,51 @@ export const inventorySourceModules = async (directory: string, gitExecutable: s
   return { tracked, payload };
 };
 
-/** Source-only adapter: no caller-supplied generated ownership or compiler exemptions. */
+const typedSourceRoot = "scripts/typed/";
+const typedRuntimeRoot = "scripts/typed-runtime/";
+const typedRuntimeManifest = `${typedRuntimeRoot}package.json`;
+
+/** Source-only adapter: derive every compiled identity from fresh compiler bytes. */
 export const checkSourceModulePolicy = async (root: string, gitExecutable: string): Promise<ModulePolicyDiagnostic[]> => {
   const { tracked, payload } = await inventorySourceModules(root, gitExecutable);
-  return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled: [] });
+  const sources = tracked.filter((file) => file.path.startsWith(typedSourceRoot));
+  const runtime = tracked.filter((file) => file.path.startsWith(typedRuntimeRoot));
+  const sourceDirectory = path.join(root, "scripts/typed");
+  const runtimeDirectory = path.join(root, "scripts/typed-runtime");
+  const exists = async (directory: string): Promise<boolean> => lstat(directory).then(() => true, (error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  });
+  const hasSource = await exists(sourceDirectory);
+  const hasRuntime = await exists(runtimeDirectory);
+  if (hasSource !== hasRuntime || Boolean(sources.length) !== Boolean(runtime.length) ||
+    (hasSource && (!sources.length || !runtime.length)) ||
+    (!hasSource && (sources.length > 0 || runtime.length > 0))) {
+    throw new Error("typed source/runtime pair is incomplete");
+  }
+  const compiled = [];
+  if (hasSource && hasRuntime) {
+    const manifest = runtime.find((file) => file.path === typedRuntimeManifest);
+    if (!manifest || manifest.mode !== "100644") {
+      throw new Error("typed runtime manifest must be tracked regular mode 100644");
+    }
+    if ([...sources, ...runtime].some((file) => file.mode !== "100644")) {
+      throw new Error("typed source/runtime files must be tracked regular mode 100644");
+    }
+    const emitted = await verifyTypedRuntime(sourceDirectory, runtimeDirectory);
+    const expectedSources = emitted.filter((file) => file.endsWith(".js"))
+      .map((file) => `${typedSourceRoot}${file.slice(0, -3)}.mts`).sort();
+    const expectedRuntime = emitted.map((file) => `${typedRuntimeRoot}${file}`).sort();
+    if (!expectedSources.length || !emitted.includes("package.json") ||
+      emitted.some((file) => file !== "package.json" && !file.endsWith(".js")) ||
+      JSON.stringify(sources.map((file) => file.path).sort()) !== JSON.stringify(expectedSources) ||
+      JSON.stringify(runtime.map((file) => file.path).sort()) !== JSON.stringify(expectedRuntime)) {
+      throw new Error("typed source/runtime tracked file set differs from compiler output");
+    }
+    for (const file of emitted.filter((entry) => entry.endsWith(".js"))) {
+      compiled.push({ sourceScope: "tracked" as const, source: `${typedSourceRoot}${file.slice(0, -3)}.mts`,
+        outputScope: "tracked" as const, output: `${typedRuntimeRoot}${file}` });
+    }
+  }
+  return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled });
 };
