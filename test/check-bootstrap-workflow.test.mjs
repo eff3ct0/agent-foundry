@@ -323,6 +323,62 @@ test("npm release workflow is explicit, immutable, and publish-once", async () =
   });
 });
 
+test("npm release rejects Corepack and unpinned or unchecked toolchains", async () => {
+  const pinned = "npm install --global pnpm@12.4.2";
+  for (const replacement of [
+    "corepack enable\n          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2",
+    "npm install --global pnpm",
+    "npm install --global pnpm@latest",
+  ]) {
+    await fixture(async (directory) => {
+      await replace(directory, "npmRelease", pinned, replacement);
+      await reject(directory, replacement.includes("corepack") ? "npm release toolchain must not use Corepack" : `npm release pinned toolchain is missing ${pinned}`);
+    });
+  }
+  for (const check of ['test "$(node --version)" = "v20.19.0"', 'test "$(pnpm --version)" = "12.4.2"']) {
+    await fixture(async (directory) => {
+      await replace(directory, "npmRelease", check, "true");
+      await reject(directory, `npm release pinned toolchain is missing ${check}`);
+    });
+  }
+  await fixture(async (directory) => {
+    await replace(directory, "npmRelease", pinned, `npm install --global pnpm\n          # ${pinned}`);
+    await reject(directory, `npm release pinned toolchain is missing ${pinned}`);
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "npmRelease", pinned, `test "$(pnpm --version)" = "12.4.2"\n          ${pinned}`);
+    await reject(directory, "npm release must check Node before installing pnpm and check pnpm afterwards");
+  });
+});
+
+test("npm release workflow wires both event SHAs into the pre-publish guard", async () => {
+  const cases = [
+    ["EVENT_SHA: ${{ github.sha }}", "EVENT_SHA: ${{ github.event_name == 'release' && github.sha || '' }}", "npm release identity step is missing EVENT_SHA: ${{ github.sha }}"],
+    ["EVENT_NAME: ${{ github.event_name }}", "EVENT_NAME: release", "npm release identity step is missing EVENT_NAME: ${{ github.event_name }}"],
+    ["eventName: process.env.EVENT_NAME, eventSha: process.env.EVENT_SHA", "eventName: process.env.EVENT_NAME, eventSha: ''", "npm release identity step is missing eventName: process.env.EVENT_NAME, eventSha: process.env.EVENT_SHA"],
+    ['import { resolveReleaseForPublish } from "./scripts/release-readback.mjs";', 'import { resolvePublishedRelease } from "./scripts/release-readback.mjs";', 'npm release identity step is missing import { resolveReleaseForPublish } from "./scripts/release-readback.mjs";'],
+  ];
+  for (const [from, to, message] of cases) {
+    await fixture(async (directory) => {
+      await replace(directory, "npmRelease", from, to);
+      await reject(directory, message);
+    });
+  }
+  await fixture(async (directory) => {
+    const target = path.join(directory, workflows, files.npmRelease);
+    const workflow = await readFile(target, "utf8");
+    const publish = workflow.match(/      - name: Publish the exact package with npm provenance\n[\s\S]*?(?=      - name: Read back npm metadata)/u)?.[0];
+    assert.ok(publish);
+    await writeFile(target, workflow.replace(publish, "").replace("      - name: Resolve immutable release identity\n", `${publish}      - name: Resolve immutable release identity\n`));
+    await reject(directory, "npm release must resolve identity before publishing");
+  });
+  await fixture(async (directory) => {
+    await append(directory, "npmRelease", "\n# EXPECTED_SHA\n");
+    // A comment outside the identity step cannot satisfy the guard.
+    assert.deepEqual(await check(directory), success);
+  });
+});
+
 test("npm release workflow checks the local release SHA against the resolved source", async () => {
   await fixture(async (directory) => {
     const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
