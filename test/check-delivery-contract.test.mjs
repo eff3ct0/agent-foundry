@@ -44,6 +44,39 @@ test("the required task contracts make provider readback and local projections e
   }
 });
 
+test("the task contract checker rejects missing binding and fail-closed clauses for every selection", async () => {
+  await fixture(async (directory) => {
+    const taskDirectory = path.join(directory, "providers", "task");
+    await mkdir(taskDirectory, { recursive: true });
+    await mkdir(path.join(directory, "templates"));
+    await writeFile(path.join(directory, "templates", "handoff.md"), "# Handoff\n");
+    await writeFile(path.join(taskDirectory, "_contract.md"), await readFile(path.join(root, "providers", "task", "_contract.md")));
+    for (const selection of ["jira", "github-issues", "github-projects", "linear", "custom"]) {
+      const target = path.join(taskDirectory, `${selection}.md`);
+      const original = await readFile(path.join(root, "providers", "task", `${selection}.md`), "utf8");
+      await writeFile(target, original);
+      assert.deepEqual(await check([target], directory), [], selection);
+      for (const [before, after, requirement] of [
+        ["<TRACKER_KEY>", "board identifier", "selected tracker identity"],
+        ["Every durable harness task/TODO", "Some durable harness tasks", "all durable harness tasks"],
+        ["confirmation and fresh readback", "acknowledgment", "native confirmation and intended-state readback"],
+        ["optional derived projections", "mandatory local task files", "optional local projection without fallback"],
+        ["unsupported", "supported", "unsupported operation blocks success"],
+        ["unavailable", "available", "unavailable or mismatched readback blocks success"],
+        ["mismatched", "matched", "unavailable or mismatched readback blocks success"],
+        ["ambiguous", "uncertain", "fail-closed operation and readback"],
+        ["malformed", "valid", "malformed readback blocks success"],
+        [/evidence\s+needed to\s+resume/gu, "details later", "actionable continuation"],
+      ]) {
+        assert.ok(typeof before === "string" ? original.includes(before) : new RegExp(before.source, "u").test(original), `${selection}: missing fixture phrase ${before}`);
+        await writeFile(target, original.replaceAll(before, after));
+        const errors = await check([target], directory);
+        assert.ok(errors.includes(`providers/task/${selection}.md missing task binding requirement: ${requirement}`), `${selection} (${before}): ${errors.join("; ")}`);
+      }
+    }
+  });
+});
+
 test("a missing selected file reports a root-relative deterministic error", async () => {
   await fixture(async (directory) => {
     assert.deepEqual(await check([path.join(directory, "missing.md")], directory), ["required file missing: missing.md"]);

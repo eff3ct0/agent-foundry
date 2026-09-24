@@ -31,8 +31,8 @@ where durable state is left during checkpoints and closeout.
 Local files (including `odd/*.md`) and task UIs are optional, derived,
 non-authoritative projections of provider-confirmed state. No projection is
 mandatory or an accepted fallback; ephemeral scratch notes are not durable tasks.
-For unsupported operations, errors, ambiguous identity, or unavailable or
-mismatched readback, stop without claiming success and record the exact missing
+For unsupported operations, errors, ambiguous identity, or unavailable,
+malformed, or mismatched readback, stop without claiming success and record the exact missing
 provider-native operation, target identity, and evidence needed to resume.
 
 ## Pull-request governance
