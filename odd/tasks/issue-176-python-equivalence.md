@@ -231,3 +231,4 @@ after initialization; the new ledger is archetype-only, not generated content.
   no hosted Node 20, registry publication, or no-job journey pass is claimed.
   Rollback is this single work-unit commit (plus its passive SHA-only ledger
   follow-up), leaving the parent and unrelated creator implementations intact.
+- Work-unit commit: `784f0017c25ca9f5ae38ac6844a40291adccee68`.
