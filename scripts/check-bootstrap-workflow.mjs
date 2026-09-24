@@ -118,12 +118,33 @@ const checkJourney = (text, projectRoot) => {
 
 const checkNpmRelease = (text) => {
   checkPins(text, releasePinnedActions, "npm release action pin is missing");
+  const resolve = section(text, "      - name: Resolve immutable release identity\n", "      - name: Check out the exact source revision\n");
+  const toolchain = section(text, "      - name: Activate pinned pnpm\n", "      - name: Build and pack the exact package once\n");
+  const publish = "      - name: Publish the exact package with npm provenance\n";
+  if (!text.includes(publish) || text.indexOf(publish) < text.indexOf("      - name: Check out the exact source revision\n")) fail("npm release must resolve identity before publishing");
+  if (/\bcorepack\b/iu.test(toolchain) || text.includes("corepack install --global pnpm")) fail("npm release toolchain must not use Corepack");
+  const commands = toolchain.split("\n").map((line) => line.trim());
+  for (const command of ['test "$(node --version)" = "v20.19.0"', "npm install --global pnpm@12.4.2", 'test "$(pnpm --version)" = "12.4.2"']) {
+    if (!commands.includes(command)) fail(`npm release pinned toolchain is missing ${command}`);
+  }
+  if (commands.indexOf('test "$(node --version)" = "v20.19.0"') > commands.indexOf("npm install --global pnpm@12.4.2") || commands.indexOf("npm install --global pnpm@12.4.2") > commands.indexOf('test "$(pnpm --version)" = "12.4.2"')) fail("npm release must check Node before installing pnpm and check pnpm afterwards");
+  if (text.indexOf("      - name: Activate pinned pnpm\n") > text.indexOf(publish)) fail("npm release must activate pnpm before publishing");
+  requireText(resolve, [
+    "EVENT_NAME: ${{ github.event_name }}", "EVENT_SHA: ${{ github.sha }}",
+    'import { resolveReleaseForPublish } from "./scripts/release-readback.mjs";',
+    "eventName: process.env.EVENT_NAME, eventSha: process.env.EVENT_SHA",
+    'if (release.status !== "ok") throw new Error(`release identity could not be verified: ${release.code}`);',
+    "sha=${release.sha}",
+  ], "npm release identity step is missing");
   requireText(text, [
     "release:\n    types: [published]", "workflow_dispatch:", "tag_name:", "permissions: {}", "id-token: write", "contents: read",
-    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
+    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
     "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts", "npm publish \"$TARBALL\" --provenance --access public", "NODE_AUTH_TOKEN",
-    "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest", "source_sha",
+    "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest",
+    'assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)',
   ], "npm release workflow is missing");
+  if (text.includes('grep -q \'"source_sha"\' identity/local.json')) fail("npm release workflow checks a nonexistent root source_sha");
+  if (resolve.includes("EXPECTED_SHA") || resolve.includes("resolvePublishedRelease")) fail("npm release identity step bypasses the event SHA guard");
   if ((text.match(/npm publish /gu) ?? []).length !== 1) fail("npm release must publish exactly once");
   if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
 };
