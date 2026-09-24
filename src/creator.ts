@@ -683,7 +683,14 @@ const composeBindings = (
   const secrets = config.values.SECRETS_PROVIDER || "none";
   const codeIntel = config.values.CODE_INTELLIGENCE || "none";
   if (!task) throw new CreatorError("configuration_invalid", "TASK_TRACKER is required for binding composition");
-  const parts = [renderMarkdown(bindingHeader, "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd()];
+  const parts = [renderMarkdown(bindingHeader, "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd(),
+    `## Bound task identity
+
+- Task provider (TASK_TRACKER): ${task}
+- Tracker (TRACKER): ${config.values.TRACKER}
+- Project/board (TRACKER_KEY): ${config.values.TRACKER_KEY || "not configured; resolve before durable task operations"}
+
+Use only this provider and tracker for every durable harness task/TODO. Confirm each native operation and read back the intended task identity, state, and handoff before claiming success. Missing identity or readback blocks the operation; local files and task UIs are not fallback stores.`];
   for (const [capability, name] of [["task", task], ["secrets", secrets]] as const) {
     const source = providerFragment(sources, capability, name);
     parts.push(renderTextFile(source, "docs/bindings.md", config, new Set([source.path]), destinations, removed).toString("utf8").trimEnd());
@@ -693,6 +700,21 @@ const composeBindings = (
     parts.push(renderTextFile(source, "docs/bindings.md", config, new Set([source.path]), destinations, removed).toString("utf8").trimEnd());
   }
   return Buffer.from(`${parts.join("\n\n")}\n`, "utf8");
+};
+
+const nativeTaskReferences: Record<string, string> = {
+  jira: "Jira: <TICKET_ID>",
+  linear: "Linear: <TICKET_ID>",
+  custom: "Task: <TICKET_ID>",
+};
+
+const composePrTaskReference = (bytes: Buffer, task: string): Buffer => {
+  const reference = nativeTaskReferences[task];
+  if (!reference) return bytes;
+  const text = bytes.toString("utf8");
+  const marker = /(<!-- provider-governance:start -->)[\s\S]*?(<!-- provider-governance:end -->)/u;
+  if (!marker.test(text)) throw new CreatorError("composition_invalid", "pull-request template is missing its provider-governance section");
+  return Buffer.from(text.replace(marker, `$1\n${reference}\n<!-- Approval is confirmed by the bound task provider. -->\n$2`), "utf8");
 };
 
 const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buffer | undefined => {
@@ -758,7 +780,9 @@ const readPayloadFiles = async (
   for (const source of sourceFiles.values()) {
     if (!destinations.has(source.path)) continue;
     const destinationPath = destinations.get(source.path)!;
-    const bytes = renderTextFile(source, destinationPath, config, textFiles, destinations, removedSourcePaths);
+    const rendered = renderTextFile(source, destinationPath, config, textFiles, destinations, removedSourcePaths);
+    const bytes = source.path === "templates/pull-request.md" || source.path === ".github/pull_request_template.md"
+      ? composePrTaskReference(rendered, config.values.TASK_TRACKER) : rendered;
     files.push({ relativePath: destinationPath, bytes, mode: source.mode, sha256: sha256(bytes), size: bytes.byteLength });
   }
   const generatedPaths = new Set(ownershipEntries(ownership).filter(({ definition }) => definition.disposition === "generated").map(({ entry }) => entry.path));

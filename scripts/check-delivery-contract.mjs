@@ -118,6 +118,24 @@ const checkProvider = (capability, target, contractPath, contractText, text, pro
     const missing = codeIntelNoneMarkers.filter((marker) => !text.toLowerCase().includes(marker));
     if (missing.length > 0) errors.push(`${label} missing explicit intentional-minimal none contract: ${missing.join(", ")}`);
   }
+  if (capability === "task") {
+    const binding = text.split("**Binding:**")[1]?.split("**Agent interaction:**", 1)[0] ?? "";
+    const interaction = text.split("**Agent interaction:**")[1]?.split(provider === "custom" ? /\*\*Protected `status:approved` gate:\*\*/u : /\*\*(?:Mandatory template|Pull-request governance):\*\*/u, 1)[0] ?? "";
+    for (const [requirement, pattern, source] of [
+      ["selected tracker identity", /TASK_TRACKER[\s\S]*?<TRACKER>[\s\S]*?<TRACKER_KEY>/u, binding],
+      ["all durable harness tasks", /Every durable harness task\/TODO/u, binding],
+      ["provider-first cold resume", /cold\s+resume/u, interaction],
+      ["native confirmation and intended-state readback", /confirmation and fresh readback[\s\S]*?state[\s\S]*?comment\/handoff/u, interaction],
+      ["optional local projection without fallback", /optional derived projections[\s\S]*?never\s+required or fallback stores/u, interaction],
+      ["unsupported operation blocks success", /unsupported/u, interaction],
+      ["unavailable or mismatched readback blocks success", /unavailable[\s\S]*?mismatched/u, interaction],
+      ["malformed readback blocks success", /malformed[\s\S]*?(?:stop|blocks)/u, interaction],
+      ["fail-closed operation and readback", /(?:unsupported|unavailable)[\s\S]*?fail(?:ed|s|ure)?[\s\S]*?ambiguous[\s\S]*?readback[\s\S]*?(?:stop|blocks)/u, interaction],
+      ["actionable continuation", /(?:exact|missing)[\s\S]*?operation[\s\S]*?(?:identity|number|key|identifier)[\s\S]*?evidence\s+needed to\s+resume/u, interaction],
+    ]) {
+      if (!pattern.test(source)) errors.push(`${label} missing task binding requirement: ${requirement}`);
+    }
+  }
 };
 
 const checkCi = (target, projectRoot, errors) => {

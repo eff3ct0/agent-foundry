@@ -57,6 +57,7 @@
     "scripts/sync-github-labels.mjs",
     "start.mjs",
     "odd/tasks/issue-124-opencode-startup-race.md",
+    "odd/tasks/issue-177-bound-tracker.md",
     "templates/adr.md",
     "templates/agent-runbook.md",
     "templates/definition-of-done.md",
