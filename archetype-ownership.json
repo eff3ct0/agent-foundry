@@ -102,6 +102,7 @@
         {"path": "scripts/package-consumer-verify.mjs", "kind": "file"},
         {"path": "scripts/npm-release.mjs", "kind": "file"},
         {"path": "scripts/npm-provenance-policy.mjs", "kind": "file"},
+        {"path": "scripts/npm-provenance-audit.mjs", "kind": "file"},
         {"path": "scripts/resource-proof-cleanup.mjs", "kind": "file"},
         {"path": "scripts/check-bootstrap-workflow.mjs", "kind": "file"},
         {"path": "scripts/release-ref.mjs", "kind": "file"},
