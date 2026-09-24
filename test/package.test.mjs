@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,7 @@ import {
 } from "../scripts/build-payload.mjs";
 import { packedArtifactIdentity } from "../scripts/artifact-identity.mjs";
 import emitter from "../dist/typed-module-emitter.js";
+import verifier from "../dist/typed-runtime-verifier.js";
 import policy from "../dist/module-policy.js";
 import sourcePolicy from "../dist/module-policy-source.js";
 
@@ -21,6 +22,7 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(await readFile(path.join(root, "dist/payload-manifest.json"), "utf8"));
 const { emitTypedModules } = emitter;
+const { verifyTypedRuntime } = verifier;
 const { checkModulePolicy } = policy;
 const { inventorySourceModules, checkSourceModulePolicy } = sourcePolicy;
 const trustedGit = await (async () => {
@@ -162,6 +164,47 @@ test("typed module emitter rejects unsafe or unresolved imports before writing o
   }
 });
 
+test("checked-in typed runtime matches fresh compiler bytes without transient .mjs", async () => {
+  const source = path.join(root, "scripts/typed");
+  const committed = path.join(root, "scripts/typed-runtime");
+  await verifyTypedRuntime(source, committed);
+  const parent = await mkdtemp(path.join(os.tmpdir(), "typed-runtime-fixture-"));
+  try {
+    const output = path.join(parent, "output");
+    await emitTypedModules(source, output);
+    assert.deepEqual(await walk(output), [
+      "check-real-agent-workflow.js", "package.json", "resource-cleanup-eligibility.js", "resource-provisioning-proof.js",
+    ]);
+    assert.deepEqual(await walk(committed), await walk(output));
+    for (const file of await walk(output)) {
+      assert.deepEqual(await readFile(path.join(committed, file)), await readFile(path.join(output, file)));
+    }
+    const runtime = path.join(parent, "runtime");
+    await cp(output, runtime, { recursive: true });
+    await verifyTypedRuntime(source, runtime);
+    const js = path.join(runtime, "check-real-agent-workflow.js");
+    const bytes = await readFile(js);
+    bytes[bytes.length - 2] ^= 1;
+    await writeFile(js, bytes);
+    await assert.rejects(verifyTypedRuntime(source, runtime), /typed runtime bytes differ/u);
+    await writeFile(js, await readFile(path.join(output, "check-real-agent-workflow.js")));
+    await rm(js);
+    await assert.rejects(verifyTypedRuntime(source, runtime), /typed runtime file set differs/u);
+    await cp(output, runtime, { recursive: true });
+    await writeFile(path.join(runtime, "extra.js"), "export {};\n");
+    await assert.rejects(verifyTypedRuntime(source, runtime), /typed runtime file set differs/u);
+    await rm(path.join(runtime, "extra.js"));
+    const changedSource = path.join(parent, "source");
+    await cp(source, changedSource, { recursive: true });
+    await writeFile(path.join(changedSource, "check-real-agent-workflow.mts"), "export const changed: number = 1;\n");
+    await assert.rejects(verifyTypedRuntime(changedSource, runtime), /typed runtime bytes differ/u);
+    await writeFile(path.join(changedSource, "check-real-agent-workflow.mts"), "const invalid: number = 'wrong';\n");
+    await assert.rejects(verifyTypedRuntime(changedSource, runtime), /not assignable/u);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("module policy classifies tracked, payload, and generated support separately", () => {
   const inventory = {
     tracked: ["src/entry.mts", "src/cli.ts", "hooks/pi/factory-start.ts", "src/tool.ts", "dist/tool.js"],
@@ -272,6 +315,120 @@ test("source inventory uses Git index modes and exact payload identities with st
       { scope: "tracked", path: "scripts/nested/rogue.js", reason: "untyped JavaScript module" },
       { scope: "tracked", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
     ]);
+  } finally {
+    await rm(repository, { recursive: true, force: true });
+  }
+});
+
+test("source policy proves every tracked typed runtime module from fresh compiler bytes", async () => {
+  const repository = await sourceFixture();
+  const sourceName = "scripts/typed/check-real-agent-workflow.mts";
+  const runtimeName = "scripts/typed-runtime/check-real-agent-workflow.js";
+  const secondSource = "scripts/typed/nested/second.mts";
+  const secondRuntime = "scripts/typed-runtime/nested/second.js";
+  const manifestName = "scripts/typed-runtime/package.json";
+  const source = path.join(repository, sourceName);
+  const runtime = path.join(repository, runtimeName);
+  const output = path.join(repository, "fresh-output");
+  try {
+    await mkdir(path.dirname(source));
+    await mkdir(path.join(repository, "scripts/typed/nested"));
+    await writeFile(source, 'export { value } from "./nested/second.mjs";\n');
+    await writeFile(path.join(repository, secondSource), "export const value: number = 181;\n");
+    await emitTypedModules(path.dirname(source), output);
+    await cp(output, path.dirname(runtime), { recursive: true });
+    await execFileAsync(trustedGit, ["add", "--", sourceName, secondSource, runtimeName, secondRuntime, manifestName], { cwd: repository });
+
+    const expected = [
+      { scope: "payload", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
+      { scope: "tracked", path: "scripts/nested/rogue.js", reason: "untyped JavaScript module" },
+      { scope: "tracked", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
+    ];
+    assert.deepEqual(await checkSourceModulePolicy(repository, trustedGit), expected);
+    await execFileAsync(trustedGit, ["rm", "--cached", "--", manifestName], { cwd: repository });
+    assert.equal(await readFile(path.join(repository, manifestName), "utf8"), '{"type":"module"}\n');
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime manifest/u);
+    await execFileAsync(trustedGit, ["add", "--", manifestName], { cwd: repository });
+    await execFileAsync(trustedGit, ["update-index", "--chmod=+x", "--", manifestName], { cwd: repository });
+    if (process.platform !== "win32") await chmod(path.join(repository, manifestName), 0o755);
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime manifest|source inventory mode mismatch/u);
+    await execFileAsync(trustedGit, ["update-index", "--chmod=-x", "--", manifestName], { cwd: repository });
+    if (process.platform !== "win32") await chmod(path.join(repository, manifestName), 0o644);
+    assert.deepEqual(await checkSourceModulePolicy(repository, trustedGit), expected);
+    await execFileAsync(trustedGit, ["rm", "--cached", "--", secondRuntime], { cwd: repository });
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /tracked file set differs/u);
+    await execFileAsync(trustedGit, ["add", "--", secondRuntime], { cwd: repository });
+    await execFileAsync(trustedGit, ["update-index", "--chmod=+x", "--", secondRuntime], { cwd: repository });
+    if (process.platform !== "win32") await chmod(path.join(repository, secondRuntime), 0o755);
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /tracked regular mode|source inventory mode mismatch/u);
+    await execFileAsync(trustedGit, ["update-index", "--chmod=-x", "--", secondRuntime], { cwd: repository });
+    if (process.platform !== "win32") await chmod(path.join(repository, secondRuntime), 0o644);
+    assert.deepEqual(await checkSourceModulePolicy(repository, trustedGit), expected);
+    await writeFile(path.join(repository, "scripts/typed-runtime/untracked.js"), "export {};\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime file set differs/u);
+    await rm(path.join(repository, "scripts/typed-runtime/untracked.js"));
+    await writeFile(path.join(repository, "scripts/typed/untracked.mts"), "export {};\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime file set differs/u);
+    await rm(path.join(repository, "scripts/typed/untracked.mts"));
+    await execFileAsync(trustedGit, ["rm", "--cached", "--", secondSource], { cwd: repository });
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /tracked file set differs/u);
+    await execFileAsync(trustedGit, ["add", "--", secondSource], { cwd: repository });
+    await writeFile(path.join(repository, manifestName), '{"type":"commonjs"}\n');
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime bytes differ/u);
+    await writeFile(path.join(repository, manifestName), await readFile(path.join(output, "package.json")));
+    await writeFile(path.join(repository, "scripts/typed-runtime/rogue.js"), "export {};\n");
+    await writeFile(path.join(repository, "scripts/typed-runtime/rogue.mjs"), "export {};\n");
+    await execFileAsync(trustedGit, ["add", "--", "scripts/typed-runtime/rogue.js", "scripts/typed-runtime/rogue.mjs"], { cwd: repository });
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime file set differs/u);
+    await rm(path.join(repository, "scripts/typed-runtime/rogue.js"));
+    await rm(path.join(repository, "scripts/typed-runtime/rogue.mjs"));
+    await execFileAsync(trustedGit, ["add", "-u"], { cwd: repository });
+    const neighbor = path.join(repository, "scripts/nested/neighbor.js");
+    await writeFile(neighbor, "export {};\n");
+    await writeFile(path.join(repository, "scripts/nested/neighbor.mjs"), "export {};\n");
+    await execFileAsync(trustedGit, ["add", "--", "scripts/nested/neighbor.js", "scripts/nested/neighbor.mjs"], { cwd: repository });
+    assert.deepEqual(await checkSourceModulePolicy(repository, trustedGit), [
+      ...expected,
+      { scope: "tracked", path: "scripts/nested/neighbor.js", reason: "untyped JavaScript module" },
+      { scope: "tracked", path: "scripts/nested/neighbor.mjs", reason: "untyped .mjs module" },
+    ].sort((a, b) => `${a.scope}:${a.path}`.localeCompare(`${b.scope}:${b.path}`)));
+
+    await writeFile(runtime, "export const value = 0;\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime bytes differ/u);
+    await writeFile(runtime, await readFile(path.join(output, "check-real-agent-workflow.js")));
+    await writeFile(path.join(repository, secondRuntime), "export const value = 0;\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime bytes differ/u);
+    await writeFile(path.join(repository, secondRuntime), await readFile(path.join(output, "nested/second.js")));
+    await writeFile(path.join(repository, secondSource), "export const value: number = 182;\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime bytes differ/u);
+    await writeFile(path.join(repository, secondSource), "export const value: number = 181;\n");
+    await rm(runtime);
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /ENOENT|source inventory/u);
+    await cp(path.join(output, "check-real-agent-workflow.js"), runtime);
+    await chmod(runtime, 0o755);
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /source inventory mode mismatch/u);
+    await chmod(runtime, 0o644);
+    await rm(runtime);
+    await symlink(path.join(output, "check-real-agent-workflow.js"), runtime);
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /source inventory symlink/u);
+    await rm(runtime);
+    await cp(path.join(output, "check-real-agent-workflow.js"), runtime);
+    await execFileAsync(trustedGit, ["rm", "--cached", "--", sourceName], { cwd: repository });
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed source\/runtime pair is incomplete|tracked file set differs/u);
+    await execFileAsync(trustedGit, ["add", "--", sourceName], { cwd: repository });
+    await execFileAsync(trustedGit, ["rm", "--cached", "--", runtimeName], { cwd: repository });
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed source\/runtime pair is incomplete|tracked file set differs/u);
+  } finally {
+    await rm(repository, { recursive: true, force: true });
+  }
+});
+
+test("source policy refuses unpaired JavaScript in the reserved typed runtime", async () => {
+  const repository = await sourceFixture();
+  try {
+    await mkdir(path.join(repository, "scripts/typed-runtime"));
+    await writeFile(path.join(repository, "scripts/typed-runtime/rogue.js"), "export {};\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed source\/runtime pair is incomplete/u);
   } finally {
     await rm(repository, { recursive: true, force: true });
   }
