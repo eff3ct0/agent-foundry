@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { cleanupProvisionedResource } from "../scripts/resource-proof-cleanup.mjs";
-import { serializeProvisioningProof } from "../scripts/resource-provisioning-proof.mjs";
+import { serializeProvisioningProof } from "../scripts/typed-runtime/resource-provisioning-proof.js";
 
 const owner = "sandbox-owner";
 const runId = "123";

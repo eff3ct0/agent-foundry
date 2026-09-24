@@ -17,7 +17,7 @@ the same content and reports `noop` for unchanged files.
 | `scripts/check-delivery-contract.mjs` | Node structural contract | Validates docs, providers, and CI recipe data |
 | `scripts/check-factory-layout.mjs` | Node layout contract | Validates initialized-project support boundaries |
 | `scripts/check-bootstrap-workflow.mjs` | Node workflow contract | Rejects floating actions and unsafe release boundaries |
-| `scripts/check-real-agent-workflow.mjs` | Node workflow contract | Rejects unpinned or cross-credential real-agent paths |
+| `scripts/typed-runtime/check-real-agent-workflow.js` | Compiled Node workflow contract | Rejects unpinned or cross-credential real-agent paths; build verifies exact typed-source output before packaging |
 
 ## Payload and ownership
 
