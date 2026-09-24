@@ -65,7 +65,7 @@ test("the Node CLI emits the Python parity success output", async () => {
   assert.equal(result.stderr, "");
 });
 
-test("archetype Node 20 PR check rejects trigger, authority, pin, version, and command drift", async () => {
+test("archetype Node 20 PR check rejects trigger, authority, pin, version, and pre-build execution drift", async () => {
   const changes = [
     ["  pull_request:", "  pull_request_target:"],
     ["  contents: read", "  contents: write"],
@@ -77,7 +77,9 @@ test("archetype Node 20 PR check rejects trigger, authority, pin, version, and c
     ['test "$(pnpm --version)" = "12.4.2"', 'test "$(pnpm --version)" = "latest"'],
     ["pnpm test:package-consumer", "pnpm build"],
     ["node scripts/typed-runtime/check-real-agent-workflow.js", "node scripts/missing-checker.js"],
-    ["          node scripts/check-determinism.mjs\n          pnpm typecheck", "          pnpm typecheck"],
+    ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/typed-runtime/check-real-agent-workflow.js\n          pnpm test"],
+    ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/check-determinism.mjs\n          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js"],
+    ["node scripts/check-determinism.mjs", "node scripts/missing-determinism.mjs"],
     ["          pnpm typecheck", "          pnpm typecheck\n          node -e 'console.log(process.env)'"],
     ["  verify:\n", "  verify:\n    env:\n      TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"],
   ];
