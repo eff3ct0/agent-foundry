@@ -55,6 +55,7 @@
     "scripts/check-delivery-contract.mjs",
     "scripts/check-pr-governance.mjs",
     "scripts/task-adapter.mjs",
+    "scripts/task-jira-read.mjs",
     "scripts/sync-github-labels.mjs",
     "start.mjs",
     "templates/adr.md",

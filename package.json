@@ -16,7 +16,7 @@
   "packageManager": "pnpm@12.4.2",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "typecheck": "tsc --noEmit && tsc --allowJs --checkJs --noEmit --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck scripts/task-adapter.mjs",
+    "typecheck": "tsc --noEmit && tsc --allowJs --checkJs --noEmit --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck scripts/task-adapter.mjs scripts/task-jira-read.mjs",
     "test": "pnpm build && node --test test/*.test.mjs",
     "test:creator": "pnpm build && node --test test/creator.test.mjs",
     "test:local-matrix": "pnpm build && node --test test/local-matrix.test.mjs",
