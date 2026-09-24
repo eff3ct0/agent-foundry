@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8872,
-      "sha256": "0798884ca6362c6f6b6f058c33cd1a5360c792361b61dcb1abe047fce358696f"
+      "size": 8998,
+      "sha256": "5fe2ece52adf9f2763e9539878af5a855eb82de9d2aaed0d391c050b21450166"
     },
     {
       "path": "ci/_contract.md",
@@ -329,6 +329,18 @@
       "sha256": "181618275724d6f48b42b0f38aa85490ed7fc47a6767c00937950516540ad776"
     },
     {
+      "path": "scripts/task-adapter.mjs",
+      "mode": "100644",
+      "size": 9969,
+      "sha256": "0c59b540e1c85faf667239a5a9f15fc570cdf4696d7c998688acae530596dbb9"
+    },
+    {
+      "path": "scripts/task-jira-read.mjs",
+      "mode": "100644",
+      "size": 5582,
+      "sha256": "8f8905d78c557afb462e1df3e2250cb5ff6ef95c5f1a301de3da302d2015e643"
+    },
+    {
       "path": "start.mjs",
       "mode": "100644",
       "size": 10603,
@@ -377,5 +389,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:c31bb2713ba7a94cd06968f5fe119142fcbefcc238b96d8fb08f71cf25fb9070"
+  "payload_digest": "sha256:e4b7984caff5e368acc236868b292e86ce6a17cd85245f192da0f7601bb02a5f"
 }
