@@ -96,7 +96,27 @@ const checkTemplateBootstrap = (text) => {
   if (bootstrap.includes("GITHUB_TOKEN") || !report.includes("if: always()") || !report.includes("needs: [prepare, bootstrap]") || !report.includes("GITHUB_TOKEN: ${{ github.token }}")) fail("template reporter must be always-run and credential-separated");
 };
 
+const checkJourneyRunIndentation = (text) => {
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const run = /^([ ]*)run: \|[+-]?$/u.exec(lines[index]);
+    if (!run) continue;
+    let contentIndent;
+    for (let next = index + 1; next < lines.length; next++) {
+      if (!lines[next].trim()) continue;
+      const indent = /^ */u.exec(lines[next])[0].length;
+      if (indent <= run[1].length) break;
+      contentIndent ??= indent;
+      if (indent < contentIndent || lines[next][indent] === "\t") {
+        fail(`real-agent journey run block has invalid YAML indentation at line ${next + 1}`);
+      }
+    }
+    if (contentIndent === undefined) fail(`real-agent journey run block is empty at line ${index + 1}`);
+  }
+};
+
 const checkJourney = (text, projectRoot) => {
+  checkJourneyRunIndentation(text);
   const uses = actionReferences(text);
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("real-agent journey action is not pinned to a full commit SHA");
   if (!/^  JOURNEY_TEMPLATE: eff3ct0\/agent-foundry$/mu.test(text)) fail("real-agent journey source repository must be eff3ct0/agent-foundry");
