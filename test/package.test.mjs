@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -26,6 +26,11 @@ const walk = async (directory, relative = "") => {
     else result.push(entryRelative);
   }
   return result.sort();
+};
+
+const assertNoPythonImplementationFiles = async (target) => {
+  const pythonFiles = (await walk(target)).filter((file) => file.endsWith(".py"));
+  assert.deepEqual(pythonFiles, [], "generated project contains Python implementation files");
 };
 
 test("manifest covers the bundled payload exactly once", async () => {
@@ -115,6 +120,9 @@ test("packed package preserves npm transport and startup handoff", async (contex
     await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "npm transport", TASK_TRACKER: "github-issues" } }));
     const installedCli = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry", "dist", "index.js");
     const environment = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, FACTORY_NPM_INSTALL_ARGS: path.join(parent, "handoff-args.txt") };
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    const planned = await execFileAsync(process.execPath, [installedCli, "plan", ...args], { cwd: root, env: environment });
+    assert.equal(JSON.parse(planned.stdout).status, "planned");
     const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], { cwd: root, env: environment }).then((value) => ({ ...value, code: 0 })).catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code }));
     assert.equal(result.code, 0, result.stderr);
     const envelope = JSON.parse(result.stdout);
@@ -125,10 +133,40 @@ test("packed package preserves npm transport and startup handoff", async (contex
     assert.ok(await stat(path.join(target, ".gitignore")));
     assert.ok(await stat(path.join(target, "start.mjs")));
 
+    const verified = await execFileAsync(process.execPath, [installedCli, "verify", ...args, "--agent", "codex"], { cwd: root, env: environment });
+    assert.equal(JSON.parse(verified.stdout).status, "verified");
+    const rerun = await execFileAsync(process.execPath, [installedCli, "apply", ...args, "--agent", "codex"], { cwd: root, env: environment });
+    assert.equal(JSON.parse(rerun.stdout).status, "noop");
+
+    const checker = path.join(target, ".factory", "scripts", "check-factory-layout.mjs");
+    const { check } = await import(pathToFileURL(checker).href);
+    await assert.rejects(stat(path.join(target, ".github", "workflows", "ci.yml")), { code: "ENOENT" });
+    await assert.rejects(stat(path.join(target, ".factory", "checks")), { code: "ENOENT" });
+    assert.deepEqual(await check(target), [], "inherited layout checker rejected the generated target");
+    await assertNoPythonImplementationFiles(target);
+
     const startup = await execFileAsync(process.execPath, [path.join(target, "start.mjs"), "--cwd", target, "--json"]);
     const startupEnvelope = JSON.parse(startup.stdout);
     assert.equal(startupEnvelope.mode, "WORK");
     assert.equal(startupEnvelope.status, "ready");
+
+    const injected = path.join(target, ".factory", "scripts", "retired.py");
+    await writeFile(injected, "#!/usr/bin/env python3\n");
+    await chmod(injected, 0o755);
+    await assert.rejects(assertNoPythonImplementationFiles(target), /retired\.py/u);
+    await rm(injected);
+
+    const bindings = path.join(target, "docs", "bindings.md");
+    const bindingsContent = await readFile(bindings);
+    await rm(bindings);
+    assert.deepEqual(await check(target), ["required root file missing or not a file: docs/bindings.md"]);
+    await writeFile(bindings, bindingsContent);
+
+    const checks = path.join(target, ".factory", "checks");
+    await writeFile(checks, "not a directory\n");
+    assert.deepEqual(await check(target), ["missing or invalid .factory directory: .factory/checks"]);
+    await rm(checks);
+    assert.deepEqual(await check(target), [], "restored generated target must pass the inherited checker");
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

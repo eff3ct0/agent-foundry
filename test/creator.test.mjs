@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, readdir, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -417,6 +417,12 @@ test("composes bindings and CI recipes, then removes creator-only inputs", async
   const rerun = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
   assert.equal(rerun.code, 0, rerun.stderr);
   assert.equal(json(rerun).status, "noop");
+  await rm(path.join(target, ".github", "workflows", "ci.yml"));
+  const missingCi = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
+  assert.notEqual(missingCi.code, 0);
+  assert.equal(json(missingCi).status, "not-created");
+  assert.ok(json(missingCi).operations.some(({ path: file, action, reason }) =>
+    file === ".github/workflows/ci.yml" && action === "create" && reason === "missing"));
 });
 
 test("compatibility fixtures produce stable plans for task, secrets, and code-intelligence bindings", async () => {
