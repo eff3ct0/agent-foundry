@@ -1,52 +1,112 @@
-# ODD task: Agent Foundry repository rebrand
+# ODD task: Rebrand the repository as Agent Foundry (#183)
 
-## Status
+## Status and next action
 
-- Phase: `PLANNED`
-- Ticket: [#183](https://github.com/eff3ct0/factory-template/issues/183)
-- Worktree: `/home/steam/git/project-archetype-worktrees/issue-112-cutover`
-- Branch: `feat/issue-112-cutover`
-- Base: `main`
-- Route: delegated direct for broad reference mapping and multi-file edits
-- TDD: disabled for documentation/metadata work; validate applicable Node and workflow contracts
-- Delivery strategy: `ask-on-risk`; estimate review size before implementation
-- Slug: owner plans to change it manually; any agent operation requires the exact target slug and explicit authorization
+- Phase: `EVIDENCE/DELIVERY`; R4 and R2 are delivered for review, not merged. R3 metadata is applied and independently read back; the R5 installer caption and scoped local audit are now verified on a separate, unpushed branch. #183 remains open. Parent-reported issue [#183](https://github.com/eff3ct0/agent-foundry/issues/183) readback on 2026-09-23 was `OPEN`, `status:approved`; this local-only unit did not re-read GitHub.
+- Isolated R2 worktree: `/home/steam/git/agent-foundry-worktrees/issue-183-copy`; branch `docs/issue-183-rebrand-copy`; base `dafac99` (R4 parent tip). R4 work-unit commit `d56c665c4add6a3fc967075e29d2b85bda8adb8d`; R2 work-unit commit `7e76335826ae3d3a8971d52537bab1d4cd4aec39`.
+- Owner already renamed the repository to `eff3ct0/agent-foundry` and left Template mode enabled (`isTemplate: true`), per the parent's live readback. Package/CLI change #112 was merged through PR #182 at `d6b0f68`; older draft-PR and pending-publication notes below are historical, not current release evidence.
+- **Next action:** review and integrate [R4 PR #190](https://github.com/eff3ct0/agent-foundry/pull/190) before [R2 PR #191](https://github.com/eff3ct0/agent-foundry/pull/191), then consider this unpushed installer child based on R2 at `adca6d5`. #184 hosted and published-package/exact-registry-consumer gates remain separate. Do not merge, dispatch hosted work, rewrite metadata, or toggle Template mode under this checkpoint. The owner will change Template mode manually only after all package, exact-consumer, and hosted gates are verified.
 
-## Objective
+### Delivery checkpoint (2026-09-23)
 
-Rebrand active repository/product-facing materials consistently to “Agent Foundry” after the package/CLI identity is finalized, while preserving technical concepts, historical evidence, and the existing repository slug until the owner changes it.
+- Feature-branch chain: the tracker `feat/issue-183-integrator` was pushed at `d6b0f68` but has no PR because it is empty relative to `main`. [R4 PR #190](https://github.com/eff3ct0/agent-foundry/pull/190) is `OPEN`, head `feat/issue-183-rebrand`, base `feat/issue-183-integrator`, with sole `type:bug` label. [R2 PR #191](https://github.com/eff3ct0/agent-foundry/pull/191) is `OPEN`, head `docs/issue-183-rebrand-copy`, base `feat/issue-183-rebrand`, with sole `type:docs` label. The parent readback reported governance `validate` SUCCESS for both; this is not a claim that rerun CI is currently green. PR #191's head, base, label, and open state were also read back for this checkpoint.
+- This is a passive documentation receipt only. No merge, issue mutation, repository metadata write, Template-mode change, release, npm publication, or hosted journey is authorized. The earlier local test results and rollback boundaries below remain the evidence for their respective work units, not new test runs for this receipt.
+- R3 was subsequently authorized with the exact tuple below and applied by the parent in one `gh repo edit`; the independent readback and new combined local results appear in the R3/R5 checkpoint below. The preceding sentence describes the earlier PR-delivery receipt, not a claim that metadata was never changed.
 
-## Authorized scope
+## Outcome, authority, and exclusions
 
-- Active README, agent/maintainer instructions, docs, templates, issue/PR forms, startup copy, and workflow messages that present the current product/repository brand.
-- Review and update active workflow URLs and hardcoded repository coordinates after the owner changes the repository slug.
-- Prepare the desired GitHub repository description, topics, and homepage for owner review; apply remote metadata only after the owner explicitly authorizes the exact values and operation.
-- Update tests/static checks that assert current branded copy or URLs.
+Rebrand active repository/product-facing materials to **Agent Foundry** and update live references to `eff3ct0/agent-foundry`. The earlier planning pass edited this file alone; R4 edited runtime coordinates, nearby source-only guidance, and tests. R2 child 2 edited bounded active copy, the generated payload lock, and this tracker. The owner subsequently approved the exact description, topics, homepage, and authenticated `gh` use; the parent applied that tuple once. Repository rename was already done by the owner; do not repeat it. Do not merge, publish, delete, or alter Template mode under this task.
 
-## Exclusions and approval boundaries
+Keep `@eff3ct/agent-foundry` and `foundry` as the existing #112 identity, not a new rename. Preserve `.factory-template-creator` as the persisted creator state/staging namespace (`src/creator.ts`, `start.mjs`, `docs/creator.md`, tests); changing it would be a compatibility migration, not copyediting. Preserve generic technical terms such as template, archetype, `.factory/`, and organization factory (`<ORG>/factory`, `FACTORY_SPEC`). Do not rewrite unrelated historical `odd/tasks/` records, old PR URLs, old worktree names, prior registry results, or existing evidence as if the new brand existed then. Distinguish intentional literal fixture data from operational coordinates before changing tests.
 
-- The package identity `@eff3ct/agent-foundry` and CLI binary `foundry` belong to issue #112, not this separate repository rebrand task.
-- Do not rename the repository slug. The owner intends to change it manually; any delegated rename requires the exact new slug and explicit confirmation.
-- Do not mechanically rename generic technical concepts such as project templates, archetypes, `.factory/` support paths, or organization-level factory behavior unless separately approved.
-- Do not rewrite historical task evidence as if the new brand had existed at the time.
-- No GitHub description/topics/homepage mutation without exact owner approval.
+## R1 inventory and classification (verified locally at base commit)
 
-## Tasks and checks
+- [x] **R1 — map active, technical, and historical references.** Route: direct, bounded CodeGraph exploration followed by local reference inspection; no delegated agent. Evidence: CodeGraph exposed `start.mjs` self-mode command at line 29 and the creator-state validation at lines 101/141; local reads found `.github/workflows/real-agent-journey.yml:29` sets `JOURNEY_TEMPLATE: eff3ct0/factory-template`, which feeds the plan/provision path. Local `node start.mjs` actually printed the obsolete `gh issue list -R eff3ct0/factory-template` instruction. These are live coordinates, not just prose; the workflow's published-package version input remains `@eff3ct/agent-foundry`.
 
-- [ ] R1: Inventory active brand references and classify product, repository, technical, and historical usages. Route: delegated direct exploration. Checks: mapping reviewed; slug-dependent links separated from package/CLI identity.
-- [ ] R2: Rewrite active README, instructions, docs, templates, forms, workflow messages, and applicable tests to “Agent Foundry.” Route: delegated direct. Checks: focused docs/workflow tests; active-reference audit excluding historical records.
-- [ ] R3: Prepare canonical GitHub description, topics, and homepage values for owner confirmation. Route: inline planning. Checks: wording reviewed; no remote write without exact approval.
-- [ ] R4: After the owner changes the repository slug, update active URLs/coordinates and verify repository references. Route: delegated direct. Checks: new exact slug supplied by owner; no old active coordinates remain except explicit historical/external references.
-- [ ] R5: Run the full applicable local verification matrix and update this tracker. Route: delegated direct. Checks: typecheck, tests, docs/workflow contracts, payload consistency, diff check.
+| Classification | Verified examples | Treatment in R2/R4 |
+| --- | --- | --- |
+| Active product and maintainer copy | `README.md:1-5` still opens with `<PROJECT_NAME>`; `AGENT.md:1`, `MAINTAINERS.md:1-5`, `docs/org-factory.md:3-7,44`, `docs/smoke-test.md:8,162`, template/agent entrypoints and GitHub forms | Make current source-product identity clear while preserving downstream `<PROJECT_NAME>` placeholders and abstract template contracts. Update active source-only copy that names the old slug. |
+| Active operational coordinates | `start.mjs:29`; `MAINTAINERS.md:3,18,39`; `.github/workflows/real-agent-journey.yml:29`; `scripts/real-agent-journey-cleanup.mjs:6`; `scripts/report-bootstrap-failure.mjs:406-407` self-check examples; active source-link docs | Point live source identity, examples, links, startup commands, and workflow defaults at `eff3ct0/agent-foundry`. Verify workflow/checker and journey fixture expectations together. Do not rely on GitHub redirect for hosted runs. |
+| Technical names and compatibility | `.factory-template-creator` in `src/creator.ts:27`, `start.mjs:101,141,149`, `docs/creator.md:48-52` and creator/startup tests; `.claude/factory-template.md` and `.opencode/agents/factory-template.md` provider output paths in `providers/agents/catalog.json`, `docs/creator.md`, and tests; `<ORG>/factory` in `docs/org-factory.md` | Keep persisted creator namespace unchanged. Evaluate provider output filenames separately for compatibility before proposing a rename; do not bulk-replace technical identifiers or generic factory concepts. |
+| Historical records and synthetic fixtures | Existing `odd/tasks/issue-112-cutover.md` and older task PR/worktree links; `test/report-bootstrap-failure.test.mjs`, `test/real-agent-journey-report.test.mjs`, resource-provisioning tests using old source strings as data | Leave historical task files untouched. Change tests only where they assert the *current* source coordinate or copy; keep useful arbitrary-repository fixtures if they intentionally exercise generic input. |
 
-## Progress
+The inventory is a scoped map, not a claim that every possible old-string occurrence is resolved. Before closeout, audit tracked active docs, scripts, workflows, forms, templates, and tests for remaining old product/slug coordinates; classify each match and record justified exceptions. This planning session did not conduct a fresh remote readback or claim CodeGraph verification of any GitHub settings.
 
-- Initial scope map completed. It identified active references in `README.md`, `AGENT.md`, `MAINTAINERS.md`, `start.mjs`, `docs/`, `templates/`, `.github/workflows/real-agent-journey.yml`, tests, and scripts.
-- The user confirmed the npm scope is `@eff3ct`, selected package `@eff3ct/agent-foundry`, and CLI command `foundry`. Package/bin implementation is tracked separately under issue #112.
-- The public registry returned E404 for `@eff3ct/agent-foundry` before implementation; the package/bin identity is now implemented separately under issue #112 and draft PR #182.
-- This task begins with broader repository copy and metadata only.
-- GitHub repository slug and metadata remain unchanged.
+## Acceptance and verification
 
-## Next step
+- [ ] Active source-repository identity, startup instructions, maintainer docs, product README, installer UI, and applicable forms/templates say Agent Foundry and use `eff3ct0/agent-foundry` where a concrete repository is intended; generated-project placeholders remain generic. The installer caption is corrected and locally tested below; integrated review and remaining gates are not complete.
+- [x] `node start.mjs` in SELF mode prints the new issue-list coordinate. The offline real-agent journey plan uses the renamed repository; the independent source readback remains fail-closed, and the cleanup default and applicable tests agree. No #184 hosted run was started.
+- [ ] Package/bin remain `@eff3ct/agent-foundry`/`foundry`; creator state namespace and organization factory semantics stay intact. Historical evidence remains historically accurate. Each remaining old-string occurrence is classified rather than mechanically erased.
+- [ ] Add/update ordinary functional regressions with each changed behavior (owner chose **ordinary functional tests**, not strict TDD). Run from this worktree with pinned Node >=20.19.0 and Corepack pnpm 12.4.2: `node start.mjs` (SELF output), `node --test test/startup.test.mjs test/real-agent-journey-report.test.mjs test/report-bootstrap-failure.test.mjs` plus any changed component tests; `node scripts/check-bootstrap-workflow.mjs`; `pnpm typecheck`; `pnpm test:workflow-contract`; `pnpm test` (includes build and full Node test suite). Run `pnpm test:package-consumer` if the payload/generation-facing copy or catalog changes, to check generated files and identity; capture actual command, exit/result, and omissions, not predicted passes. Inspect `git diff --check` and the final active-reference audit. No lint script is defined in `package.json`; do not invent a lint result. Hosted journey is a separate authorized/credential-dependent #184 boundary, not a substitute for local checks.
+- [x] R3 metadata: the owner explicitly approved the exact tuple below and authenticated `gh` use; the parent applied it once. Independent readback verified description, topics, homepage, and unchanged `isTemplate: true` (checkpoint below). No second mutation.
+- [ ] Record focused and full test outcomes, runtime harness output (or `N/A` with reason for a docs-only unit), rollback boundary, authored addition+deletion count, commit/PR IDs if later created, and blockers in this tracker. Do not mark #183 `DONE` on the strength of a checklist or a planning-only edit.
 
-Execute R1/R2 as a separate rebrand change; request the exact repository slug from the owner after they perform the manual rename, and obtain separate approval before any GitHub metadata write.
+## Reviewable work units and routing
+
+| Task | Route and trigger | Finished state / review boundary |
+| --- | --- | --- |
+| R1 (complete) | Direct mapping when entering `DEFINITION`; evidence above. | Active vs technical vs historical references classified; no source edit claimed. |
+| R2 (complete locally; child 2) | Direct bounded docs implementation and packaged-consumer regression. Provider filename migration and AGENT.md cross-issue #177 remain outside this unit. | Source product attribution and live docs coordinates updated; inherited `<PROJECT_NAME>` and organization factory contracts preserved. |
+| R3 (applied and read back) | Owner-approved exact description/topics/homepage; parent performed one authenticated metadata edit. | This checkpoint independently read back the exact values and `isTemplate: true`; no further metadata write. |
+| R4 (complete locally) | Direct local implementation because owner slug is already `eff3ct0/agent-foundry`. Startup and hosted journey coordinates precede any #184 hosted run; regressions and dependent source-only guidance travel with the unit. | Offline runtime checks and rollback evidence below; no hosted execution or unrelated historical edits. |
+| R5 (bounded installer fix locally verified; delivery pending) | Direct combined verification after R2/R4, followed by a separate installer child based on R2; record actual results and reviewable diff. | Interactive welcome caption and focused regression pass, with the scoped active-reference audit below; no claim of merged, hosted, or published verification. |
+
+GitHub metadata tuple subsequently **approved and applied** by the parent; independently read back below (the original proposal was not itself authorization):
+
+| Field | Exact applied value |
+| --- | --- |
+| Description | `Agent Foundry: a versioned, transactional creator for agent-first software projects.` |
+| Topics | `ai-agents`, `developer-tools`, `project-template`, `scaffolding`, `typescript` |
+| Homepage | `https://github.com/eff3ct0/agent-foundry` |
+
+Delivery strategy: the owner selected a **separate feature-branch chain** for #183, superseding the earlier `ask-on-risk` forecast. Tracker `feat/issue-183-integrator` remains at `main`; child 1 is `feat/issue-183-rebrand` (R4, parent tip `dafac99`); child 2 is `docs/issue-183-rebrand-copy` (R2, based on `dafac99`), in `/home/steam/git/agent-foundry-worktrees/issue-183-copy`. Child 2 targets child 1, not `main`; the PR delivery is recorded in the checkpoint above. Keep each child cohesive, testable, and independently reversible; do not shrink docs or tests for the ~400 authored-line advisory.
+
+## R5 installer child local evidence (2026-09-23)
+
+- New sibling worktree `/home/steam/git/agent-foundry-worktrees/issue-183-installer`, branch `fix/issue-183-installer-brand`, based on the clean R2 tip `adca6d54461d8b2b32546e2cf7467695346b2338`. No parent or main worktree edits. `node start.mjs`: exit 0, SELF mode with `gh issue list -R eff3ct0/agent-foundry --label type:product`. Node `v26.9.0`; pnpm `12.4.2`. RDD off; ordinary functional tests, not strict RED/GREEN.
+- `src/installer-ui.ts` now renders `Agent Foundry installer` while preserving the generic `Prepare a repository from the packaged template` line. `test/installer-ui.test.mjs` exercises `renderWelcome` with color disabled, checks both lines exactly, and rejects the retired caption and ANSI escapes. No persisted `.factory-template-creator` namespace, package/bin identity, or generated payload was changed.
+- `pnpm build`: exit 0 (`node scripts/build.mjs`); `pnpm typecheck`: exit 0 (`tsc --noEmit`); `node --test test/installer-ui.test.mjs test/installer-pty.test.mjs`: exit 0, 5/5 passed, including the real PTY Escape cancellation check (local runtime boundary).
+- `pnpm test`: exit 0, 178/178 passed; `pnpm test:package-consumer`: exit 0, 3/3 offline tests passed (not an exact published-registry consumer); `pnpm test:workflow-contract`: exit 0, 18/18 passed.
+- `node scripts/check-determinism.mjs`: exit 0 (`determinism and Python-removal audit OK`); `node scripts/check-bootstrap-workflow.mjs`: exit 0 (bootstrap, template bootstrap, real-agent journey, journey assertion, npm release static checks OK); `node scripts/check-real-agent-workflow.mjs`: exit 0 (`real-agent workflow static check OK`); `node scripts/check-factory-layout.mjs`: exit 0 (`factory layout structural self-check OK`); `git diff --check`: exit 0.
+- Scoped active old-brand audit for `Factory Template installer` and `eff3ct0/factory-template`: no matches in `src/`, `docs/`, `scripts/`, `templates/`, `providers/`, or `.github/`. Remaining `test/` occurrences are this negative welcome assertion, negative retired-slug checks, or synthetic arbitrary-repository fixtures; the earlier R2/R4 audit classified historical task records and compatibility paths. This is a local active-reference result, not an integrated branch or hosted readback.
+- Rollback boundary: revert only this installer caption, its focused test, and this R5 tracker update; R2/R4 work units, historical evidence, and the earlier approved metadata remain intact. This child is local-only: no push, PR, merge, issue mutation, metadata edit, Template toggle, release, hosted #184 execution, credentials, or remote readback. Review/integration of the chain and independent published-package, exact registry-consumer, and hosted gates remain outstanding before #183 closeout. Work-unit commit: `d373ddcbb0a75ade0e8543095986fbd8d2bccb1e` (`fix(installer): update Agent Foundry welcome caption (#183)`), 22 additions + 5 deletions (27 authored lines, below the 400-line advisory). This SHA is recorded by a separate evidence-only follow-up because a commit cannot contain its own identity.
+
+## R3 readback and R5 combined local checkpoint (2026-09-23)
+
+- Remote readback (read-only `gh repo view eff3ct0/agent-foundry --json nameWithOwner,description,repositoryTopics,homepageUrl,isTemplate`): `nameWithOwner=eff3ct0/agent-foundry`; description `Agent Foundry: a versioned, transactional creator for agent-first software projects.`; topics exactly `ai-agents`, `developer-tools`, `project-template`, `scaffolding`, `typescript`; homepage `https://github.com/eff3ct0/agent-foundry`; `isTemplate=true`. These match the owner's approved tuple and the parent's one earlier metadata edit. No edit or Template-mode toggle was made in this checkpoint.
+- Worktree `docs/issue-183-rebrand-copy` at `00a6388fde6bf47fb2cb07fac55a2f106c8e9ada` before this receipt; clean initial status. `node start.mjs`: exit 0, SELF mode prints `gh issue list -R eff3ct0/agent-foundry --label type:product`. Node `v26.9.0`; pnpm `12.4.2`.
+- `pnpm typecheck`: exit 0 (`tsc --noEmit`).
+- `pnpm test`: exit 0 (build; 177/177 Node tests passed).
+- `pnpm test:package-consumer`: exit 0 (build; 3/3 offline package-consumer tests passed). This does **not** prove a published-registry exact-version consumer run.
+- `node scripts/check-determinism.mjs`: exit 0 (`determinism and Python-removal audit OK`).
+- `node scripts/check-bootstrap-workflow.mjs`: exit 0 (bootstrap, template bootstrap, real-agent journey, journey assertion, and npm release workflow static checks OK).
+- `node scripts/check-real-agent-workflow.mjs`: exit 0 (`real-agent workflow static check OK`).
+- `node scripts/check-factory-layout.mjs`: exit 0 (`factory layout structural self-check OK`).
+- `git diff d6b0f68..HEAD --check`: exit 0, no whitespace errors against the integrated #112 base at the pre-receipt HEAD. The same range must be checked again after this doc commit.
+- Active old-brand audit: active `.github/`, `scripts/`, `templates/`, and `providers/` searches found no old slug or old product caption; `docs/creator.md` retains only the persisted `.factory-template-creator` namespace (provider output filenames in the catalog are compatibility names). Tests retain negative retired-slug checks and synthetic arbitrary-template fixtures; `odd/tasks/` retains historical evidence. **Exception requiring work:** `src/installer-ui.ts:41` renders `Factory Template installer` through `renderWelcome`, invoked by interactive `src/index.ts:340`; this is current user-visible copy, not a technical compatibility identifier. R5's full active-reference criterion therefore fails despite the command passes. Do not correct source code in this doc-only receipt.
+- Runtime harness: N/A for this passive evidence unit; no hosted #184 execution, package publication, exact registry-consumer verification, merge, issue mutation, or release is claimed. Rollback for this receipt: revert only this tracker update; retain R2/R4 commits and the already-applied remote metadata. #183 remains open pending installer correction, review/integration of the PR chain, and separate package/exact-consumer/hosted gates before the owner manually changes Template mode.
+- PR #191 readback before this receipt: `OPEN`, head `docs/issue-183-rebrand-copy` at `00a6388fde6bf47fb2cb07fac55a2f106c8e9ada`, base `feat/issue-183-rebrand`, sole `type:docs` label. This tracker-only receipt has 41 authored additions+deletions against that head, below the 400-line advisory; its commit and push SHA are reported separately after delivery, without a second self-referential commit.
+
+## R2 child-2 local evidence (2026-09-23)
+
+- Product-facing `README.md` attributes the creator to Agent Foundry and links to `eff3ct0/agent-foundry` while retaining `<PROJECT_NAME>` for downstream headings. Source-only `MAINTAINERS.md` and `docs/smoke-test.md` name the current source; inherited `docs/org-factory.md` distinguishes that source from `<ORG>/factory` and keeps `FACTORY_SPEC`. Generic GitHub forms and templates needed no source-brand change. `AGENT.md` is deferred because of #177; `.factory-template-creator` and provider output filenames are compatibility names, not copy.
+- `node scripts/build-payload.mjs --write-lock`: exit 0, regenerated `package/payload-manifest.json` digest `sha256:f385592298df30fe9c05dd31e50823a4395f76643aa8a7a6bd29f2df27329315` for the inherited README/org guide. No lock was hand-edited.
+- `pnpm typecheck`: exit 0 (`tsc --noEmit`); `pnpm test`: exit 0 (177/177); `node scripts/check-bootstrap-workflow.mjs`: exit 0 (five workflow static checks OK); `node scripts/check-real-agent-workflow.mjs`: exit 0; `node scripts/check-factory-layout.mjs`: exit 0; `node scripts/check-determinism.mjs`: exit 0; `pnpm test:package-consumer`: exit 0 (3/3). `git diff --check`: exit 0. Runtime harness: N/A; this is passive documentation, not a hosted runtime boundary. No #184 dispatch or remote operation.
+- Active-reference audit: no old slug in active `docs/*.md`, `.github/*.md`/`*.yml`, `scripts/*.mjs`, `templates/*.md`, or `providers/*.md`. Remaining matches in `docs/creator.md` are provider output paths and persisted creator namespace; test matches are negative old-source checks or synthetic generic provisioning/reporter fixtures. Historical `odd/` records are left unchanged. No package/bin rename or Template-mode mutation.
+- Rollback boundary: revert only child-2 changes to `README.md`, `MAINTAINERS.md`, `docs/smoke-test.md`, `docs/org-factory.md`, and this tracker; regenerate `package/payload-manifest.json` with the repository builder after restoring inherited docs. R4 and the historical R1 evidence remain intact. At this earlier R2 checkpoint metadata was still `BLOCKED: exact owner-reviewed wording` and the child had no remote delivery; R3 has since been approved/applied/read back and R5 remains incomplete.
+- Work-unit commit: `7e76335826ae3d3a8971d52537bab1d4cd4aec39` (`docs(rebrand): update Agent Foundry source copy (#183)`), 59 authored additions+deletions plus 10 generated lock lines against `dafac99`. This passive SHA receipt changes only the task document; its commit is additional evidence, not a second functional unit.
+
+## R4 local implementation evidence (2026-09-23)
+
+- SELF startup now prints `gh issue list -R eff3ct0/agent-foundry --label type:product`. `JOURNEY_TEMPLATE` in the parent workflow supplies that same slug to the offline plan, source provision readback, cleanup adapter, and canonical reporter. The workflow checker rejects a reverted slug. The cleanup adapter fallback, bootstrap reporter self-check, current-source report fixtures, and source-only `MAINTAINERS.md` coordinates agree. Generic repository validation and the package/bin (`@eff3ct/agent-foundry`/`foundry`) are unchanged.
+- `node scripts/build-payload.mjs --write-lock`: exit 0, payload digest `sha256:4bf46412a8be3f81f9153b2efec806cf7d2a2ebf6e55b2ccedec6d35ae0e2dcc` because `start.mjs` is a declared payload file. The lock is generated, not hand-edited.
+- `node start.mjs`: exit 0, SELF command above. `node --test test/startup.test.mjs test/real-agent-journey-report.test.mjs test/report-bootstrap-failure.test.mjs test/check-bootstrap-workflow.test.mjs`: exit 0, 41/41 passed (after correcting one new test's expected mismatch wording). Positive plan/report/startup fixtures and negative old-slug workflow/report and mismatched bootstrap readback fixtures passed.
+- `node scripts/check-real-agent-workflow.mjs`: exit 0, `real-agent workflow static check OK`. `node scripts/check-bootstrap-workflow.mjs`: exit 0, all five workflow static checks OK. `pnpm typecheck`: exit 0, `tsc --noEmit`.
+- `pnpm test`: exit 0, 177/177 passed (including build/payload validation). `pnpm test:workflow-contract`: exit 0, 18/18 passed. `pnpm test:package-consumer`: exit 0, 3/3 passed. Hosted workflow: not run; no hosted dispatch, repository metadata mutation, release, or PR.
+- `git diff --check`: exit 0. Against `d6b0f68`, this unit is 208 authored additions+deletions plus 6 generated payload-lock lines (214 total); below the 400-line work-unit guard. A scoped audit found no old slug in active `.github/workflows/*.yml` or `scripts/*.mjs`; old-slug strings retained in negative tests, generic provisioning fixtures, and historical records are intentional.
+- Rollback boundary: revert only this R4 runtime/checker/test/nearby `MAINTAINERS.md` unit and regenerate `package/payload-manifest.json` from the restored `start.mjs`; keep the earlier R1 plan and all historical `odd/tasks/` records. The commit contains this tracker as the implementation receipt. At this earlier R4 checkpoint delivery was local-only and R2/R3/R5 were open; R3 has since been approved/applied/read back, while R5 remains incomplete.
+- Commit evidence: `d56c665c4add6a3fc967075e29d2b85bda8adb8d` (`fix(journey): cut over source repository coordinates (#183)`). This passive tracker-only follow-up records the immutable work-unit SHA; it changes no runtime behavior.
+
+## Historical note (not a current gate)
+
+Earlier #112 notes recorded the previous `eff3ct0/factory-template` slug, draft PR #182, unpublished-package questions, and a planned owner rename. Those observations belonged to that earlier checkpoint; the parent now reports #182 merged at `d6b0f68`, the owner rename complete, and Template mode still enabled. The planning pass had no independent registry or metadata readback; this later R3 checkpoint independently reads GitHub metadata but does not verify registry publication. Leave other `odd/` historical evidence unchanged.

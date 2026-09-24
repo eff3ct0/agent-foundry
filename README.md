@@ -1,8 +1,9 @@
 # <PROJECT_NAME>
 
-**Language-agnostic** repository template for agent-first software development.
-The exact-version Node creator package is the primary way to create a project
-from this archetype.
+Created with **Agent Foundry**, the language-agnostic archetype for agent-first
+software development. The source is [`eff3ct0/agent-foundry`](https://github.com/eff3ct0/agent-foundry);
+each generated project keeps its own `<PROJECT_NAME>`. The exact-version Node
+creator package is the primary way to create a project from the archetype.
 
 ## What it includes
 
@@ -60,11 +61,11 @@ recovery boundaries. Do not hide a remote mutation behind project creation.
 
 ## Rollback and final cutover
 
-GitHub Template mode remains enabled only as a rollback safety valve until local
-and published-consumer verification passes. If the package path fails,
-re-enable Template mode and repair the package path. Published npm bytes are
-immutable, so publish a correcting version rather than replacing an existing
-version.
+The source repository retains GitHub Template mode as a rollback safety valve
+until local and published-consumer verification passes. If the package path
+fails, repair it before changing the creation path; using Template mode for
+recovery requires a separate decision. Published npm bytes are immutable, so
+publish a correcting version rather than replacing an existing version.
 
 ## Governance
 
