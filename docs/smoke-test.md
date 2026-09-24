@@ -1,11 +1,11 @@
-# Factory smoke test (repeatable dogfood)
+# Agent Foundry smoke test (repeatable dogfood)
 
 Validate that a COLD agent, given only the repository and a minimal kickoff,
   starts and configures itself according to the contract. Every friction point becomes a
-[`type:dx-feedback` issue](../.github/ISSUE_TEMPLATE/dx-feedback.yml) in the template repository.
+[`type:dx-feedback` issue](../.github/ISSUE_TEMPLATE/dx-feedback.yml) in `eff3ct0/agent-foundry`.
 
 > **Archetype boundary:** Release E2E and OpenAI triage paths exist only in
-> `eff3ct0/factory-template`. Normal initialization removes those maintainer
+> `eff3ct0/agent-foundry`. Normal initialization removes those maintainer
 > procedures and their helpers and tests. Downstream projects inherit generic
 > template behavior and generated assets such as CI and bindings.
 
@@ -159,7 +159,7 @@ rm -rf factory-smoke-test
 
 ## 5. Feedback (the improvement engine)
 Open a [`type:dx-feedback` issue](../.github/ISSUE_TEMPLATE/dx-feedback.yml) in
-`eff3ct0/factory-template` for every point where extra intervention was needed or
+`eff3ct0/agent-foundry` for every point where extra intervention was needed or
 `docs/agent-init.md` was ambiguous.
 
 ## Definition of Done

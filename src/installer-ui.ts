@@ -38,7 +38,7 @@ export const detectUiOptions = (
 };
 
 export const renderWelcome = (options: InstallerUiOptions): string => [
-  paint("Factory Template installer", "bold", options),
+  paint("Agent Foundry installer", "bold", options),
   paint("Prepare a repository from the packaged template", "dim", options),
 ].join("\n");
 
