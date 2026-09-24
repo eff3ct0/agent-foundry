@@ -323,6 +323,34 @@ test("npm release workflow is explicit, immutable, and publish-once", async () =
   });
 });
 
+test("npm release rejects Corepack and unpinned or unchecked toolchains", async () => {
+  const pinned = "npm install --global pnpm@12.4.2";
+  for (const replacement of [
+    "corepack enable\n          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2",
+    "npm install --global pnpm",
+    "npm install --global pnpm@latest",
+  ]) {
+    await fixture(async (directory) => {
+      await replace(directory, "npmRelease", pinned, replacement);
+      await reject(directory, replacement.includes("corepack") ? "npm release toolchain must not use Corepack" : `npm release pinned toolchain is missing ${pinned}`);
+    });
+  }
+  for (const check of ['test "$(node --version)" = "v20.19.0"', 'test "$(pnpm --version)" = "12.4.2"']) {
+    await fixture(async (directory) => {
+      await replace(directory, "npmRelease", check, "true");
+      await reject(directory, `npm release pinned toolchain is missing ${check}`);
+    });
+  }
+  await fixture(async (directory) => {
+    await replace(directory, "npmRelease", pinned, `npm install --global pnpm\n          # ${pinned}`);
+    await reject(directory, `npm release pinned toolchain is missing ${pinned}`);
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "npmRelease", pinned, `test "$(pnpm --version)" = "12.4.2"\n          ${pinned}`);
+    await reject(directory, "npm release must check Node before installing pnpm and check pnpm afterwards");
+  });
+});
+
 test("npm release workflow wires both event SHAs into the pre-publish guard", async () => {
   const cases = [
     ["EVENT_SHA: ${{ github.sha }}", "EVENT_SHA: ${{ github.event_name == 'release' && github.sha || '' }}", "npm release identity step is missing EVENT_SHA: ${{ github.sha }}"],
