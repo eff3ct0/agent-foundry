@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -320,6 +320,70 @@ test("npm release workflow is explicit, immutable, and publish-once", async () =
   await fixture(async (directory) => {
     await replace(directory, "npmRelease", "release:\n    types: [published]", "push:\n    branches: [main]");
     await reject(directory, "npm release workflow is missing release:\n    types: [published]");
+  });
+});
+
+test("npm release stop cannot be deleted, moved, disguised or bypassed", async () => {
+  const stop = "          printf '%s\\n' 'npm release publication blocked: exclusive publish gate not installed' >&2\n          exit 1\n";
+  const publishCommand = '          npm publish "$TARBALL" --provenance --access public\n';
+  const variants = [
+    [stop, ""],
+    [stop, stop.replace(/^          /gmu, "          # ")],
+    ["          exit 1\n", "          # exit 1\n"],
+    ["          exit 1\n", "          exit 0\n"],
+    ["          exit 1\n", "          if false; then exit 1; fi\n"],
+    ["          exit 1\n", "          exit 1 || true\n"],
+    [stop + '          test -n "$NODE_AUTH_TOKEN"\n' + publishCommand,
+      publishCommand + stop + '          test -n "$NODE_AUTH_TOKEN"\n'],
+  ];
+  for (const [from, to] of variants) {
+    await fixture(async (directory) => {
+      await replaceFirst(directory, "npmRelease", from, to);
+      await reject(directory, "npm release publish step must stop before npm publish without bypass");
+    });
+  }
+  for (const bypass of [
+    "        continue-on-error: true\n",
+    "    continue-on-error: true\n",
+    "        if: always()\n",
+    "    defaults:\n      run:\n        shell: sh\n",
+  ]) {
+    await fixture(async (directory) => {
+      await replaceFirst(directory, "npmRelease", "      - name: Publish the exact package with npm provenance\n",
+        `      - name: Publish the exact package with npm provenance\n${bypass}`);
+      await reject(directory, "npm release publish step must stop before npm publish without bypass");
+    });
+  }
+  await fixture(async (directory) => {
+    await replaceFirst(directory, "npmRelease", stop, "");
+    await append(directory, "npmRelease", `\n# ${stop.trim()}\n`);
+    await reject(directory, "npm release publish step must stop before npm publish without bypass");
+  });
+});
+
+test("npm release stop exits before npm or token checks for both trigger paths", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
+    const step = workflow.split("      - name: Publish the exact package with npm provenance\n")[1]
+      ?.split("      - name: Read back npm metadata, tarball, and payload identity\n")[0];
+    assert.ok(step);
+    const scriptText = step.split("        run: |\n")[1]?.split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    assert.ok(scriptText);
+    const bin = path.join(directory, "bin");
+    await mkdir(bin);
+    const marker = path.join(directory, "npm-called");
+    const fakeNpm = path.join(bin, "npm");
+    await writeFile(fakeNpm, '#!/bin/sh\n: > "$FAKE_NPM_MARKER"\nexit 93\n');
+    await chmod(fakeNpm, 0o755);
+    for (const eventName of ["release", "workflow_dispatch"]) {
+      for (const token of ["", "offline-placeholder"]) {
+        await assert.rejects(execFileAsync("bash", ["-eo", "pipefail", "-c", scriptText], {
+          cwd: directory, env: { PATH: `${bin}:${process.env.PATH}`, NODE_AUTH_TOKEN: token,
+            TARBALL: "not-a-package.tgz", FAKE_NPM_MARKER: marker, GITHUB_EVENT_NAME: eventName },
+        }), (error) => error.code === 1 && error.stderr.includes("publication blocked"));
+        await assert.rejects(readFile(marker), { code: "ENOENT" });
+      }
+    }
   });
 });
 

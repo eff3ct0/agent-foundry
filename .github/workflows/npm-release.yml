@@ -89,6 +89,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          printf '%s\n' 'npm release publication blocked: exclusive publish gate not installed' >&2
+          exit 1
           test -n "$NODE_AUTH_TOKEN"
           npm publish "$TARBALL" --provenance --access public
       - name: Read back npm metadata, tarball, and payload identity
