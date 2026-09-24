@@ -1,6 +1,6 @@
-# MAINTAINERS - archetype self-governance
+# MAINTAINERS - Agent Foundry source governance
 
-This repo (`eff3ct0/factory-template`) follows its OWN doctrine (dogfooding).
+Agent Foundry (`eff3ct0/agent-foundry`) follows its own doctrine (dogfooding).
 This layer is concrete and SEPARATE from the **product** (the template content
 containing `<PLACEHOLDER>` values).
 
@@ -15,7 +15,7 @@ workflows and generated project files remain.
 | Category | Lifecycle | Examples and rule |
 | --- | --- | --- |
 | Archetype governance | Removed after initialization | This file, source change records, and source-only verification assets exist only to operate the archetype. |
-| Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/factory-template`. |
+| Release/template E2E / OpenAI triage | Removed after initialization | The release and template bootstrap workflows, smoke-test procedure, bootstrap/reporter/triage helpers, workflow checker, and their tests run only in `eff3ct0/agent-foundry`. |
 | Initializer inputs | Removed after initialization | `placeholders.json` is consumed before cleanup; it must not be deleted before replacement, validation, or composition. |
 | Provider and CI recipes | Removed after initialization | `providers/` and `ci/` are composition inputs. They stay available until bindings and CI are generated, then are removed as a unit. |
 | Inherited generic assets | Retained | `start.mjs`, `AGENT.md`, generic docs, hooks, templates, GitHub forms, governance workflows, and generic Node checkers belong to every initialized project. |
@@ -36,7 +36,7 @@ placeholders, and remove its scaffolding. `placeholders.json`, `providers/`,
 not this repo's configuration.
 
 ## Bindings for this repo
-- **Tasks:** GitHub Issues + GitHub Projects (v2) for `eff3ct0/factory-template`.
+- **Tasks:** GitHub Issues + GitHub Projects (v2) for `eff3ct0/agent-foundry`.
 - **Secrets:** none (public template; no real secrets).
 - **Loop contract:** `templates/agent-runbook.md`. **DoD:** `templates/definition-of-done.md`.
 
@@ -45,11 +45,12 @@ not this repo's configuration.
 The immutable npm release contract is `.github/workflows/npm-release.yml`. It
 has only the published-release and explicit tag-dispatch paths. The workflow
 resolves the tag to one full commit SHA, requires `v<package-version>`, builds
-and packs that checkout with Node 20.19.0 and npm-installed pnpm 12.4.2, then
-publishes the one tarball once with npm provenance. `NPM_TOKEN` is required at the
-publish boundary. The immediate npm metadata, tarball, payload, release-tag,
-and source-SHA readback is authoritative; any mismatch fails closed. The
-workflow never changes GitHub repository settings or Template mode.
+and packs that checkout with Node 20.19.0 and npm-installed pnpm 12.4.2.
+On the #184 feature branch, an unconditional stop in the shared publish step
+prevents npm publication before the token check or `npm publish`. This stop
+does not protect `main` until separately integrated. The planned publication
+and registry readback remain blocked pending an exclusive publish/skip gate;
+the workflow never changes GitHub repository settings or Template mode.
 
 Before a maintainer authorizes a release, retain the workflow evidence artifact
 with the release tag, source SHA, package/version, payload digest, tarball
@@ -208,7 +209,7 @@ The canonical label catalog is [`.github/labels.json`](.github/labels.json); run
 4. When a coherent batch lands -> create and push a new tag (`v1.x` / `v2`).
 
 ## Improve while using
-Every project bootstrapped from the template that finds a gap opens a
+Every project created with Agent Foundry that finds a gap opens a
 `type:dx-feedback` issue here (its `FACTORY_SPEC` records provenance). Usage
 feeds the backlog.
 
