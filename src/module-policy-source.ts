@@ -153,33 +153,51 @@ export const inventorySourceModules = async (directory: string, gitExecutable: s
   return { tracked, payload };
 };
 
-const typedWorkflowSource = "scripts/typed/check-real-agent-workflow.mts";
-const typedWorkflowRuntime = "scripts/typed-runtime/check-real-agent-workflow.js";
-const typedWorkflowManifest = "scripts/typed-runtime/package.json";
+const typedSourceRoot = "scripts/typed/";
+const typedRuntimeRoot = "scripts/typed-runtime/";
+const typedRuntimeManifest = `${typedRuntimeRoot}package.json`;
 
-/** Source-only adapter: derive the single compiled identity from fresh compiler bytes. */
+/** Source-only adapter: derive every compiled identity from fresh compiler bytes. */
 export const checkSourceModulePolicy = async (root: string, gitExecutable: string): Promise<ModulePolicyDiagnostic[]> => {
   const { tracked, payload } = await inventorySourceModules(root, gitExecutable);
-  const source = tracked.find((file) => file.path === typedWorkflowSource);
-  const runtime = tracked.find((file) => file.path === typedWorkflowRuntime);
-  const runtimeManifest = tracked.find((file) => file.path === typedWorkflowManifest);
-  if (Boolean(source) !== Boolean(runtime) || (!source && runtimeManifest)) {
-    throw new Error("typed workflow source/runtime pair is incomplete");
+  const sources = tracked.filter((file) => file.path.startsWith(typedSourceRoot));
+  const runtime = tracked.filter((file) => file.path.startsWith(typedRuntimeRoot));
+  const sourceDirectory = path.join(root, "scripts/typed");
+  const runtimeDirectory = path.join(root, "scripts/typed-runtime");
+  const exists = async (directory: string): Promise<boolean> => lstat(directory).then(() => true, (error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  });
+  const hasSource = await exists(sourceDirectory);
+  const hasRuntime = await exists(runtimeDirectory);
+  if (hasSource !== hasRuntime || Boolean(sources.length) !== Boolean(runtime.length) ||
+    (hasSource && (!sources.length || !runtime.length)) ||
+    (!hasSource && (sources.length > 0 || runtime.length > 0))) {
+    throw new Error("typed source/runtime pair is incomplete");
   }
   const compiled = [];
-  if (source && runtime) {
-    if (!runtimeManifest || runtimeManifest.mode !== "100644") {
-      throw new Error("typed workflow runtime manifest must be tracked regular mode 100644");
+  if (hasSource && hasRuntime) {
+    const manifest = runtime.find((file) => file.path === typedRuntimeManifest);
+    if (!manifest || manifest.mode !== "100644") {
+      throw new Error("typed runtime manifest must be tracked regular mode 100644");
     }
-    if (source.mode !== "100644" || runtime.mode !== "100644") {
-      throw new Error("typed workflow source/runtime pair has an invalid mode");
+    if ([...sources, ...runtime].some((file) => file.mode !== "100644")) {
+      throw new Error("typed source/runtime files must be tracked regular mode 100644");
     }
-    const emitted = await verifyTypedRuntime(path.join(root, "scripts/typed"), path.join(root, "scripts/typed-runtime"));
-    if (JSON.stringify(emitted) !== JSON.stringify(["check-real-agent-workflow.js", "package.json"])) {
-      throw new Error("typed workflow runtime has an unexpected output set");
+    const emitted = await verifyTypedRuntime(sourceDirectory, runtimeDirectory);
+    const expectedSources = emitted.filter((file) => file.endsWith(".js"))
+      .map((file) => `${typedSourceRoot}${file.slice(0, -3)}.mts`).sort();
+    const expectedRuntime = emitted.map((file) => `${typedRuntimeRoot}${file}`).sort();
+    if (!expectedSources.length || !emitted.includes("package.json") ||
+      emitted.some((file) => file !== "package.json" && !file.endsWith(".js")) ||
+      JSON.stringify(sources.map((file) => file.path).sort()) !== JSON.stringify(expectedSources) ||
+      JSON.stringify(runtime.map((file) => file.path).sort()) !== JSON.stringify(expectedRuntime)) {
+      throw new Error("typed source/runtime tracked file set differs from compiler output");
     }
-    compiled.push({ sourceScope: "tracked" as const, source: typedWorkflowSource,
-      outputScope: "tracked" as const, output: typedWorkflowRuntime });
+    for (const file of emitted.filter((entry) => entry.endsWith(".js"))) {
+      compiled.push({ sourceScope: "tracked" as const, source: `${typedSourceRoot}${file.slice(0, -3)}.mts`,
+        outputScope: "tracked" as const, output: `${typedRuntimeRoot}${file}` });
+    }
   }
   return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled });
 };
