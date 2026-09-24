@@ -55,8 +55,8 @@
     {
       "path": ".github/workflows/sync-labels.yml",
       "mode": "100644",
-      "size": 575,
-      "sha256": "f50ce7dcf82cbfda5f360a20b3fce39a96d2a978f11acdfe16ff81e420048cf7"
+      "size": 985,
+      "sha256": "0f0d19f5c21ebce6bbfe1d949164dd05c10d3e3f4109f1e2e7302371cedb331a"
     },
     {
       "path": ".gitignore",
@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 9638,
-      "sha256": "51e91eb7dfa466432bcfb238b768e960adb6f5d696cfde9c3d333292b96c281d"
+      "size": 9789,
+      "sha256": "303b4a97b79123907ae0634543b562787f9abbda57cfb9d9bfeb674054fb1529"
     },
     {
       "path": "ci/_contract.md",
@@ -127,8 +127,8 @@
     {
       "path": "docs/factory-layout.md",
       "mode": "100644",
-      "size": 9084,
-      "sha256": "e709ca41709727cc309fbf128cfdfafabf1414e257f474cd87c2b2ebb4765ce1"
+      "size": 9133,
+      "sha256": "5f13d43fd30ab22c09609d8fcf417933f69bf4d57aed7e48c1cc94096b6d5536"
     },
     {
       "path": "docs/github-governance.md",
@@ -323,10 +323,22 @@
       "sha256": "5ef10c1aba882d278af63b74bfaae927e78438dbc7dcb40dc56d510f71be2d77"
     },
     {
-      "path": "scripts/sync-github-labels.mjs",
+      "path": "scripts/typed-inherited-runtime/package.json",
       "mode": "100644",
-      "size": 3083,
-      "sha256": "181618275724d6f48b42b0f38aa85490ed7fc47a6767c00937950516540ad776"
+      "size": 18,
+      "sha256": "1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae"
+    },
+    {
+      "path": "scripts/typed-inherited-runtime/sync-github-labels.js",
+      "mode": "100644",
+      "size": 3330,
+      "sha256": "17f51332147b031c6a529abbf6283400c523e4e3d948ef951a20186f165bf14d"
+    },
+    {
+      "path": "scripts/typed-inherited/sync-github-labels.mts",
+      "mode": "100644",
+      "size": 3363,
+      "sha256": "2b8dc0fd3d59868e8db28ef699bebddbb18686892778882b2e5397c0b047c995"
     },
     {
       "path": "start.mjs",
@@ -377,5 +389,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:f988ea1a300969a58d36d5c18e11f7853056257db5bb983b21831b5cc5421f99"
+  "payload_digest": "sha256:578f3cd05d2f106f935d795711b81760788a363d8f2993adc62dddc8781d7825"
 }

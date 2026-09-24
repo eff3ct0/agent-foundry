@@ -574,6 +574,12 @@ const renderTextFile = (
   if (!Buffer.from(text, "utf8").equals(source.bytes)) return source.bytes;
   let rendered = text;
   for (const [key, value] of Object.entries(config.values)) rendered = rendered.replaceAll(`<${key}>`, () => value);
+  if (source.path === ".github/workflows/sync-labels.yml") {
+    if (!rendered.includes("node scripts/typed-inherited-runtime/sync-github-labels.js")) {
+      throw new CreatorError("composition_invalid", "label workflow is missing its inherited runtime command");
+    }
+    rendered = rendered.replaceAll("scripts/typed-inherited", ".factory/scripts/typed-inherited");
+  }
   if (destinationPath.endsWith(".md")) rendered = renderMarkdown(rendered, source.path, destinationPath, destinations, removed);
   for (const key of Object.keys(config.values)) {
     if (rendered.includes(`<${key}>`)) throw new CreatorError("unresolved_placeholder", `generated file contains unresolved placeholder: ${key}`, { path: destinationPath });

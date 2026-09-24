@@ -89,11 +89,38 @@ test("generated module inventory uses the composed creator plan, not application
       ".factory/scripts/check-delivery-contract.mjs",
       ".factory/scripts/check-factory-layout.mjs",
       ".factory/scripts/check-pr-governance.mjs",
-      ".factory/scripts/sync-github-labels.mjs",
       "start.mjs",
     ].map((name) => ({ scope: "generated", path: name, reason: "untyped .mjs module" })));
     assert.ok(await stat(path.join(target, ".opencode/plugins/factory-start.ts")));
     assert.ok(await stat(path.join(target, ".github/workflows/ci.yml")));
+    const labelScript = path.join(target, ".factory/scripts/typed-inherited-runtime/sync-github-labels.js");
+    const labelsWorkflow = await readFile(path.join(target, ".github/workflows/sync-labels.yml"), "utf8");
+    assert.match(labelsWorkflow, /node \.factory\/scripts\/typed-inherited-runtime\/sync-github-labels\.js --repo/u);
+    assert.match(labelsWorkflow, /\.factory\/scripts\/typed-inherited\/sync-github-labels\.mts/u);
+    const selfCheck = await execFileAsync(process.execPath, [labelScript, "--self-check"], { cwd: target });
+    assert.match(selfCheck.stdout, /self-check OK\n$/u);
+    const dryRun = await execFileAsync(process.execPath, [labelScript, "--dry-run", "--repo", "acme/example"], { cwd: target });
+    assert.equal(dryRun.stdout.trim().split("\n").length, 10);
+    for (const relative of [
+      ".factory/scripts/typed-inherited/sync-github-labels.mts",
+      ".factory/scripts/typed-inherited-runtime/sync-github-labels.js",
+      ".factory/scripts/typed-inherited-runtime/package.json",
+    ]) {
+      const filename = path.join(target, relative);
+      const original = await readFile(filename);
+      await writeFile(filename, Buffer.concat([original, Buffer.from("\n")]));
+      await assert.rejects(checkGeneratedModulePolicy(options), /does not match the composed creator plan/u);
+      await writeFile(filename, original);
+      if (process.platform !== "win32") {
+        await chmod(filename, 0o755);
+        await assert.rejects(checkGeneratedModulePolicy(options), /does not match the composed creator plan/u);
+        await chmod(filename, 0o644);
+      }
+    }
+    await writeFile(path.join(path.dirname(labelScript), "extra.js"), "export {};\n");
+    await assert.rejects(checkGeneratedModulePolicy(options), /typed runtime file set differs/u);
+    await rm(path.join(path.dirname(labelScript), "extra.js"));
+    assert.deepEqual(await checkGeneratedModulePolicy(options), baseline);
 
     await mkdir(path.join(target, "app"));
     await writeFile(path.join(target, "app/own.js"), "export {};");

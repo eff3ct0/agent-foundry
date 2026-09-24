@@ -199,5 +199,37 @@ export const checkSourceModulePolicy = async (root: string, gitExecutable: strin
         outputScope: "tracked" as const, output: `${typedRuntimeRoot}${file}` });
     }
   }
+  const labelSource = "scripts/typed-inherited/sync-github-labels.mts";
+  const labelRuntime = "scripts/typed-inherited-runtime/sync-github-labels.js";
+  const labelManifest = "scripts/typed-inherited-runtime/package.json";
+  const labelFiles = [labelSource, labelRuntime, labelManifest];
+  const labelTracked = tracked.filter((file) => file.path.startsWith("scripts/typed-inherited/") ||
+    file.path.startsWith("scripts/typed-inherited-runtime/"));
+  const labelPayload = payload.filter((file) => labelFiles.includes(file.path));
+  const labelSourceExists = await exists(path.join(root, "scripts/typed-inherited"));
+  const labelRuntimeExists = await exists(path.join(root, "scripts/typed-inherited-runtime"));
+  if (labelTracked.length || labelPayload.length || labelSourceExists || labelRuntimeExists) {
+    if (JSON.stringify(labelTracked.map((file) => file.path).sort()) !== JSON.stringify([...labelFiles].sort()) ||
+      JSON.stringify(labelPayload.map((file) => file.path).sort()) !== JSON.stringify([...labelFiles].sort()) ||
+      [...labelTracked, ...labelPayload].some((file) => file.mode !== "100644")) {
+      throw new Error("inherited label source/runtime tracked and payload identities differ");
+    }
+    const git = await trustedGitExecutable(await realpath(root), gitExecutable);
+    for (const file of labelFiles) {
+      const { stdout } = await execFileAsync(git, ["-c", "core.fsmonitor=false", "show", `:${file}`], {
+        cwd: root, env: gitEnvironment(), encoding: "buffer", maxBuffer: 1024 * 1024,
+      });
+      if (!Buffer.from(stdout).equals(await readFile(path.join(root, file)))) {
+        throw new Error(`inherited label tracked bytes differ: ${file}`);
+      }
+    }
+    const emitted = await verifyTypedRuntime(path.join(root, "scripts/typed-inherited"), path.join(root, "scripts/typed-inherited-runtime"));
+    if (JSON.stringify(emitted) !== JSON.stringify(["package.json", "sync-github-labels.js"])) {
+      throw new Error("inherited label compiler file set differs");
+    }
+    for (const scope of ["tracked", "payload"] as const) {
+      compiled.push({ sourceScope: scope, source: labelSource, outputScope: scope, output: labelRuntime });
+    }
+  }
   return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled });
 };

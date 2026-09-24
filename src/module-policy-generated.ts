@@ -3,6 +3,7 @@ import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { preparePlan, STATE_FILE, type CreatorOptions } from "./creator";
 import { checkModulePolicy, type ModulePolicyDiagnostic } from "./module-policy";
+import { verifyTypedRuntime } from "./typed-runtime-verifier";
 
 const digest = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
@@ -78,7 +79,28 @@ export const checkGeneratedModulePolicy = async (
   }
   const generated = new Set(owned);
   for (const file of await scanFactory(root)) generated.add(file);
+  const sourcePath = ".factory/scripts/typed-inherited/sync-github-labels.mts";
+  const runtimePath = ".factory/scripts/typed-inherited-runtime/sync-github-labels.js";
+  const manifestPath = ".factory/scripts/typed-inherited-runtime/package.json";
+  const paths = [sourcePath, runtimePath, manifestPath];
+  if (paths.some((file) => !owned.has(file) || expected.get(file)?.mode !== 0o644)) {
+    throw new Error("generated inherited label identities are incomplete or have wrong modes");
+  }
+  // Source-side verification ties the Git checkout to packaged and composed bytes.
+  const checkout = path.resolve(__dirname, "..");
+  for (const file of paths) {
+    const original = await onDisk(checkout, file.slice(".factory/".length));
+    if (original.mode !== 0o644 || !original.bytes.equals(expected.get(file)!.bytes)) {
+      throw new Error(`packaged inherited label bytes or mode differ from source: ${file}`);
+    }
+  }
+  const emitted = await verifyTypedRuntime(path.join(root, ".factory/scripts/typed-inherited"),
+    path.join(root, ".factory/scripts/typed-inherited-runtime"));
+  if (JSON.stringify(emitted) !== JSON.stringify(["package.json", "sync-github-labels.js"])) {
+    throw new Error("generated inherited label compiler file set differs");
+  }
   return checkModulePolicy({
-    tracked: [], payload: [], generated: [...generated].sort(compare), generatedApplication: [], compiled: [],
+    tracked: [], payload: [], generated: [...generated].sort(compare), generatedApplication: [],
+    compiled: [{ sourceScope: "generated", source: sourcePath, outputScope: "generated", output: runtimePath }],
   });
 };

@@ -54,7 +54,6 @@
     "scripts/check-delivery-contract.mjs",
     "scripts/check-factory-layout.mjs",
     "scripts/check-pr-governance.mjs",
-    "scripts/sync-github-labels.mjs",
     "start.mjs",
     "odd/tasks/issue-124-opencode-startup-race.md",
     "templates/adr.md",
@@ -188,7 +187,9 @@
         {"path": "openspec/config.yaml", "kind": "file"},
         {"path": "scripts/check-delivery-contract.mjs", "kind": "file"},
         {"path": "scripts/check-pr-governance.mjs", "kind": "file"},
-        {"path": "scripts/sync-github-labels.mjs", "kind": "file"},
+        {"path": "scripts/typed-inherited/sync-github-labels.mts", "kind": "file"},
+        {"path": "scripts/typed-inherited-runtime/sync-github-labels.js", "kind": "file"},
+        {"path": "scripts/typed-inherited-runtime/package.json", "kind": "file"},
         {"path": "start.mjs", "kind": "file"},
         {"path": "templates", "kind": "directory"},
         {"path": "scripts/check-factory-layout.mjs", "kind": "file"}
