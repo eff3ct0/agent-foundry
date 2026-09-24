@@ -202,7 +202,12 @@ jobs:
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from "node:fs/promises";
           const metadata = JSON.parse(await readFile("package-metadata.json", "utf8"));
-          const [name, version] = process.env.JOURNEY_PACKAGE_SPEC.split("@");
+          const name = "@eff3ct/agent-foundry";
+          const spec = process.env.JOURNEY_PACKAGE_SPEC ?? "";
+          const version = spec.slice(`${name}@`.length);
+          const identifier = "(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)";
+          const semver = new RegExp(`^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-${identifier}(?:\\.${identifier})*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`);
+          if (process.env.JOURNEY_PACKAGE_NAME !== name || spec !== `${name}@${version}` || !semver.test(version)) throw new Error("journey package spec must identify the exact scoped package and version");
           if (metadata.name !== name || metadata.version !== version) throw new Error("published package metadata does not match the exact journey package");
           await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: process.env.JOURNEY_PACKAGE_SPEC }, null, 2)}\n`);
           NODE

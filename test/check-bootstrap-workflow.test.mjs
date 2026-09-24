@@ -241,6 +241,56 @@ test("real-agent journey rejects the retired source repository before hosted exe
   });
 });
 
+test("real-agent journey pins its executable scoped package metadata guard", async () => {
+  const mutations = [
+    ['const version = spec.slice(`${name}@`.length);', 'const [name, version] = spec.split("@");'],
+    ['const name = "@eff3ct/agent-foundry";', 'const name = "agent-foundry";'],
+    ['|| !semver.test(version)', '|| true'],
+    ['metadata.name !== name || metadata.version !== version', 'metadata.name !== name'],
+    ['JOURNEY_PACKAGE_SPEC: ${{ env.JOURNEY_PACKAGE_NAME }}@${{ needs.prepare.outputs.package_version }}', 'JOURNEY_PACKAGE_SPEC: ${{ env.JOURNEY_PACKAGE_NAME }}@latest'],
+  ];
+  for (const [from, to] of mutations) {
+    await fixture(async (directory) => {
+      await replaceFirst(directory, "journey", from, to);
+      await reject(directory, "real-agent journey must verify exact scoped package metadata before apply");
+    });
+  }
+});
+
+test("real-agent journey executes its scoped package guard with exact offline metadata", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
+    const match = workflow.match(/          npm view "\$JOURNEY_PACKAGE_SPEC" --json > package-metadata\.json\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          npx --yes --package "\$JOURNEY_PACKAGE_SPEC" foundry apply/u);
+    assert.ok(match, "the metadata heredoc must run immediately before package apply");
+    const scriptText = match[1].split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    await mkdir(path.join(directory, "generated"));
+    const sourceSha = "a".repeat(40);
+    const run = async (spec, metadata, packageName = "@eff3ct/agent-foundry") => {
+      await writeFile(path.join(directory, "package-metadata.json"), JSON.stringify(metadata));
+      return execFileAsync(process.execPath, ["--input-type=module", "-e", scriptText], {
+        cwd: directory,
+        env: { JOURNEY_PACKAGE_SPEC: spec, JOURNEY_PACKAGE_NAME: packageName, JOURNEY_SOURCE_SHA: sourceSha },
+      });
+    };
+    const name = "@eff3ct/agent-foundry";
+    for (const version of ["0.1.0", "1.2.3-rc.1+build.5"]) {
+      const spec = `${name}@${version}`;
+      await run(spec, { name, version });
+      assert.deepEqual(JSON.parse(await readFile(path.join(directory, "generated/.journey-source.json"), "utf8")), {
+        source_sha: sourceSha, package_name: name, package_version: version, package_spec: spec,
+      });
+    }
+    await rm(path.join(directory, "generated/.journey-source.json"));
+    for (const spec of ["agent-foundry@0.1.0", "@other/agent-foundry@0.1.0", `${name}@latest`, `${name}@1.2`, `${name}@1.2.3@evil`, `${name}@01.2.3`, `${name}@1.2.3-01`, `${name}@1.2.3-..`, `${name}@1.2.3+`]) {
+      await assert.rejects(run(spec, { name, version: "0.1.0" }), /journey package spec must identify the exact scoped package and version/u);
+      await assert.rejects(readFile(path.join(directory, "generated/.journey-source.json")), { code: "ENOENT" });
+    }
+    await assert.rejects(run(`${name}@0.1.0`, { name: "agent-foundry", version: "0.1.0" }), /published package metadata does not match/u);
+    await assert.rejects(run(`${name}@0.1.0`, { name, version: "0.2.0" }), /published package metadata does not match/u);
+    await assert.rejects(run(`${name}@0.1.0`, { name, version: "0.1.0" }, "@other/agent-foundry"), /journey package spec must identify/u);
+  });
+});
+
 test("real-agent journey requires the Agent Foundry generated commit caption exactly once", async () => {
   await fixture(async (directory) => {
     await replace(directory, "journey", 'git -C generated commit -m "chore: initialize with Agent Foundry"', 'git -C generated commit -m "chore: apply published factory template"');
