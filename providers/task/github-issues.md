@@ -18,7 +18,7 @@ completion, require GitHub Issues confirmation and fresh readback of the intende
 repository, issue number, state, and comment/handoff before claiming success.
 Local files (including `odd/*.md`) and task UIs are optional derived projections,
 never required or fallback stores. On an unsupported or failed operation,
-ambiguous issue identity, or unavailable/mismatched readback, stop and record
+ambiguous issue identity, or unavailable/malformed/mismatched readback, stop and record
 the exact GitHub Issues operation, repository and issue number, and evidence
 needed to resume.
 

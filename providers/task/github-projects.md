@@ -21,8 +21,8 @@ handoff/comment operation on that item and read it back; if unavailable, stop
 and record the missing operation, project item identity, and evidence needed to
 resume. Never fabricate an issue link or fall back to GitHub Issues. Local files
 (including `odd/*.md`) and task UIs are optional derived projections, never
-required or fallback stores. On failure, ambiguous identity, or unavailable or
-mismatched readback, stop without claiming a transition or completion.
+required or fallback stores. On unsupported operation, failure, ambiguous identity, or readback that is
+unavailable, malformed, or mismatched, stop without claiming a transition or completion.
 
 **Mandatory template:** a new issue linked to the board MUST use the
 corresponding issue form in `.github/ISSUE_TEMPLATE/`. With `gh`, fill that

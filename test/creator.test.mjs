@@ -445,8 +445,14 @@ test("all task selections generate exclusive, readable provider-native bindings"
     assert.match(bindings, /confirmation and fresh readback/u, provider);
     assert.match(bindings, /comment\/handoff/u, provider);
     assert.match(bindings, /optional derived projections/u, provider);
-    assert.match(bindings, /unavailable\s+or\s+mismatched|unavailable\/mismatched/u, provider);
+    assert.match(bindings, /unavailable(?:\s+or\s+|,\s*|\/)malformed(?:\s+or\s+|,\s*or\s+|\/)mismatched/u, provider);
     assert.match(bindings, /exact .*operation/u, provider);
+    assert.match(bindings, /Use only this provider and tracker for every durable harness task\/TODO/u, provider);
+    assert.match(bindings, /read back the intended task identity, state, and handoff/u, provider);
+    assert.match(bindings, /local files and task UIs are not fallback stores/u, provider);
+    assert.match(bindings, /(?:unsupported|unavailable)[\s\S]*?ambiguous[\s\S]*?readback/u, provider);
+    assert.match(bindings, /malformed[\s\S]*?(?:stop|blocks)/u, provider);
+    assert.match(bindings, /evidence\s+needed to\s+resume/u, provider);
     assert.doesNotMatch(bindings, /Do not leave state only in Jira/u, provider);
     if (provider === "github-projects") {
       assert.match(bindings, /draft\s+or project-only item without a linked issue/u);
@@ -457,9 +463,38 @@ test("all task selections generate exclusive, readable provider-native bindings"
       assert.match(bindings, /(?:Do not|Never) substitute GitHub/u, provider);
     }
     const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
-    assert.ok(agent.includes(tracker) && agent.includes(key), provider);
+    assert.ok(agent.includes(`- Task tracker: \`${tracker}\` (project/board \`${key}\`)`), provider);
+    assert.match(agent, /optional,[\s\S]*?derived,[\s\S]*?non-authoritative projection/u, provider);
+    assert.match(agent, /unsupported, fails, has ambiguous identity,[\s\S]*?readback is unavailable, malformed, or mismatched/u, provider);
     const runbook = await readFile(path.join(target, ".factory", "templates", "agent-runbook.md"), "utf8");
     assert.ok(runbook.includes(`${provider}`) && runbook.includes(key), provider);
+    assert.match(runbook, /Never require them or use them as fallback task stores/u, provider);
+    assert.match(runbook, /provider-native[\s\S]*?confirmation and fresh readback/u, provider);
+    assert.match(runbook, /A malformed readback is not confirmation/u, provider);
+    const handoff = await readFile(path.join(target, ".factory", "templates", "handoff.md"), "utf8");
+    assert.match(handoff, /Confirm the comment or native handoff operation[\s\S]*?read back its intended content/u, provider);
+    assert.match(handoff, /unsupported, fails, identifies an ambiguous task, or cannot be read back/u, provider);
+    assert.match(handoff, /returns malformed data, stop without claiming success/u, provider);
+    const agentInit = await readFile(path.join(target, ".factory", "docs", "agent-init.md"), "utf8");
+    assert.match(agentInit, /Verify provider confirmation and readback of the intended task identity and state/u, provider);
+    assert.match(agentInit, /neither required nor fallback stores/u, provider);
+    assert.match(agentInit, /returns malformed readback, stop/u, provider);
+    await assert.rejects(stat(path.join(target, "odd")), undefined, provider);
+    if (provider === "jira" || provider === "linear" || provider === "custom") {
+      assert.doesNotMatch(bindings, /Task provider \(TASK_TRACKER\): github-(?:issues|projects)/u, provider);
+      assert.match(bindings, /(?:Do not|Never) substitute GitHub/u, provider);
+      const reference = provider === "custom" ? "Task:" : `${provider === "jira" ? "Jira" : "Linear"}:`;
+      for (const template of [".github/pull_request_template.md", ".factory/templates/pull-request.md"]) {
+        const pr = await readFile(path.join(target, template), "utf8");
+        assert.ok(pr.includes(reference), `${provider}: ${template} must use native task reference`);
+        assert.doesNotMatch(pr, /Closes #|linked GitHub issue must have status:approved/u, `${provider}: ${template}`);
+      }
+    } else {
+      for (const template of [".github/pull_request_template.md", ".factory/templates/pull-request.md"]) {
+        const pr = await readFile(path.join(target, template), "utf8");
+        assert.match(pr, /Closes #<TICKET_ID>/u, `${provider}: ${template}`);
+      }
+    }
     const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
     assert.equal(verified.code, 0, `${provider}: ${verified.stderr}`);
   }

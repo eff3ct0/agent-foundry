@@ -32,7 +32,7 @@ change the bound provider. Verify provider confirmation and readback of the inte
 after each durable operation. At cold resume, read provider state and the latest handoff before local task data.
 Local files such as `odd/*.md` and task UIs may project confirmed state but are optional and non-authoritative;
 they are neither required nor fallback stores. If a native operation is unsupported, fails, identifies an
-ambiguous task, or cannot be read back with matching state, stop and record the exact provider-native operation
+ambiguous task, cannot be read back with matching state, or returns malformed readback, stop and record the exact provider-native operation
 and target identity needed to resume. Never substitute GitHub for a non-GitHub provider.
 
 Agent selection uses `--agent <id>` or `--agents <id,...>`. The creator checks

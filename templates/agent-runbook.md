@@ -25,8 +25,8 @@ provider-confirmed state. Never require them or use them as fallback task stores
 For create, update, status change, comment, checkpoint, phase handoff, or completion, require provider-native
 confirmation and fresh readback of the intended task identity and state before claiming success or projecting
 it locally. On an unsupported operation, provider error, ambiguous identity, or unavailable/mismatched readback,
-stop without claiming the transition or completion. Record the exact provider-native operation, target identity,
-and evidence needed to resume; do not substitute GitHub for a non-GitHub binding.
+stop without claiming the transition or completion. A malformed readback is not confirmation. Record the exact
+provider-native operation, target identity, and evidence needed to resume; do not substitute GitHub for a non-GitHub binding.
 
 ## Ordered phases
 Run every task through these phases in order:

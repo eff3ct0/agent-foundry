@@ -9,7 +9,7 @@ same task before treating this handoff as durable. The provider-confirmed handof
 Local files (including `odd/*.md`) and task UIs are optional derived projections, never required or fallback
 task stores. The same confirmation and readback rule applies to creation, updates, status changes, checkpoints,
 and completion. If the operation is unsupported, fails, identifies an ambiguous task, or cannot be read back
-with matching state, stop without claiming success. Record the exact missing provider-native operation and
+with matching state, or returns malformed data, stop without claiming success. Record the exact missing provider-native operation and
 target identity needed to resume; do not map a non-GitHub task provider to GitHub.
 
 ## Phase state

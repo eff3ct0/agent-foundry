@@ -702,6 +702,21 @@ Use only this provider and tracker for every durable harness task/TODO. Confirm 
   return Buffer.from(`${parts.join("\n\n")}\n`, "utf8");
 };
 
+const nativeTaskReferences: Record<string, string> = {
+  jira: "Jira: <TICKET_ID>",
+  linear: "Linear: <TICKET_ID>",
+  custom: "Task: <TICKET_ID>",
+};
+
+const composePrTaskReference = (bytes: Buffer, task: string): Buffer => {
+  const reference = nativeTaskReferences[task];
+  if (!reference) return bytes;
+  const text = bytes.toString("utf8");
+  const marker = /(<!-- provider-governance:start -->)[\s\S]*?(<!-- provider-governance:end -->)/u;
+  if (!marker.test(text)) throw new CreatorError("composition_invalid", "pull-request template is missing its provider-governance section");
+  return Buffer.from(text.replace(marker, `$1\n${reference}\n<!-- Approval is confirmed by the bound task provider. -->\n$2`), "utf8");
+};
+
 const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buffer | undefined => {
   const system = config.values.CI_SYSTEM || "";
   const stacks = parseStacks(config.values.CI_STACKS || "");
@@ -765,7 +780,9 @@ const readPayloadFiles = async (
   for (const source of sourceFiles.values()) {
     if (!destinations.has(source.path)) continue;
     const destinationPath = destinations.get(source.path)!;
-    const bytes = renderTextFile(source, destinationPath, config, textFiles, destinations, removedSourcePaths);
+    const rendered = renderTextFile(source, destinationPath, config, textFiles, destinations, removedSourcePaths);
+    const bytes = source.path === "templates/pull-request.md" || source.path === ".github/pull_request_template.md"
+      ? composePrTaskReference(rendered, config.values.TASK_TRACKER) : rendered;
     files.push({ relativePath: destinationPath, bytes, mode: source.mode, sha256: sha256(bytes), size: bytes.byteLength });
   }
   const generatedPaths = new Set(ownershipEntries(ownership).filter(({ definition }) => definition.disposition === "generated").map(({ entry }) => entry.path));
