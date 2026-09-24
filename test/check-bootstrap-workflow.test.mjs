@@ -139,6 +139,10 @@ test("bootstrap rejects weak cleanup, report, and credential isolation", async (
     await reject(directory, "cleanup must use the trusted proof-based policy ref: ${{ github.workflow_sha }}");
   });
   await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "./scripts/typed-runtime/resource-proof-cleanup.js", "./scripts/resource-proof-cleanup.mjs");
+    await reject(directory, "cleanup must use the trusted proof-based policy scripts/typed-runtime/resource-proof-cleanup.js");
+  });
+  await fixture(async (directory) => {
     await replace(directory, "bootstrap", "  bootstrap:\n", "  bootstrap:\n    env:\n      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n");
     await reject(directory, "OPENAI_API_KEY must be isolated to triage");
   });
