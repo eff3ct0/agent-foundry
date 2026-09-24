@@ -2,7 +2,7 @@ import {
   canonicalResourceName,
   proveProvisionedResource,
   serializeProvisioningProof,
-} from "./resource-provisioning-proof.mjs";
+} from "./typed-runtime/resource-provisioning-proof.js";
 
 const OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/u;
 const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;

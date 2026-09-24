@@ -5,7 +5,7 @@ import {
   proveProvisionedResource,
   ResourceProvisioningProofError,
   serializeProvisioningProof,
-} from "../scripts/resource-provisioning-proof.mjs";
+} from "../scripts/typed-runtime/resource-provisioning-proof.js";
 
 const runId = "123";
 const owner = "sandbox-owner";
