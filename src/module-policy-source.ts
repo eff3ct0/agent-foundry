@@ -155,15 +155,22 @@ export const inventorySourceModules = async (directory: string, gitExecutable: s
 
 const typedWorkflowSource = "scripts/typed/check-real-agent-workflow.mts";
 const typedWorkflowRuntime = "scripts/typed-runtime/check-real-agent-workflow.js";
+const typedWorkflowManifest = "scripts/typed-runtime/package.json";
 
 /** Source-only adapter: derive the single compiled identity from fresh compiler bytes. */
 export const checkSourceModulePolicy = async (root: string, gitExecutable: string): Promise<ModulePolicyDiagnostic[]> => {
   const { tracked, payload } = await inventorySourceModules(root, gitExecutable);
   const source = tracked.find((file) => file.path === typedWorkflowSource);
   const runtime = tracked.find((file) => file.path === typedWorkflowRuntime);
-  if (Boolean(source) !== Boolean(runtime)) throw new Error("typed workflow source/runtime pair is incomplete");
+  const runtimeManifest = tracked.find((file) => file.path === typedWorkflowManifest);
+  if (Boolean(source) !== Boolean(runtime) || (!source && runtimeManifest)) {
+    throw new Error("typed workflow source/runtime pair is incomplete");
+  }
   const compiled = [];
   if (source && runtime) {
+    if (!runtimeManifest || runtimeManifest.mode !== "100644") {
+      throw new Error("typed workflow runtime manifest must be tracked regular mode 100644");
+    }
     if (source.mode !== "100644" || runtime.mode !== "100644") {
       throw new Error("typed workflow source/runtime pair has an invalid mode");
     }

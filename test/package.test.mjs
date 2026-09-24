@@ -322,6 +322,7 @@ test("source policy proves only the tracked typed workflow runtime from fresh co
   const repository = await sourceFixture();
   const sourceName = "scripts/typed/check-real-agent-workflow.mts";
   const runtimeName = "scripts/typed-runtime/check-real-agent-workflow.js";
+  const manifestName = "scripts/typed-runtime/package.json";
   const source = path.join(repository, sourceName);
   const runtime = path.join(repository, runtimeName);
   const output = path.join(repository, "fresh-output");
@@ -330,7 +331,7 @@ test("source policy proves only the tracked typed workflow runtime from fresh co
     await writeFile(source, "export const value: number = 181;\n");
     await emitTypedModules(path.dirname(source), output);
     await cp(output, path.dirname(runtime), { recursive: true });
-    await execFileAsync(trustedGit, ["add", "--", sourceName, runtimeName, "scripts/typed-runtime/package.json"], { cwd: repository });
+    await execFileAsync(trustedGit, ["add", "--", sourceName, runtimeName, manifestName], { cwd: repository });
 
     const expected = [
       { scope: "payload", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
@@ -338,6 +339,19 @@ test("source policy proves only the tracked typed workflow runtime from fresh co
       { scope: "tracked", path: "scripts/nested/start.mjs", reason: "untyped .mjs module" },
     ];
     assert.deepEqual(await checkSourceModulePolicy(repository, trustedGit), expected);
+    await execFileAsync(trustedGit, ["rm", "--cached", "--", manifestName], { cwd: repository });
+    assert.equal(await readFile(path.join(repository, manifestName), "utf8"), '{"type":"module"}\n');
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed workflow runtime manifest/u);
+    await execFileAsync(trustedGit, ["add", "--", manifestName], { cwd: repository });
+    await execFileAsync(trustedGit, ["update-index", "--chmod=+x", "--", manifestName], { cwd: repository });
+    if (process.platform !== "win32") await chmod(path.join(repository, manifestName), 0o755);
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed workflow runtime manifest|source inventory mode mismatch/u);
+    await execFileAsync(trustedGit, ["update-index", "--chmod=-x", "--", manifestName], { cwd: repository });
+    if (process.platform !== "win32") await chmod(path.join(repository, manifestName), 0o644);
+    assert.deepEqual(await checkSourceModulePolicy(repository, trustedGit), expected);
+    await writeFile(path.join(repository, manifestName), '{"type":"commonjs"}\n');
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime bytes differ/u);
+    await writeFile(path.join(repository, manifestName), await readFile(path.join(output, "package.json")));
     await writeFile(path.join(repository, "scripts/typed-runtime/rogue.js"), "export {};\n");
     await writeFile(path.join(repository, "scripts/typed-runtime/rogue.mjs"), "export {};\n");
     await execFileAsync(trustedGit, ["add", "--", "scripts/typed-runtime/rogue.js", "scripts/typed-runtime/rogue.mjs"], { cwd: repository });
