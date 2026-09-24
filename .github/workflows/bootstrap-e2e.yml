@@ -117,7 +117,7 @@ jobs:
           mkdir -p evidence
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from "node:fs/promises";
-          import { createHostedLifecycleMutationClient } from "./scripts/hosted-lifecycle-mutation-client.mjs";
+          import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";
           import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
           import { matrixConfiguration } from "./scripts/local-matrix.mjs";
           import { provisionAndProve } from "./scripts/typed-runtime/resource-provision-and-proof.js";
@@ -212,7 +212,7 @@ jobs:
           mkdir -p cleanup
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from "node:fs/promises";
-          import { createHostedLifecycleMutationClient } from "./scripts/hosted-lifecycle-mutation-client.mjs";
+          import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";
           import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
           import { cleanupProvisionedResource } from "./scripts/typed-runtime/resource-proof-cleanup.js";
           const transport = ({ url, method = "GET", headers, body, signal }) => fetch(url, { method, headers, body, signal });

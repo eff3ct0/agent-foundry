@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(scriptDirectory, path.basename(path.dirname(scriptDirectory)) === ".factory" ? "../.." : "..");
+const generatedLayout = path.basename(path.dirname(scriptDirectory)) === ".factory";
+const root = path.resolve(scriptDirectory, generatedLayout ? "../.." : "..");
 const closeReference = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?:(?<owner>[A-Za-z0-9_.-]+)\/(?<repo>[A-Za-z0-9_.-]+))?#(?<number>[0-9]+)\b/giu;
 const defaultTaskProvider = "github-issues";
 const githubTaskProviders = new Set(["github-issues", "github-projects"]);
@@ -91,7 +92,13 @@ const selfCheck = async () => {
   assert.doesNotMatch(workflow, /(?:contents|issues|pull-requests): write/u);
   assert.match(workflow, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/u);
   assert.match(workflow, /node-version: 20\.19\.0/u);
-  for (const template of [".github/pull_request_template.md", "templates/pull-request.md"]) {
+  const pullRequestTemplate = generatedLayout ? ".factory/templates/pull-request.md" : "templates/pull-request.md";
+  for (const template of [".github/pull_request_template.md", pullRequestTemplate]) {
+    let current = root;
+    for (const component of template.split("/")) {
+      current = path.join(current, component);
+      assert.ok(!(await lstat(current)).isSymbolicLink(), `governance template symlink: ${template}`);
+    }
     const text = await readFile(path.join(root, template), "utf8");
     assert.match(text, /provider-governance:start/u);
     if (githubTaskProviders.has(provider)) {
