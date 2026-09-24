@@ -82,6 +82,13 @@ test("startup routing recognizes source, setup, work, moved, incomplete, and mal
   }
 });
 
+test("SELF mode directs source maintenance to the current repository", async () => {
+  const result = await run(["--cwd", root]);
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /gh issue list -R eff3ct0\/agent-foundry --label type:product/u);
+  assert.doesNotMatch(result.stdout, /eff3ct0\/factory-template/u);
+});
+
 test("startup JSON output is deterministic and errors stay bounded", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "factory-startup-output-"));
   try {

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { buildReport, reportFailure, reportInput, reportJourney } from "../scripts/real-agent-journey.mjs";
 
-const sourceRepository = "eff3ct0/factory-template";
+const sourceRepository = "eff3ct0/agent-foundry";
 const revision = "a".repeat(40);
 const runId = "123";
 const runUrl = `https://github.com/${sourceRepository}/actions/runs/${runId}`;
@@ -42,6 +42,23 @@ const searchResults = (matchingIssue = null) => {
   };
   return { request, getCalls: () => calls };
 };
+
+test("journey plan records the current source coordinate before provisioning", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "journey-plan-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const output = path.join(directory, "contract.json");
+  const result = spawnSync(process.execPath, [
+    "scripts/real-agent-journey.mjs", "plan", "--run-id", runId,
+    "--template", sourceRepository, "--owner", "acme", "--runtime", "codex-cli",
+    "--source-sha", revision, "--package-name", "@eff3ct/agent-foundry",
+    "--package-version", "0.1.0", "--output", output,
+  ], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(await readFile(output, "utf8"));
+  assert.equal(plan.source_template, "eff3ct0/agent-foundry");
+  assert.equal(plan.source_sha, revision);
+  assert.equal(plan.generated_repository, "acme/real-agent-journey-123");
+});
 
 test("passed aggregate validates and reports a no-op without GitHub requests", async (t) => {
   const passed = structuredClone(evidence);
@@ -89,7 +106,15 @@ test("report content and fingerprint are deterministic", () => {
   const report = buildReport(evidence, runUrl);
   assert.match(report.fingerprint, /^[0-9a-f]{32}$/u);
   assert.ok(report.body.includes(`Real-Agent-Journey-Fingerprint: ${report.fingerprint}`));
+  assert.equal(report.source_repository, "eff3ct0/agent-foundry");
+  assert.ok(report.body.includes(`https://github.com/${sourceRepository}/actions/runs/${runId}`));
   assert.equal(report.body.length < 12_000, true);
+});
+
+test("retired report target fails before any GitHub request", async () => {
+  let called = false;
+  await assert.rejects(reportJourney(evidence, runUrl, "eff3ct0/factory-template", "secret-token", async () => { called = true; }), /report target does not match the source repository/u);
+  assert.equal(called, false);
 });
 
 test("report CLI accepts the workflow arguments without exposing a token", async (t) => {
@@ -116,7 +141,7 @@ test("open and closed duplicate lookup recognizes an existing marker comment wit
       states.push(new URLSearchParams(args[1].split("?")[1]).get("q"));
       return request(...args);
     }
-    if (args[1] === "repos/eff3ct0/factory-template/issues/44/comments?per_page=100") return [{ issue_url: "https://api.github.com/repos/eff3ct0/factory-template/issues/44", body: `existing comment\n${report.marker}` }];
+    if (args[1] === `repos/${sourceRepository}/issues/44/comments?per_page=100`) return [{ issue_url: `https://api.github.com/repos/${sourceRepository}/issues/44`, body: `existing comment\n${report.marker}` }];
     throw new Error(`unexpected ${args[1]}`);
   };
   assert.equal(await reportFailure(report, sourceRepository, "secret-token", wrapped), "already reported #44");

@@ -79,8 +79,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 3724,
-      "sha256": "6a6e23af7dd3fd48fbe84562e2493b5a036daa616d5301502247f76b729a585e"
+      "size": 3947,
+      "sha256": "0c19b3d0e7d7b0529d117282a9687425427ce16af00c9d4a42cf285b82dc4b1c"
     },
     {
       "path": "archetype-ownership.json",
@@ -139,8 +139,8 @@
     {
       "path": "docs/org-factory.md",
       "mode": "100644",
-      "size": 3190,
-      "sha256": "47491c546032bcedea46c0e83eae579455cb3d45133d5e1eda8229839b8ac79c"
+      "size": 3167,
+      "sha256": "748b4b45ab41768bdfe9eb012fbe50d97ecf39b669f2543dffad34af74da3e8e"
     },
     {
       "path": "docs/workflow.md",
@@ -331,8 +331,8 @@
     {
       "path": "start.mjs",
       "mode": "100644",
-      "size": 10603,
-      "sha256": "e6c732960da9a8f740bf3e802d094bdf615da3ba9bc3b7bfda2202f11113a96c"
+      "size": 10600,
+      "sha256": "55c0d0f2840d597272d4531ec7ff39c5e0fc8290f1a733fe6f23a5ba1a030d46"
     },
     {
       "path": "templates/adr.md",
@@ -377,5 +377,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:c31bb2713ba7a94cd06968f5fe119142fcbefcc238b96d8fb08f71cf25fb9070"
+  "payload_digest": "sha256:a8df63b7e297b159b5c83b3ccde7f6ee604c9624ab23f7ac984a6c80b1841068"
 }
