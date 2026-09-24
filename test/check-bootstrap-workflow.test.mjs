@@ -241,6 +241,28 @@ test("real-agent journey rejects the retired source repository before hosted exe
   });
 });
 
+test("real-agent journey requires the Agent Foundry generated commit caption exactly once", async () => {
+  await fixture(async (directory) => {
+    await replace(directory, "journey", 'git -C generated commit -m "chore: initialize with Agent Foundry"', 'git -C generated commit -m "chore: apply published factory template"');
+    await reject(directory, "real-agent journey generated commit caption must name Agent Foundry");
+  });
+  await fixture(async (directory) => {
+    await replaceFirst(directory, "journey", "git -C generated push origin HEAD:main", 'git -C generated commit -m "chore: apply published factory template"\n          git -C generated push origin HEAD:main');
+    await reject(directory, "real-agent journey generated commit caption must name Agent Foundry");
+  });
+});
+
+test("real-agent journey rejects a heredoc decoy followed by a wrapped retired commit", async () => {
+  await fixture(async (directory) => {
+    await replaceFirst(directory, "journey", '          git -C generated commit -m "chore: initialize with Agent Foundry"', '          : <<\'CAPTION\'\n          git -C generated commit -m "chore: initialize with Agent Foundry"\n          CAPTION\n          env git -C generated commit -m "chore: apply published factory template"');
+    await reject(directory, "real-agent journey generated commit caption must name Agent Foundry");
+  });
+  await fixture(async (directory) => {
+    await replaceFirst(directory, "journey", '          git -C generated commit -m "chore: initialize with Agent Foundry"', '          env git -C generated commit -m "chore: apply published factory template"');
+    await reject(directory, "real-agent journey generated commit caption must name Agent Foundry");
+  });
+});
+
 test("real-agent journey rejects missing contract markers and source resolution", async () => {
   await fixture(async (directory) => {
     await replace(directory, "journey", "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "JOURNEY_CONTRACT_VERSION: unknown");
