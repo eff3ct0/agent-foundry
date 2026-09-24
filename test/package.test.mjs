@@ -12,7 +12,7 @@ import {
   manifestDigest,
   validateDeclaredPaths,
 } from "../scripts/build-payload.mjs";
-import { packedArtifactIdentity } from "../scripts/artifact-identity.mjs";
+import { packedArtifactIdentity, consumerArtifactIdentity, generatedTreeDigest, ArtifactIdentityError } from "../scripts/typed-runtime/artifact-identity.js";
 import emitter from "../dist/typed-module-emitter.js";
 import verifier from "../dist/typed-runtime-verifier.js";
 import policy from "../dist/module-policy.js";
@@ -173,7 +173,7 @@ test("checked-in typed runtime matches fresh compiler bytes without transient .m
     const output = path.join(parent, "output");
     await emitTypedModules(source, output);
     assert.deepEqual(await walk(output), [
-      "check-real-agent-workflow.js", "hosted-lifecycle-mutation-client.js", "package.json", "resource-cleanup-eligibility.js", "resource-proof-cleanup.js", "resource-provision-and-proof.js", "resource-provisioning-proof.js",
+      "artifact-identity.js", "check-real-agent-workflow.js", "hosted-lifecycle-mutation-client.js", "package.json", "resource-cleanup-eligibility.js", "resource-proof-cleanup.js", "resource-provision-and-proof.js", "resource-provisioning-proof.js",
     ]);
     assert.deepEqual(await walk(committed), await walk(output));
     for (const file of await walk(output)) {
@@ -574,6 +574,51 @@ test("packed package preserves npm transport and startup handoff", async (contex
   }
 });
 
+test("packed generated governance self-check uses its relocated template and fails closed", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-governance-package-"));
+  try {
+    const packageDirectory = path.join(parent, "package");
+    const installDirectory = path.join(parent, "install");
+    const target = path.join(parent, "project");
+    const config = path.join(parent, "answers.json");
+    await mkdir(packageDirectory);
+    await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packageDirectory], { cwd: root });
+    const tarballName = (await readdir(packageDirectory)).find((entry) => entry.endsWith(".tgz"));
+    assert.ok(tarballName, "pnpm pack did not produce a tarball");
+    await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, path.join(packageDirectory, tarballName)], { cwd: root });
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "governance fixture", TASK_TRACKER: "github-issues" } }));
+    const cli = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry", "dist", "index.js");
+    const create = async (command) => JSON.parse((await execFileAsync(process.execPath,
+      [cli, command, "--target", target, "--config", config, "--non-interactive"], { cwd: root })).stdout);
+    assert.equal((await create("plan")).status, "planned");
+    assert.equal((await create("apply")).status, "applied");
+    assert.equal((await create("verify")).status, "verified");
+    assert.equal((await create("apply")).status, "noop");
+    assert.equal(JSON.parse((await execFileAsync(process.execPath,
+      [path.join(target, "start.mjs"), "--cwd", target, "--json"])).stdout).mode, "WORK");
+    assert.equal((await execFileAsync(process.execPath, [path.join(root, "scripts/check-pr-governance.mjs"), "--self-check"])).stdout, "self-check OK\n");
+
+    const checker = path.join(target, ".factory/scripts/check-pr-governance.mjs");
+    const relocated = path.join(target, ".factory/templates/pull-request.md");
+    const original = await readFile(relocated, "utf8");
+    assert.equal((await execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
+    await mkdir(path.join(target, "templates"));
+    await writeFile(path.join(target, "templates/pull-request.md"), original);
+    await rm(relocated);
+    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /ENOENT/u);
+    await writeFile(relocated, "# Invalid template\n");
+    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /provider-governance:start/u);
+    await rm(relocated);
+    await symlink(path.join(target, "templates/pull-request.md"), relocated);
+    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /symlink/u);
+    await rm(relocated);
+    await writeFile(relocated, original);
+    assert.equal((await execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("two packed artifacts preserve complete package and generated-tree identity", async (context) => {
   if (process.platform === "win32") {
     context.skip("the package installation fixture uses a POSIX executable");
@@ -607,6 +652,45 @@ test("two packed artifacts preserve complete package and generated-tree identity
     for (const digest of [identities[0].tarball_digest, identities[0].payload_digest, identities[0].tree_digest]) {
       assert.match(digest, /^sha256:[0-9a-f]{64}$/u);
     }
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("artifact identity preserves versioned envelopes and fail-closed tree and release validation", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-identity-contract-"));
+  try {
+    const tarballPath = path.join(parent, "package.tgz");
+    const packagePath = path.join(parent, "package");
+    const projectPath = path.join(parent, "project");
+    const sourceSha = "a".repeat(40);
+    await mkdir(path.join(packagePath, "dist"), { recursive: true });
+    await mkdir(projectPath);
+    await writeFile(tarballPath, "tarball bytes");
+    await writeFile(path.join(packagePath, "package.json"), JSON.stringify({ name: "example", version: "1.0.0" }));
+    await writeFile(path.join(packagePath, "dist/payload-manifest.json"), JSON.stringify({ package_name: "example", package_version: "1.0.0", payload_version: "1.0.0", payload_digest: `sha256:${"b".repeat(64)}` }));
+    await writeFile(path.join(projectPath, "hello.txt"), "hello");
+    const paths = { tarballPath, packagePath, projectPath };
+    const packed = await packedArtifactIdentity(paths);
+    assert.deepEqual(packed, {
+      schema_version: 1,
+      package: { name: "example", version: "1.0.0" },
+      tarball_digest: `sha256:${createHash("sha256").update("tarball bytes").digest("hex")}`,
+      payload_digest: `sha256:${"b".repeat(64)}`,
+      tree_digest: await generatedTreeDigest(projectPath),
+    });
+    const consumer = await consumerArtifactIdentity({ ...paths, sourceSha });
+    assert.deepEqual(consumer, {
+      schema_version: 2, package: packed.package, payload: { version: "1.0.0", digest: packed.payload_digest },
+      tarball_digest: packed.tarball_digest, source_sha: sourceSha,
+      release: { status: "unavailable", code: "release_identity_unavailable" }, tree_digest: packed.tree_digest,
+    });
+    assert.deepEqual((await consumerArtifactIdentity({ ...paths, sourceSha, release: { status: "verified", tag: "v1.0.0", sha: sourceSha } })).release,
+      { status: "verified", tag: "v1.0.0", sha: sourceSha });
+    await assert.rejects(consumerArtifactIdentity({ ...paths, sourceSha: "bad" }), (error) => error instanceof ArtifactIdentityError && error.message === "source identity is absent or malformed");
+    await assert.rejects(consumerArtifactIdentity({ ...paths, sourceSha, release: { status: "unverified" } }), (error) => error instanceof ArtifactIdentityError && error.message === "release identity is absent or malformed");
+    await symlink(path.join(projectPath, "hello.txt"), path.join(projectPath, "link"));
+    await assert.rejects(generatedTreeDigest(projectPath), (error) => error instanceof ArtifactIdentityError && error.message === "generated project tree contains a symlink: link");
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
