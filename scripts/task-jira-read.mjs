@@ -1,5 +1,5 @@
 // @ts-check
-import { TaskAdapterError } from "./task-adapter.mjs";
+import { TaskAdapterError, parseHandoffContent } from "./task-adapter.mjs";
 
 /**
  * Read-only Jira issue transport. The caller supplies access to its bound Jira tenant;
@@ -78,6 +78,10 @@ export const createJiraReadPort = (transport) => {
             || comment.body !== prefix + JSON.stringify(entry)
             || Object.keys(entry).sort().join(",") !== "content,kind,operationId") {
           fail("readback_mismatch", `${target}: ambiguous or malformed operation correlation in native comment ${comment.id}`);
+        }
+        if (entry.kind === "handoff") {
+          try { parseHandoffContent(entry.content); }
+          catch { fail("readback_mismatch", `${target}: malformed handoff content in native comment ${comment.id}; inspect native handoff evidence`); }
         }
         seenOperations.add(entry.operationId);
         entries.push(/** @type {{operationId: string, kind: string, content: string}} */ (entry));

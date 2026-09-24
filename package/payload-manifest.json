@@ -331,14 +331,14 @@
     {
       "path": "scripts/task-adapter.mjs",
       "mode": "100644",
-      "size": 9969,
-      "sha256": "0c59b540e1c85faf667239a5a9f15fc570cdf4696d7c998688acae530596dbb9"
+      "size": 11445,
+      "sha256": "4c7910cc72c347232c84a8460b15a2b688269426441fa31690e341ed23b05f97"
     },
     {
       "path": "scripts/task-jira-read.mjs",
       "mode": "100644",
-      "size": 5582,
-      "sha256": "8f8905d78c557afb462e1df3e2250cb5ff6ef95c5f1a301de3da302d2015e643"
+      "size": 5859,
+      "sha256": "e0e4c6fc7c44fababfa56c7d492162c437c4c8a5c781ccfe63eefafcccac6352"
     },
     {
       "path": "start.mjs",
@@ -389,5 +389,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:435908c0b8b547f95da803483f09e780a25c21296302cff1264f34cf69b00864"
+  "payload_digest": "sha256:1f478b49688637624c3283c2ef1b7e8c6a8ce37d1d90b6402f9ced62e61ac5fe"
 }

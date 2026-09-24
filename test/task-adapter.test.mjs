@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { createTaskAdapter, parseTaskBinding } from "../scripts/task-adapter.mjs";
+import { createTaskAdapter, handoffContent, parseTaskBinding } from "../scripts/task-adapter.mjs";
 
 const binding = (provider = "jira", board = "BOARD") => `# Bindings - mandatory project providers
 
@@ -123,6 +123,10 @@ test("structured handoff validates blocked continuation and unsupported writes d
   try {
     const adapter = await f.adapter();
     await assert.rejects(adapter.write(identity, { ...entry, kind: "handoff", content: {} }), { code: "handoff_invalid" });
+    const handoff = { phase: "BLOCKED", status: "ACTIVE", completedWork: "Read issue", nextAction: "Verify handoff", branch: "local", commit: "WIP", verification: "Not yet run", resumeEvidence: "Read native task" };
+    await assert.rejects(adapter.write(identity, { ...entry, kind: "handoff", content: handoff }), { code: "handoff_invalid" });
+    assert.throws(() => handoffContent({ ...handoff, resumePhase: "DONE", blocker: "Await approval" }), { code: "handoff_invalid" });
+    assert.throws(() => handoffContent({ ...handoff, resumePhase: "BLOCKED", blocker: "Await approval" }), { code: "handoff_invalid" });
     await assert.rejects(adapter.write(identity, entry), { code: "native_unsupported" });
     await assert.rejects(adapter.write(identity, { ...entry, kind: "create" }), { code: "operation_invalid" });
     assert.equal(writes, 0);
