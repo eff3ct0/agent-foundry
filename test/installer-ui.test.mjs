@@ -8,9 +8,16 @@ const {
   renderReview,
   renderSelection,
   renderStep,
+  renderWelcome,
 } = await import("../dist/installer-ui.js");
 
 const options = { color: false, unicode: false, reducedMotion: true, width: 40 };
+
+test("welcome renders Agent Foundry without color and preserves its template description", () => {
+  const welcome = renderWelcome(options);
+  assert.equal(welcome, "Agent Foundry installer\nPrepare a repository from the packaged template");
+  assert.doesNotMatch(welcome, /Factory Template installer|\u001b/);
+});
 
 test("renderer uses stable ASCII output for narrow, reduced-motion terminals", () => {
   const selection = renderSelection({ key: "TASK_TRACKER", prompt: "Task provider", default: "", required: true, enum: ["jira", "github-issues"] }, 1, options);
