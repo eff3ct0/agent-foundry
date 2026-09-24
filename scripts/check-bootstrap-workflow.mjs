@@ -121,6 +121,7 @@ const checkNpmRelease = (text) => {
   const resolve = section(text, "      - name: Resolve immutable release identity\n", "      - name: Check out the exact source revision\n");
   const toolchain = section(text, "      - name: Activate pinned pnpm\n", "      - name: Build and pack the exact package once\n");
   const publish = "      - name: Publish the exact package with npm provenance\n";
+  const readback = "      - name: Read back npm metadata, tarball, and payload identity\n";
   if (!text.includes(publish) || text.indexOf(publish) < text.indexOf("      - name: Check out the exact source revision\n")) fail("npm release must resolve identity before publishing");
   if (/\bcorepack\b/iu.test(toolchain) || text.includes("corepack install --global pnpm")) fail("npm release toolchain must not use Corepack");
   const commands = toolchain.split("\n").map((line) => line.trim());
@@ -146,6 +147,12 @@ const checkNpmRelease = (text) => {
   if (text.includes('grep -q \'"source_sha"\' identity/local.json')) fail("npm release workflow checks a nonexistent root source_sha");
   if (resolve.includes("EXPECTED_SHA") || resolve.includes("resolvePublishedRelease")) fail("npm release identity step bypasses the event SHA guard");
   if ((text.match(/npm publish /gu) ?? []).length !== 1) fail("npm release must publish exactly once");
+  const publishStep = section(text, publish, readback);
+  const stoppedStep = `        working-directory: release-source\n        env:\n          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}\n        run: |\n          printf '%s\\n' 'npm release publication blocked: exclusive publish gate not installed' >&2\n          exit 1\n          test -n "$NODE_AUTH_TOKEN"\n          npm publish "$TARBALL" --provenance --access public\n`;
+  if ((text.split(publish).length !== 2) || publishStep !== stoppedStep
+      || /(?:^|\n)\s*(?:continue-on-error|defaults):/u.test(text) || /(?:^|\n)\s*if:\s*always\(\)/u.test(text)) {
+    fail("npm release publish step must stop before npm publish without bypass");
+  }
   if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
 };
 
