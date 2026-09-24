@@ -4,6 +4,7 @@ import { constants } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { checkModulePolicy, type ModulePolicyDiagnostic } from "./module-policy";
+import { verifyTypedRuntime } from "./typed-runtime-verifier";
 
 const execFileAsync = promisify(execFile);
 const outside = (root: string, candidate: string): boolean => {
@@ -152,8 +153,26 @@ export const inventorySourceModules = async (directory: string, gitExecutable: s
   return { tracked, payload };
 };
 
-/** Source-only adapter: no caller-supplied generated ownership or compiler exemptions. */
+const typedWorkflowSource = "scripts/typed/check-real-agent-workflow.mts";
+const typedWorkflowRuntime = "scripts/typed-runtime/check-real-agent-workflow.js";
+
+/** Source-only adapter: derive the single compiled identity from fresh compiler bytes. */
 export const checkSourceModulePolicy = async (root: string, gitExecutable: string): Promise<ModulePolicyDiagnostic[]> => {
   const { tracked, payload } = await inventorySourceModules(root, gitExecutable);
-  return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled: [] });
+  const source = tracked.find((file) => file.path === typedWorkflowSource);
+  const runtime = tracked.find((file) => file.path === typedWorkflowRuntime);
+  if (Boolean(source) !== Boolean(runtime)) throw new Error("typed workflow source/runtime pair is incomplete");
+  const compiled = [];
+  if (source && runtime) {
+    if (source.mode !== "100644" || runtime.mode !== "100644") {
+      throw new Error("typed workflow source/runtime pair has an invalid mode");
+    }
+    const emitted = await verifyTypedRuntime(path.join(root, "scripts/typed"), path.join(root, "scripts/typed-runtime"));
+    if (JSON.stringify(emitted) !== JSON.stringify(["check-real-agent-workflow.js", "package.json"])) {
+      throw new Error("typed workflow runtime has an unexpected output set");
+    }
+    compiled.push({ sourceScope: "tracked" as const, source: typedWorkflowSource,
+      outputScope: "tracked" as const, output: typedWorkflowRuntime });
+  }
+  return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled });
 };
