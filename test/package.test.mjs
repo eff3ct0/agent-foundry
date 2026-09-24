@@ -164,7 +164,7 @@ test("typed module emitter rejects unsafe or unresolved imports before writing o
   }
 });
 
-test("checked-in workflow runtime matches fresh typed compiler bytes without transient .mjs", async () => {
+test("checked-in typed runtime matches fresh compiler bytes without transient .mjs", async () => {
   const source = path.join(root, "scripts/typed");
   const committed = path.join(root, "scripts/typed-runtime");
   await verifyTypedRuntime(source, committed);
@@ -172,7 +172,9 @@ test("checked-in workflow runtime matches fresh typed compiler bytes without tra
   try {
     const output = path.join(parent, "output");
     await emitTypedModules(source, output);
-    assert.deepEqual(await walk(output), ["check-real-agent-workflow.js", "package.json"]);
+    assert.deepEqual(await walk(output), [
+      "check-real-agent-workflow.js", "package.json", "resource-cleanup-eligibility.js", "resource-provisioning-proof.js",
+    ]);
     assert.deepEqual(await walk(committed), await walk(output));
     for (const file of await walk(output)) {
       assert.deepEqual(await readFile(path.join(committed, file)), await readFile(path.join(output, file)));
