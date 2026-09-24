@@ -12,7 +12,7 @@ import {
   manifestDigest,
   validateDeclaredPaths,
 } from "../scripts/build-payload.mjs";
-import { packedArtifactIdentity } from "../scripts/artifact-identity.mjs";
+import { packedArtifactIdentity, consumerArtifactIdentity, generatedTreeDigest, ArtifactIdentityError } from "../scripts/typed-runtime/artifact-identity.js";
 import emitter from "../dist/typed-module-emitter.js";
 import verifier from "../dist/typed-runtime-verifier.js";
 import policy from "../dist/module-policy.js";
@@ -173,7 +173,7 @@ test("checked-in typed runtime matches fresh compiler bytes without transient .m
     const output = path.join(parent, "output");
     await emitTypedModules(source, output);
     assert.deepEqual(await walk(output), [
-      "check-real-agent-workflow.js", "hosted-lifecycle-mutation-client.js", "package.json", "resource-cleanup-eligibility.js", "resource-proof-cleanup.js", "resource-provision-and-proof.js", "resource-provisioning-proof.js",
+      "artifact-identity.js", "check-real-agent-workflow.js", "hosted-lifecycle-mutation-client.js", "package.json", "resource-cleanup-eligibility.js", "resource-proof-cleanup.js", "resource-provision-and-proof.js", "resource-provisioning-proof.js",
     ]);
     assert.deepEqual(await walk(committed), await walk(output));
     for (const file of await walk(output)) {
@@ -607,6 +607,45 @@ test("two packed artifacts preserve complete package and generated-tree identity
     for (const digest of [identities[0].tarball_digest, identities[0].payload_digest, identities[0].tree_digest]) {
       assert.match(digest, /^sha256:[0-9a-f]{64}$/u);
     }
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("artifact identity preserves versioned envelopes and fail-closed tree and release validation", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-identity-contract-"));
+  try {
+    const tarballPath = path.join(parent, "package.tgz");
+    const packagePath = path.join(parent, "package");
+    const projectPath = path.join(parent, "project");
+    const sourceSha = "a".repeat(40);
+    await mkdir(path.join(packagePath, "dist"), { recursive: true });
+    await mkdir(projectPath);
+    await writeFile(tarballPath, "tarball bytes");
+    await writeFile(path.join(packagePath, "package.json"), JSON.stringify({ name: "example", version: "1.0.0" }));
+    await writeFile(path.join(packagePath, "dist/payload-manifest.json"), JSON.stringify({ package_name: "example", package_version: "1.0.0", payload_version: "1.0.0", payload_digest: `sha256:${"b".repeat(64)}` }));
+    await writeFile(path.join(projectPath, "hello.txt"), "hello");
+    const paths = { tarballPath, packagePath, projectPath };
+    const packed = await packedArtifactIdentity(paths);
+    assert.deepEqual(packed, {
+      schema_version: 1,
+      package: { name: "example", version: "1.0.0" },
+      tarball_digest: `sha256:${createHash("sha256").update("tarball bytes").digest("hex")}`,
+      payload_digest: `sha256:${"b".repeat(64)}`,
+      tree_digest: await generatedTreeDigest(projectPath),
+    });
+    const consumer = await consumerArtifactIdentity({ ...paths, sourceSha });
+    assert.deepEqual(consumer, {
+      schema_version: 2, package: packed.package, payload: { version: "1.0.0", digest: packed.payload_digest },
+      tarball_digest: packed.tarball_digest, source_sha: sourceSha,
+      release: { status: "unavailable", code: "release_identity_unavailable" }, tree_digest: packed.tree_digest,
+    });
+    assert.deepEqual((await consumerArtifactIdentity({ ...paths, sourceSha, release: { status: "verified", tag: "v1.0.0", sha: sourceSha } })).release,
+      { status: "verified", tag: "v1.0.0", sha: sourceSha });
+    await assert.rejects(consumerArtifactIdentity({ ...paths, sourceSha: "bad" }), (error) => error instanceof ArtifactIdentityError && error.message === "source identity is absent or malformed");
+    await assert.rejects(consumerArtifactIdentity({ ...paths, sourceSha, release: { status: "unverified" } }), (error) => error instanceof ArtifactIdentityError && error.message === "release identity is absent or malformed");
+    await symlink(path.join(projectPath, "hello.txt"), path.join(projectPath, "link"));
+    await assert.rejects(generatedTreeDigest(projectPath), (error) => error instanceof ArtifactIdentityError && error.message === "generated project tree contains a symlink: link");
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

@@ -4,19 +4,19 @@ import path from "node:path";
 
 export class ArtifactIdentityError extends Error {}
 
-const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const digest = (value) => `sha256:${sha256(Buffer.from(JSON.stringify(value)))}`;
+const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+const digest = (value: unknown) => `sha256:${sha256(Buffer.from(JSON.stringify(value)))}`;
 const SHA = /^[0-9a-f]{40}$/u;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 
-const requiredString = (value, name) => {
+const requiredString = (value: unknown, name: string): string => {
   if (typeof value !== "string" || value.length === 0) {
     throw new ArtifactIdentityError(`${name} is absent or malformed`);
   }
   return value;
 };
 
-const regularFile = async (file, name) => {
+const regularFile = async (file: string, name: string) => {
   const entry = await lstat(file).catch(() => {
     throw new ArtifactIdentityError(`${name} is absent`);
   });
@@ -24,11 +24,13 @@ const regularFile = async (file, name) => {
   return entry;
 };
 
-const treeFiles = async (root, relative = "") => {
+type TreeFile = { path: string; mode: string; size: number; sha256: string };
+
+const treeFiles = async (root: string, relative = ""): Promise<TreeFile[]> => {
   const entries = await readdir(path.join(root, relative), { withFileTypes: true }).catch(() => {
     throw new ArtifactIdentityError("generated project tree is absent");
   });
-  const files = [];
+  const files: TreeFile[] = [];
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     const child = path.posix.join(relative, entry.name);
     const absolute = path.join(root, child);
@@ -45,9 +47,11 @@ const treeFiles = async (root, relative = "") => {
   return files;
 };
 
-export const generatedTreeDigest = async (projectPath) => digest({ files: await treeFiles(projectPath) });
+export const generatedTreeDigest = async (projectPath: string) => digest({ files: await treeFiles(projectPath) });
 
-export const packedArtifactIdentity = async ({ tarballPath, packagePath, projectPath }) => {
+type ArtifactPaths = { tarballPath: string; packagePath: string; projectPath: string };
+
+export const packedArtifactIdentity = async ({ tarballPath, packagePath, projectPath }: ArtifactPaths) => {
   await regularFile(tarballPath, "packed tarball");
   const packageJson = JSON.parse(await readFile(path.join(packagePath, "package.json"), "utf8"));
   const manifest = JSON.parse(await readFile(path.join(packagePath, "dist", "payload-manifest.json"), "utf8"));
@@ -66,16 +70,17 @@ export const packedArtifactIdentity = async ({ tarballPath, packagePath, project
   };
 };
 
-const releaseIdentity = (value) => {
+const releaseIdentity = (value: unknown) => {
   if (value === undefined) return { status: "unavailable", code: "release_identity_unavailable" };
-  if (typeof value !== "object" || value === null || Array.isArray(value) || value.status !== "verified"
-      || typeof value.tag !== "string" || !value.tag || typeof value.sha !== "string" || !SHA.test(value.sha)) {
+  if (typeof value !== "object" || value === null || Array.isArray(value) || !("status" in value) || value.status !== "verified"
+      || !("tag" in value) || typeof value.tag !== "string" || !value.tag
+      || !("sha" in value) || typeof value.sha !== "string" || !SHA.test(value.sha)) {
     throw new ArtifactIdentityError("release identity is absent or malformed");
   }
   return { status: "verified", tag: value.tag, sha: value.sha };
 };
 
-export const consumerArtifactIdentity = async ({ tarballPath, packagePath, projectPath, sourceSha, release }) => {
+export const consumerArtifactIdentity = async ({ tarballPath, packagePath, projectPath, sourceSha, release }: ArtifactPaths & { sourceSha: unknown; release?: unknown }) => {
   if (typeof sourceSha !== "string" || !SHA.test(sourceSha)) {
     throw new ArtifactIdentityError("source identity is absent or malformed");
   }

@@ -3,7 +3,7 @@ import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { packedArtifactIdentity } from "./artifact-identity.mjs";
+import { packedArtifactIdentity } from "./typed-runtime/artifact-identity.js";
 
 const execFileAsync = promisify(execFile);
 const PACKAGE_NAME = "@eff3ct/agent-foundry";
