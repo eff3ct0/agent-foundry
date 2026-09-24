@@ -1,0 +1,33 @@
+name: Archetype Node 20 verification
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20.19.0
+      - name: Activate pinned package toolchain
+        run: |
+          test "$(node --version)" = "v20.19.0"
+          npm install --global pnpm@12.4.2
+          test "$(pnpm --version)" = "12.4.2"
+          pnpm install --frozen-lockfile
+      - name: Verify typed emitter and package consumers
+        run: |
+          pnpm typecheck
+          pnpm test
+          node scripts/typed-runtime/check-real-agent-workflow.js
+          node --test --test-name-pattern='typed module emitter' test/package.test.mjs
+          pnpm test:package-consumer
+          node scripts/check-determinism.mjs

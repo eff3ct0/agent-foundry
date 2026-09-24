@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { createHostedLifecycleReadClient } from "../scripts/hosted-lifecycle-read-client.mjs";
-import { decideCleanupEligibility, readCleanupEligibility } from "../scripts/resource-cleanup-eligibility.mjs";
+import { decideCleanupEligibility, readCleanupEligibility } from "../scripts/typed-runtime/resource-cleanup-eligibility.js";
 
 const owner = "sandbox-owner";
 const runId = "123";
