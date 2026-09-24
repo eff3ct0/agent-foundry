@@ -79,8 +79,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 3724,
-      "sha256": "6a6e23af7dd3fd48fbe84562e2493b5a036daa616d5301502247f76b729a585e"
+      "size": 3947,
+      "sha256": "0c19b3d0e7d7b0529d117282a9687425427ce16af00c9d4a42cf285b82dc4b1c"
     },
     {
       "path": "archetype-ownership.json",
@@ -139,8 +139,8 @@
     {
       "path": "docs/org-factory.md",
       "mode": "100644",
-      "size": 3190,
-      "sha256": "47491c546032bcedea46c0e83eae579455cb3d45133d5e1eda8229839b8ac79c"
+      "size": 3167,
+      "sha256": "748b4b45ab41768bdfe9eb012fbe50d97ecf39b669f2543dffad34af74da3e8e"
     },
     {
       "path": "docs/workflow.md",
@@ -377,5 +377,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:4bf46412a8be3f81f9153b2efec806cf7d2a2ebf6e55b2ccedec6d35ae0e2dcc"
+  "payload_digest": "sha256:f385592298df30fe9c05dd31e50823a4395f76643aa8a7a6bd29f2df27329315"
 }
