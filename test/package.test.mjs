@@ -173,7 +173,7 @@ test("checked-in typed runtime matches fresh compiler bytes without transient .m
     const output = path.join(parent, "output");
     await emitTypedModules(source, output);
     assert.deepEqual(await walk(output), [
-      "check-real-agent-workflow.js", "package.json", "resource-cleanup-eligibility.js", "resource-proof-cleanup.js", "resource-provisioning-proof.js",
+      "check-real-agent-workflow.js", "package.json", "resource-cleanup-eligibility.js", "resource-proof-cleanup.js", "resource-provision-and-proof.js", "resource-provisioning-proof.js",
     ]);
     assert.deepEqual(await walk(committed), await walk(output));
     for (const file of await walk(output)) {

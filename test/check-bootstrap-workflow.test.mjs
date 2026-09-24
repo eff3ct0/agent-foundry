@@ -108,6 +108,10 @@ test("bootstrap rejects unpinned, unverified, and missing required actions", asy
 
 test("bootstrap rejects weak lifecycle permission and token boundaries", async () => {
   await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "./scripts/typed-runtime/resource-provision-and-proof.js", "./scripts/resource-provision-and-proof.mjs");
+    await reject(directory, "bootstrap must use the typed provisioning importer ./scripts/typed-runtime/resource-provision-and-proof.js");
+  });
+  await fixture(async (directory) => {
     await replace(directory, "bootstrap", "permissions: {}", "permissions: read-all");
     await reject(directory, "workflow must default to no permissions");
   });
