@@ -113,6 +113,19 @@ const checkJourney = (text, projectRoot) => {
   }
   if (uses.filter((reference) => reference.startsWith("actions/create-github-app-token@")).length !== 4) fail("real-agent journey must mint one token per credential boundary");
   const agent = section(text, "\n  agent:\n", "\n  assert:\n");
+  const creationStep = section(agent, "\n      - name: Create initial branch and apply the exact published creator package\n", "\n      - name: Install selected runtime\n");
+  const creationRun = section(creationStep, "\n        run: |\n");
+  const generatedCommits = [...creationRun.matchAll(/\bgit[ \t]+-C[ \t]+generated[ \t]+commit\b[^\r\n]*/gu)];
+  const expectedSequence = [
+    '          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply --target generated --config answers.json --non-interactive --yes',
+    "          git -C generated init -b main",
+    '          git -C generated config user.name "real-agent-journey"',
+    '          git -C generated config user.email "real-agent-journey@users.noreply.github.com"',
+    "          git -C generated add -A",
+    '          git -C generated commit -m "chore: initialize with Agent Foundry"',
+    '          git -C generated remote add origin "https://github.com/$JOURNEY_REPOSITORY.git"',
+  ].join("\n");
+  if (generatedCommits.length !== 1 || !creationRun.includes(expectedSequence)) fail("real-agent journey generated commit caption must name Agent Foundry");
   if (!agent.includes("OPENAI_API_KEY") || agent.includes("BOOTSTRAP_E2E_TOKEN")) fail("agent credentials are not isolated");
   for (const other of [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n")]) if (other.includes("OPENAI_API_KEY")) fail("agent API credentials crossed a stage boundary");
 };

@@ -211,7 +211,7 @@ jobs:
           git -C generated config user.name "real-agent-journey"
           git -C generated config user.email "real-agent-journey@users.noreply.github.com"
           git -C generated add -A
-          git -C generated commit -m "chore: apply published factory template"
+          git -C generated commit -m "chore: initialize with Agent Foundry"
           git -C generated remote add origin "https://github.com/$JOURNEY_REPOSITORY.git"
           export GIT_CONFIG_COUNT=1
           export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
