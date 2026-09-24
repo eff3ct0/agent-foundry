@@ -166,6 +166,7 @@ jobs:
         run: |
           pnpm typecheck
           pnpm test
+          node scripts/typed-runtime/check-real-agent-workflow.js
           node --test --test-name-pattern='typed module emitter' test/package.test.mjs
           pnpm test:package-consumer
           node scripts/check-determinism.mjs

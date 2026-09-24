@@ -1,5 +1,5 @@
-import { serializeProvisioningProof } from "./resource-provisioning-proof.mjs";
-import { readCleanupEligibility } from "./resource-cleanup-eligibility.mjs";
+import { serializeProvisioningProof } from "./typed-runtime/resource-provisioning-proof.js";
+import { readCleanupEligibility } from "./typed-runtime/resource-cleanup-eligibility.js";
 
 const MAX_PROOF_BYTES = 4096;
 const MAX_ARTIFACT_BYTES = 1024;
