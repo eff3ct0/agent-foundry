@@ -193,7 +193,7 @@ const checkNpmRelease = (text) => {
     "sha=${release.sha}",
   ], "npm release identity step is missing");
   requireText(text, [
-    "release:\n    types: [published]", "workflow_dispatch:", "tag_name:", "permissions: {}", "id-token: write", "contents: read",
+    "release:\n    types: [published]", "workflow_dispatch:", "tag_name:", "permissions: {}", "id-token: write", "contents: write",
     `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
     "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts", "npm publish \"$TARBALL\" --provenance --access public", "NODE_AUTH_TOKEN",
     "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest",
@@ -203,10 +203,55 @@ const checkNpmRelease = (text) => {
   if (resolve.includes("EXPECTED_SHA") || resolve.includes("resolvePublishedRelease")) fail("npm release identity step bypasses the event SHA guard");
   if ((text.match(/npm publish /gu) ?? []).length !== 1) fail("npm release must publish exactly once");
   const publishStep = section(text, publish, readback);
-  const stoppedStep = `        working-directory: release-source\n        env:\n          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}\n        run: |\n          printf '%s\\n' 'npm release publication blocked: exclusive publish gate not installed' >&2\n          exit 1\n          test -n "$NODE_AUTH_TOKEN"\n          npm publish "$TARBALL" --provenance --access public\n`;
-  if ((text.split(publish).length !== 2) || publishStep !== stoppedStep
+  const gatedStep = `        working-directory: release-source
+        env:
+          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: \${{ github.token }}
+          REPOSITORY: \${{ github.repository }}
+          RELEASE_ID: \${{ github.event.release.id }}
+          RELEASE_TAG: \${{ steps.release.outputs.tag }}
+          RELEASE_SHA: \${{ steps.release.outputs.sha }}
+          VERSION: \${{ steps.release.outputs.version }}
+          RUN_ID: \${{ github.run_id }}
+        run: |
+          DECISION="$(node --input-type=module <<'NODE'
+          import { probeExactVersion } from "./scripts/npm-release.mjs";
+          import { claimPublishAttempt } from "./scripts/release-readback.mjs";
+          import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
+          const packageName = "@eff3ct/agent-foundry";
+          const version = process.env.VERSION;
+          const decide = async () => {
+            const probe = await probeExactVersion({ packageName, version, transport: (options) => fetch(options.url, { signal: options.signal, headers: options.headers, redirect: options.redirect }) });
+            if (probe.status === "present") { process.stderr.write(\`\${packageName}@\${version} is already published; skipping publication\\n\`); return "skip"; }
+            if (probe.status !== "absent") { process.stderr.write(\`registry probe was inconclusive (\${probe.status}); refusing to release\\n\`); process.exit(1); }
+            let releaseId = Number(process.env.RELEASE_ID);
+            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) {
+              const client = createHostedLifecycleReadClient({ token: process.env.GITHUB_TOKEN, transport: ({ url, headers, signal }) => fetch(url, { headers, signal }) });
+              const release = await client.get(\`/repos/\${process.env.REPOSITORY}/releases/tags/\${encodeURIComponent(process.env.RELEASE_TAG)}\`);
+              if (release.status !== "ok" || !Number.isSafeInteger(release.payload?.id)) { process.stderr.write(\`release id could not be resolved for \${process.env.RELEASE_TAG}\\n\`); process.exit(1); }
+              releaseId = release.payload.id;
+            }
+            const transport = (options) => fetch(options.url, { method: options.method, headers: { ...options.headers, Authorization: \`Bearer \${process.env.GITHUB_TOKEN}\`, "X-GitHub-Api-Version": "2022-11-28" }, body: options.body, redirect: options.redirect, signal: options.signal });
+            const downloadTransport = (options) => fetch(options.url, { method: options.method, headers: options.headers, body: options.body, redirect: options.redirect, credentials: "omit", signal: options.signal });
+            const claim = await claimPublishAttempt({ transport, downloadTransport, repository: process.env.REPOSITORY, releaseId, tag: process.env.RELEASE_TAG, sourceSha: process.env.RELEASE_SHA, packageName, version, runId: String(process.env.RUN_ID) });
+            if (claim.status !== "claimed") { process.stderr.write(\`exclusive publish claim was not granted (\${claim.code ?? claim.status}); refusing to release\\n\`); process.exit(1); }
+            process.stderr.write(\`exclusive publish claim granted for release \${claim.releaseId} asset \${claim.assetId}\\n\`);
+            return "publish";
+          };
+          process.stdout.write(await decide());
+          NODE
+          )"
+          case "$DECISION" in
+            skip) printf '%s\\n' "publication skipped: $VERSION is already present in the registry" ; exit 0 ;;
+            publish) : ;;
+            *) printf '%s\\n' "npm release refused: exclusive publish decision was not granted" >&2 ; exit 1 ;;
+          esac
+          test -n "$NODE_AUTH_TOKEN"
+          npm publish "$TARBALL" --provenance --access public
+`;
+  if ((text.split(publish).length !== 2) || publishStep !== gatedStep
       || /(?:^|\n)\s*(?:continue-on-error|defaults):/u.test(text) || /(?:^|\n)\s*if:\s*always\(\)/u.test(text)) {
-    fail("npm release publish step must stop before npm publish without bypass");
+    fail("npm release publish step must gate npm publish behind the version probe and exclusive claim without bypass");
   }
   if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
 };
