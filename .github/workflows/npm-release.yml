@@ -40,15 +40,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TAG_NAME: ${{ github.event.release.tag_name || inputs.tag_name }}
-          EXPECTED_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'NODE'
           import { appendFile } from "node:fs/promises";
           import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
-          import { resolvePublishedRelease } from "./scripts/release-readback.mjs";
+          import { resolveReleaseForPublish } from "./scripts/release-readback.mjs";
           import { validateReleaseIdentity } from "./scripts/npm-release.mjs";
           const client = createHostedLifecycleReadClient({ token: process.env.GITHUB_TOKEN, transport: ({ url, headers, signal }) => fetch(url, { headers, signal }) });
-          const release = await resolvePublishedRelease({ client: { get: (endpoint) => client.get(endpoint) }, repository: process.env.REPOSITORY, tag: process.env.TAG_NAME, expectedSha: process.env.EXPECTED_SHA });
+          const release = await resolveReleaseForPublish({ client: { get: (endpoint) => client.get(endpoint) }, repository: process.env.REPOSITORY, tag: process.env.TAG_NAME, eventName: process.env.EVENT_NAME, eventSha: process.env.EVENT_SHA });
           if (release.status !== "ok") throw new Error(`release identity could not be verified: ${release.code}`);
           const version = process.env.TAG_NAME.replace(/^v/u, "");
           validateReleaseIdentity(process.env.TAG_NAME, version, release.sha);
@@ -64,8 +65,8 @@ jobs:
       - name: Activate pinned pnpm
         working-directory: release-source
         run: |
-          corepack enable
-          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2
+          test "$(node --version)" = "v20.19.0"
+          npm install --global pnpm@12.4.2
           test "$(pnpm --version)" = "12.4.2"
       - name: Build and pack the exact package once
         working-directory: release-source
@@ -88,6 +89,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          printf '%s\n' 'npm release publication blocked: exclusive publish gate not installed' >&2
+          exit 1
           test -n "$NODE_AUTH_TOKEN"
           npm publish "$TARBALL" --provenance --access public
       - name: Read back npm metadata, tarball, and payload identity
@@ -107,7 +110,7 @@ jobs:
           node scripts/npm-release.mjs --command verify-registry --package-root registry-package/extracted --tarball "$REGISTRY_TARBALL" --metadata identity/registry-metadata.json --identity identity/local.json --output identity/registry.json
           grep -q '"tarball_digest"' identity/registry.json
           grep -q '"payload"' identity/registry.json
-          grep -q '"source_sha"' identity/local.json
+          node --input-type=module -e 'import assert from "node:assert/strict"; import { readFileSync } from "node:fs"; assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)'
       - name: Upload immutable release evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

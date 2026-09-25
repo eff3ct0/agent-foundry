@@ -97,7 +97,27 @@ const checkTemplateBootstrap = (text) => {
   if (bootstrap.includes("GITHUB_TOKEN") || !report.includes("if: always()") || !report.includes("needs: [prepare, bootstrap]") || !report.includes("GITHUB_TOKEN: ${{ github.token }}")) fail("template reporter must be always-run and credential-separated");
 };
 
+const checkJourneyRunIndentation = (text) => {
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const run = /^([ ]*)run: \|[+-]?$/u.exec(lines[index]);
+    if (!run) continue;
+    let contentIndent;
+    for (let next = index + 1; next < lines.length; next++) {
+      if (!lines[next].trim()) continue;
+      const indent = /^ */u.exec(lines[next])[0].length;
+      if (indent <= run[1].length) break;
+      contentIndent ??= indent;
+      if (indent < contentIndent || lines[next][indent] === "\t") {
+        fail(`real-agent journey run block has invalid YAML indentation at line ${next + 1}`);
+      }
+    }
+    if (contentIndent === undefined) fail(`real-agent journey run block is empty at line ${index + 1}`);
+  }
+};
+
 const checkJourney = (text, projectRoot) => {
+  checkJourneyRunIndentation(text);
   const uses = actionReferences(text);
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("real-agent journey action is not pinned to a full commit SHA");
   if (!/^  JOURNEY_TEMPLATE: eff3ct0\/agent-foundry$/mu.test(text)) fail("real-agent journey source repository must be eff3ct0/agent-foundry");
@@ -116,6 +136,26 @@ const checkJourney = (text, projectRoot) => {
   const agent = section(text, "\n  agent:\n", "\n  assert:\n");
   const creationStep = section(agent, "\n      - name: Create initial branch and apply the exact published creator package\n", "\n      - name: Install selected runtime\n");
   const creationRun = section(creationStep, "\n        run: |\n");
+  const metadataGuard = [
+    '          node --input-type=module <<\'NODE\'',
+    '          import { readFile, writeFile } from "node:fs/promises";',
+    '          const metadata = JSON.parse(await readFile("package-metadata.json", "utf8"));',
+    '          const name = "@eff3ct/agent-foundry";',
+    '          const spec = process.env.JOURNEY_PACKAGE_SPEC ?? "";',
+    '          const version = spec.slice(`${name}@`.length);',
+    '          const identifier = "(?:0|[1-9]\\\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)";',
+    '          const semver = new RegExp(`^(?:0|[1-9]\\\\d*)\\\\.(?:0|[1-9]\\\\d*)\\\\.(?:0|[1-9]\\\\d*)(?:-${identifier}(?:\\\\.${identifier})*)?(?:\\\\+[0-9A-Za-z-]+(?:\\\\.[0-9A-Za-z-]+)*)?$`);',
+    '          if (process.env.JOURNEY_PACKAGE_NAME !== name || spec !== `${name}@${version}` || !semver.test(version)) throw new Error("journey package spec must identify the exact scoped package and version");',
+    '          if (metadata.name !== name || metadata.version !== version) throw new Error("published package metadata does not match the exact journey package");',
+    '          await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: process.env.JOURNEY_PACKAGE_SPEC }, null, 2)}\\n`);',
+    '          NODE',
+    '',
+  ].join("\n");
+  const actualGuard = section(creationRun, '          npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json\n', '          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply');
+  if (!creationStep.includes('JOURNEY_PACKAGE_SPEC: ${{ env.JOURNEY_PACKAGE_NAME }}@${{ needs.prepare.outputs.package_version }}')
+      || actualGuard !== metadataGuard) {
+    fail("real-agent journey must verify exact scoped package metadata before apply");
+  }
   const generatedCommits = [...creationRun.matchAll(/\bgit[ \t]+-C[ \t]+generated[ \t]+commit\b[^\r\n]*/gu)];
   const expectedSequence = [
     '          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply --target generated --config answers.json --non-interactive --yes',
@@ -133,13 +173,41 @@ const checkJourney = (text, projectRoot) => {
 
 const checkNpmRelease = (text) => {
   checkPins(text, releasePinnedActions, "npm release action pin is missing");
+  const resolve = section(text, "      - name: Resolve immutable release identity\n", "      - name: Check out the exact source revision\n");
+  const toolchain = section(text, "      - name: Activate pinned pnpm\n", "      - name: Build and pack the exact package once\n");
+  const publish = "      - name: Publish the exact package with npm provenance\n";
+  const readback = "      - name: Read back npm metadata, tarball, and payload identity\n";
+  if (!text.includes(publish) || text.indexOf(publish) < text.indexOf("      - name: Check out the exact source revision\n")) fail("npm release must resolve identity before publishing");
+  if (/\bcorepack\b/iu.test(toolchain) || text.includes("corepack install --global pnpm")) fail("npm release toolchain must not use Corepack");
+  const commands = toolchain.split("\n").map((line) => line.trim());
+  for (const command of ['test "$(node --version)" = "v20.19.0"', "npm install --global pnpm@12.4.2", 'test "$(pnpm --version)" = "12.4.2"']) {
+    if (!commands.includes(command)) fail(`npm release pinned toolchain is missing ${command}`);
+  }
+  if (commands.indexOf('test "$(node --version)" = "v20.19.0"') > commands.indexOf("npm install --global pnpm@12.4.2") || commands.indexOf("npm install --global pnpm@12.4.2") > commands.indexOf('test "$(pnpm --version)" = "12.4.2"')) fail("npm release must check Node before installing pnpm and check pnpm afterwards");
+  if (text.indexOf("      - name: Activate pinned pnpm\n") > text.indexOf(publish)) fail("npm release must activate pnpm before publishing");
+  requireText(resolve, [
+    "EVENT_NAME: ${{ github.event_name }}", "EVENT_SHA: ${{ github.sha }}",
+    'import { resolveReleaseForPublish } from "./scripts/release-readback.mjs";',
+    "eventName: process.env.EVENT_NAME, eventSha: process.env.EVENT_SHA",
+    'if (release.status !== "ok") throw new Error(`release identity could not be verified: ${release.code}`);',
+    "sha=${release.sha}",
+  ], "npm release identity step is missing");
   requireText(text, [
     "release:\n    types: [published]", "workflow_dispatch:", "tag_name:", "permissions: {}", "id-token: write", "contents: read",
-    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
+    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
     "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts", "npm publish \"$TARBALL\" --provenance --access public", "NODE_AUTH_TOKEN",
-    "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest", "source_sha",
+    "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest",
+    'assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)',
   ], "npm release workflow is missing");
+  if (text.includes('grep -q \'"source_sha"\' identity/local.json')) fail("npm release workflow checks a nonexistent root source_sha");
+  if (resolve.includes("EXPECTED_SHA") || resolve.includes("resolvePublishedRelease")) fail("npm release identity step bypasses the event SHA guard");
   if ((text.match(/npm publish /gu) ?? []).length !== 1) fail("npm release must publish exactly once");
+  const publishStep = section(text, publish, readback);
+  const stoppedStep = `        working-directory: release-source\n        env:\n          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}\n        run: |\n          printf '%s\\n' 'npm release publication blocked: exclusive publish gate not installed' >&2\n          exit 1\n          test -n "$NODE_AUTH_TOKEN"\n          npm publish "$TARBALL" --provenance --access public\n`;
+  if ((text.split(publish).length !== 2) || publishStep !== stoppedStep
+      || /(?:^|\n)\s*(?:continue-on-error|defaults):/u.test(text) || /(?:^|\n)\s*if:\s*always\(\)/u.test(text)) {
+    fail("npm release publish step must stop before npm publish without bypass");
+  }
   if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
 };
 

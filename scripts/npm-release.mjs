@@ -8,6 +8,9 @@ const PACKAGE_NAME = "@eff3ct/agent-foundry";
 const SHA = /^[0-9a-f]{40}$/u;
 const VERSION = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
+const REGISTRY_ORIGIN = "https://registry.npmjs.org";
+const PROBE_MAX_BYTES = 64 * 1024;
+const PROBE_TIMEOUT_MS = 5000;
 
 export class NpmReleaseError extends Error {
   constructor(code, message) {
@@ -85,6 +88,7 @@ export const validateRegistryMetadata = (metadata, expected) => {
 
 export const validateRegistryReadback = ({ metadata, registryIdentity, expected }) => {
   validateRegistryMetadata(metadata, expected);
+  if (registryIdentity.release?.sha !== expected.release.sha) fail("registry_release_mismatch", "registry release SHA differs from the published source revision");
   for (const field of ["name", "version"]) {
     if (registryIdentity.package[field] !== expected.package[field]) fail("registry_identity_mismatch", `registry package ${field} differs from the published package`);
   }
@@ -93,6 +97,58 @@ export const validateRegistryReadback = ({ metadata, registryIdentity, expected 
   }
   if (registryIdentity.tarball_digest !== expected.tarball_digest) fail("registry_tarball_mismatch", "registry tarball identity differs from the published package");
   return { metadata: { name: metadata.name, version: metadata.version }, identity: registryIdentity, status: "verified" };
+};
+
+// Observation only: absence is not an exclusive publish-attempt claim.
+export const probeExactVersion = async ({ packageName, version, transport, timeoutMs = PROBE_TIMEOUT_MS } = {}) => {
+  if (packageName !== PACKAGE_NAME || typeof version !== "string" || !VERSION.test(version)
+      || typeof transport !== "function" || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > PROBE_TIMEOUT_MS) {
+    return { status: "unknown" };
+  }
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => { controller.abort(); resolve({ status: "unknown" }); }, timeoutMs);
+  });
+  const read = async (url) => {
+    const response = await transport({ url, signal: controller.signal, headers: { Accept: "application/json" }, redirect: "error" });
+    if (!response || !Number.isInteger(response.status) || response.url && response.url !== url) throw new Error("invalid registry response");
+    if (response.status === 404) return { status: 404 };
+    if (response.status !== 200 || !response.body || typeof response.body.getReader !== "function") throw new Error("registry response unavailable");
+    const reader = response.body.getReader();
+    const chunks = [];
+    let length = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!(value instanceof Uint8Array) || (length += value.byteLength) > PROBE_MAX_BYTES) throw new Error("registry response oversized");
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return { status: 200, data: JSON.parse(Buffer.concat(chunks, length).toString("utf8")) };
+  };
+  const observe = async () => {
+    const packageUrl = `${REGISTRY_ORIGIN}/@eff3ct%2fagent-foundry`;
+    const exact = await read(`${packageUrl}/${encodeURIComponent(version)}`);
+    const document = await read(packageUrl);
+    if (document.status === 404) return { status: exact.status === 404 ? "absent" : "unknown" };
+    if (!object(document.data) || document.data.name !== packageName || !object(document.data.versions)) return { status: "unknown" };
+    const hasVersion = Object.hasOwn(document.data.versions, version);
+    const entry = document.data.versions[version];
+    if (exact.status === 404) return { status: hasVersion ? "unknown" : "absent" };
+    if (!object(exact.data) || exact.data.name !== packageName || exact.data.version !== version
+        || !object(entry) || entry.name !== packageName || entry.version !== version) return { status: "unknown" };
+    return { status: "present" };
+  };
+  try {
+    return await Promise.race([observe().catch(() => ({ status: "unknown" })), deadline]);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
 };
 
 const parseArgs = (values) => {
