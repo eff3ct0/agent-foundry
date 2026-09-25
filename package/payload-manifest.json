@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 8872,
-      "sha256": "0798884ca6362c6f6b6f058c33cd1a5360c792361b61dcb1abe047fce358696f"
+      "size": 9071,
+      "sha256": "80355fae4938a61fe30a43ffd2bbd6c4359ba61e5dfed3be241752955baefb25"
     },
     {
       "path": "ci/_contract.md",
@@ -329,6 +329,24 @@
       "sha256": "181618275724d6f48b42b0f38aa85490ed7fc47a6767c00937950516540ad776"
     },
     {
+      "path": "scripts/task-adapter.mjs",
+      "mode": "100644",
+      "size": 11445,
+      "sha256": "4c7910cc72c347232c84a8460b15a2b688269426441fa31690e341ed23b05f97"
+    },
+    {
+      "path": "scripts/task-github-issues-read.mjs",
+      "mode": "100644",
+      "size": 7210,
+      "sha256": "552b809b6198c7008419c2ae05bdc79b45894b9d60cfa8090c53b7f52bb73ed4"
+    },
+    {
+      "path": "scripts/task-jira-read.mjs",
+      "mode": "100644",
+      "size": 5859,
+      "sha256": "e0e4c6fc7c44fababfa56c7d492162c437c4c8a5c781ccfe63eefafcccac6352"
+    },
+    {
       "path": "start.mjs",
       "mode": "100644",
       "size": 10600,
@@ -377,5 +395,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:a8df63b7e297b159b5c83b3ccde7f6ee604c9624ab23f7ac984a6c80b1841068"
+  "payload_digest": "sha256:f249d77b3e97b8ceeb2f97e4e2a9265e330338cdb929e144e1901b0dd6a53d39"
 }
