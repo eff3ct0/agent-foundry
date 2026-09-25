@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - .github/labels.json
-      - scripts/sync-github-labels.mjs
+      - scripts/typed-inherited/sync-github-labels.mts
+      - scripts/typed-inherited-runtime/sync-github-labels.js
+      - scripts/typed-inherited-runtime/package.json
 
 permissions:
   issues: write
@@ -15,10 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20.19.0
+      - name: Verify committed typed runtime before synchronization
+        run: |
+          npm install --global pnpm@12.4.2
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm build
       - name: Synchronize labels
-        run: node scripts/sync-github-labels.mjs --repo "$GITHUB_REPOSITORY"
+        run: node scripts/typed-inherited-runtime/sync-github-labels.js --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ github.token }}

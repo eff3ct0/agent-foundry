@@ -4,7 +4,8 @@ export const MAX_REQUEST_BYTES = 16 * 1024;
 export const MAX_RESPONSE_BYTES = 64 * 1024;
 
 export class HostedLifecycleMutationError extends Error {
-  constructor(code, message) {
+  code: string;
+  constructor(code: string, message: string) {
     super(message);
     this.code = code;
   }
@@ -13,28 +14,30 @@ export class HostedLifecycleMutationError extends Error {
 const OWNER = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/u;
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;
 const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;
-const fail = (code, message) => { throw new HostedLifecycleMutationError(code, message); };
-const object = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-const byteLength = (value) => Buffer.byteLength(value, "utf8");
+const fail = (code: string, message: string): never => { throw new HostedLifecycleMutationError(code, message); };
+const object = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const byteLength = (value: string) => Buffer.byteLength(value, "utf8");
 
-const valid = (value, expression, code, message) => {
+const valid = (value: unknown, expression: RegExp, code: string, message: string): string => {
   if (typeof value !== "string" || !expression.test(value)) fail(code, message);
-  return value;
+  return value as string;
 };
 
-const contentLength = (headers) => {
+type ResponseBody = { headers?: { get(name: string): string | null }; body?: ReadableStream<Uint8Array> };
+
+const contentLength = (headers: ResponseBody["headers"]) => {
   const value = typeof headers?.get === "function" ? headers.get("content-length") : undefined;
   if (value === null || value === undefined || value === "") return undefined;
   if (!/^\d+$/u.test(value)) fail("invalid_response", "hosted lifecycle response is invalid");
   return Number(value);
 };
 
-const boundedBytes = async (response) => {
+const boundedBytes = async (response: ResponseBody) => {
   const declared = contentLength(response.headers);
   if (declared !== undefined && declared > MAX_RESPONSE_BYTES) fail("response_too_large", "hosted lifecycle response is too large");
   const reader = response.body?.getReader?.();
   if (!reader) return Buffer.alloc(0);
-  const chunks = [];
+  const chunks: Uint8Array[] = [];
   let size = 0;
   try {
     while (true) {
@@ -54,14 +57,14 @@ const boundedBytes = async (response) => {
   return Buffer.concat(chunks);
 };
 
-const mutationResult = async (response, expectedStatus, expectedPayload) => {
-  if (!object(response) || !Number.isInteger(response.status)) return { status: "rejected", code: "invalid_response" };
+const mutationResult = async (response: unknown, expectedStatus: number, expectedPayload: boolean) => {
+  if (!object(response) || typeof response.status !== "number" || !Number.isInteger(response.status)) return { status: "rejected", code: "invalid_response" };
   if (response.status >= 500 && response.status <= 599) return { status: "indeterminate", code: "mutation_indeterminate" };
   if (response.status !== expectedStatus) return { status: "rejected", code: "mutation_rejected" };
   try {
-    const bytes = await boundedBytes(response);
+    const bytes = await boundedBytes(response as ResponseBody);
     if (!expectedPayload) return bytes.length === 0 ? { status: "deleted" } : { status: "rejected", code: "invalid_response" };
-    const payload = JSON.parse(bytes.toString("utf8"));
+    const payload: unknown = JSON.parse(bytes.toString("utf8"));
     return object(payload) ? { status: "created", payload } : { status: "rejected", code: "invalid_json" };
   } catch (error) {
     if (error instanceof HostedLifecycleMutationError) return { status: "rejected", code: error.code };
@@ -69,11 +72,15 @@ const mutationResult = async (response, expectedStatus, expectedPayload) => {
   }
 };
 
-export const createHostedLifecycleMutationClient = ({ transport, token }) => {
+type Transport = (request: { method: string; url: string; headers: Record<string, string>; body: string | undefined; signal: AbortSignal }) => Promise<unknown>;
+
+export const createHostedLifecycleMutationClient = ({ transport, token }: { transport: unknown; token: unknown }) => {
   if (typeof transport !== "function") fail("invalid_transport", "hosted lifecycle transport is required");
   if (typeof token !== "string" || !token || /[\0-\x1f\x7f]/u.test(token)) fail("invalid_token", "hosted lifecycle token is invalid");
 
-  const mutate = async ({ method, endpoint, payload, expectedStatus, expectedPayload }) => {
+  const mutate = async ({ method, endpoint, payload, expectedStatus, expectedPayload }: {
+    method: string; endpoint: string; payload?: unknown; expectedStatus: number; expectedPayload: boolean;
+  }) => {
     const url = new URL(endpoint, HOSTED_LIFECYCLE_ORIGIN);
     const body = payload === undefined ? undefined : JSON.stringify(payload);
     const headers = {
@@ -85,14 +92,14 @@ export const createHostedLifecycleMutationClient = ({ transport, token }) => {
     const serialized = `${method} ${url}\n${Object.entries(headers).map(([name, value]) => `${name}: ${value}`).join("\n")}${body === undefined ? "" : `\n\n${body}`}`;
     if (byteLength(serialized) > MAX_REQUEST_BYTES) fail("request_too_large", "hosted lifecycle request is too large");
     try {
-      return await mutationResult(await transport({ method, url: url.toString(), headers, body, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }), expectedStatus, expectedPayload);
+      return await mutationResult(await (transport as Transport)({ method, url: url.toString(), headers, body, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }), expectedStatus, expectedPayload);
     } catch {
       return { status: "indeterminate", code: "mutation_indeterminate" };
     }
   };
 
   return {
-    async createTemplateRepository({ template, owner, name }) {
+    async createTemplateRepository({ template, owner, name }: { template: unknown; owner: unknown; name: unknown }) {
       template = valid(template, REPOSITORY, "invalid_template", "template identifier is invalid");
       owner = valid(owner, OWNER, "invalid_owner", "repository owner is invalid");
       name = valid(name, NAME, "invalid_name", "repository name is invalid");
@@ -104,7 +111,7 @@ export const createHostedLifecycleMutationClient = ({ transport, token }) => {
         expectedPayload: true,
       });
     },
-    async createEmptyRepository({ owner, name }) {
+    async createEmptyRepository({ owner, name }: { owner: unknown; name: unknown }) {
       owner = valid(owner, OWNER, "invalid_owner", "repository owner is invalid");
       name = valid(name, NAME, "invalid_name", "repository name is invalid");
       return mutate({
@@ -115,7 +122,7 @@ export const createHostedLifecycleMutationClient = ({ transport, token }) => {
         expectedPayload: true,
       });
     },
-    async deleteRepository({ owner, name }) {
+    async deleteRepository({ owner, name }: { owner: unknown; name: unknown }) {
       owner = valid(owner, OWNER, "invalid_owner", "repository owner is invalid");
       name = valid(name, NAME, "invalid_name", "repository name is invalid");
       return mutate({ method: "DELETE", endpoint: `/repos/${owner}/${name}`, expectedStatus: 204, expectedPayload: false });

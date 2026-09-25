@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validateTag } from "./release-ref.mjs";
-import { createHostedLifecycleMutationClient } from "./hosted-lifecycle-mutation-client.mjs";
+import { createHostedLifecycleMutationClient } from "./typed-runtime/hosted-lifecycle-mutation-client.js";
 import { createHostedLifecycleReadClient } from "./hosted-lifecycle-read-client.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { provisionAndProve } from "../scripts/resource-provision-and-proof.mjs";
+import { provisionAndProve, ResourceProvisionAndProofError, validatePersistedProvisioningProof } from "../scripts/typed-runtime/resource-provision-and-proof.js";
 
 const runId = "123";
 const owner = "sandbox-owner";
@@ -116,5 +116,30 @@ test("fails closed when the persisted versioned proof cannot be validated", asyn
 test("validates every injected boundary before creating a repository", async () => {
   const supplied = input({ proofClient: undefined });
   await assert.rejects(provisionAndProve(supplied), (error) => error.code === "invalid_proof_client");
+  assert.deepEqual(supplied.events, []);
+});
+
+test("preserves rejected, indeterminate, and proof persistence outcomes without retrying creation", async () => {
+  for (const [create, expected] of [
+    [async () => { throw new Error("connection lost"); }, { status: "indeterminate", code: "mutation_indeterminate" }],
+    [async () => ({ status: "rejected", code: "forbidden" }), { status: "rejected", code: "forbidden" }],
+    [async () => ({ status: "created" }), { status: "recovery-required", code: "proof_persistence_failed" }],
+  ]) {
+    const supplied = input();
+    supplied.mutationClient.createTemplateRepository = async (request) => {
+      supplied.events.push(`create:${JSON.stringify(request)}`);
+      return create();
+    };
+    if (expected.status === "recovery-required") supplied.proofStore.write = async () => { throw new Error("disk unavailable"); };
+    assert.deepEqual(await provisionAndProve(supplied), expected);
+    assert.equal(supplied.events.filter((event) => event.startsWith("create:")).length, 1);
+    assert.equal(supplied.events.includes("read-proof"), false);
+  }
+});
+
+test("rejects invalid persisted proof boundaries and retains typed error codes", async () => {
+  assert.equal(validatePersistedProvisioningProof({ serialized: `${JSON.stringify({ ...proof, repository_id: 0 })}\n`, runId, owner, resource, template, releaseSha }), undefined);
+  const supplied = input({ owner: "invalid/owner" });
+  await assert.rejects(provisionAndProve(supplied), (error) => error instanceof ResourceProvisionAndProofError && error.code === "invalid_owner");
   assert.deepEqual(supplied.events, []);
 });
