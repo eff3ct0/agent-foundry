@@ -56,6 +56,7 @@
     "scripts/check-pr-governance.mjs",
     "scripts/task-adapter.mjs",
     "scripts/task-jira-read.mjs",
+    "scripts/task-github-issues-read.mjs",
     "scripts/sync-github-labels.mjs",
     "start.mjs",
     "templates/adr.md",
