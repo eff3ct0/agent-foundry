@@ -86,13 +86,15 @@ test("generated module inventory uses the composed creator plan, not application
 
     const baseline = await checkGeneratedModulePolicy(options);
     assert.deepEqual(baseline, [
-      ".factory/scripts/check-delivery-contract.mjs",
       ".factory/scripts/check-factory-layout.mjs",
       "start.mjs",
     ].map((name) => ({ scope: "generated", path: name, reason: "untyped .mjs module" })));
     assert.ok(await stat(path.join(target, ".opencode/plugins/factory-start.ts")));
     assert.ok(await stat(path.join(target, ".github/workflows/ci.yml")));
     const labelScript = path.join(target, ".factory/scripts/typed-inherited-runtime/sync-github-labels.js");
+    const deliveryScript = path.join(target, ".factory/scripts/typed-inherited-runtime/check-delivery-contract.js");
+    assert.equal((await execFileAsync(process.execPath, [deliveryScript, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
+    assert.equal((await execFileAsync(process.execPath, [deliveryScript, "--approval-self-check"], { cwd: target })).stdout, "approval self-check OK\n");
     const labelsWorkflow = await readFile(path.join(target, ".github/workflows/sync-labels.yml"), "utf8");
     const governanceWorkflow = await readFile(path.join(target, ".github/workflows/governance.yml"), "utf8");
     assert.match(governanceWorkflow, /node \.factory\/scripts\/typed-inherited-runtime\/check-pr-governance\.js/u);
@@ -104,6 +106,8 @@ test("generated module inventory uses the composed creator plan, not application
     const dryRun = await execFileAsync(process.execPath, [labelScript, "--dry-run", "--repo", "acme/example"], { cwd: target });
     assert.equal(dryRun.stdout.trim().split("\n").length, 10);
     for (const relative of [
+      ".factory/scripts/typed-inherited/check-delivery-contract.mts",
+      ".factory/scripts/typed-inherited-runtime/check-delivery-contract.js",
       ".factory/scripts/typed-inherited/check-pr-governance.mts",
       ".factory/scripts/typed-inherited-runtime/check-pr-governance.js",
       ".factory/scripts/typed-inherited/sync-github-labels.mts",
@@ -124,6 +128,10 @@ test("generated module inventory uses the composed creator plan, not application
     await writeFile(path.join(path.dirname(labelScript), "extra.js"), "export {};\n");
     await assert.rejects(checkGeneratedModulePolicy(options), /typed runtime file set differs/u);
     await rm(path.join(path.dirname(labelScript), "extra.js"));
+    const deliveryBytes = await readFile(deliveryScript);
+    await rm(deliveryScript);
+    await assert.rejects(checkGeneratedModulePolicy(options), /does not match the composed creator plan/u);
+    await writeFile(deliveryScript, deliveryBytes);
     assert.deepEqual(await checkGeneratedModulePolicy(options), baseline);
 
     await mkdir(path.join(target, "app"));

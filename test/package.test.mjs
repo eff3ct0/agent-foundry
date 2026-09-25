@@ -434,18 +434,21 @@ test("source policy refuses unpaired JavaScript in the reserved typed runtime", 
   }
 });
 
-test("inherited governance and label provenance requires complete tracked payload and fresh compiler bytes", async () => {
+test("inherited delivery, governance and label provenance requires complete tracked payload and fresh compiler bytes", async () => {
   const repository = await sourceFixture();
   const source = "scripts/typed-inherited/sync-github-labels.mts";
   const governanceSource = "scripts/typed-inherited/check-pr-governance.mts";
+  const deliverySource = "scripts/typed-inherited/check-delivery-contract.mts";
   const runtime = "scripts/typed-inherited-runtime/sync-github-labels.js";
   const governanceRuntime = "scripts/typed-inherited-runtime/check-pr-governance.js";
+  const deliveryRuntime = "scripts/typed-inherited-runtime/check-delivery-contract.js";
   const manifest = "scripts/typed-inherited-runtime/package.json";
-  const paths = [source, governanceSource, runtime, governanceRuntime, manifest];
+  const paths = [source, governanceSource, deliverySource, runtime, governanceRuntime, deliveryRuntime, manifest];
   try {
     await mkdir(path.join(repository, "scripts/typed-inherited"));
     await writeFile(path.join(repository, source), "export const labels: number = 181;\n");
     await writeFile(path.join(repository, governanceSource), "export const governance: number = 181;\n");
+    await writeFile(path.join(repository, deliverySource), "export const delivery: number = 181;\n");
     await emitTypedModules(path.join(repository, "scripts/typed-inherited"), path.join(repository, "scripts/typed-inherited-runtime"));
     const declaration = path.join(repository, "package/payload-files.json");
     const lock = path.join(repository, "package/payload-manifest.json");
@@ -478,6 +481,12 @@ test("inherited governance and label provenance requires complete tracked payloa
     await writeFile(path.join(repository, governanceRuntime), "export const governance = 182;\n");
     await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /inherited tracked bytes differ/u);
     await writeFile(path.join(repository, governanceRuntime), "export const governance = 181;\n");
+    await writeFile(path.join(repository, deliverySource), "export const delivery: number = 181;\n\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /inherited tracked bytes differ/u);
+    await writeFile(path.join(repository, deliverySource), "export const delivery: number = 181;\n");
+    await writeFile(path.join(repository, deliveryRuntime), "export const delivery = 182;\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /inherited tracked bytes differ/u);
+    await writeFile(path.join(repository, deliveryRuntime), "export const delivery = 181;\n");
     if (process.platform !== "win32") {
       await chmod(path.join(repository, runtime), 0o755);
       await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /source inventory mode mismatch/u);
@@ -652,6 +661,8 @@ test("packed generated governance self-check uses its relocated template and fai
     assert.equal(JSON.parse((await execFileAsync(process.execPath,
       [path.join(target, "start.mjs"), "--cwd", target, "--json"])).stdout).mode, "WORK");
     const inheritedPaths = [
+      "scripts/typed-inherited/check-delivery-contract.mts",
+      "scripts/typed-inherited-runtime/check-delivery-contract.js",
       "scripts/typed-inherited/check-pr-governance.mts",
       "scripts/typed-inherited-runtime/check-pr-governance.js",
       "scripts/typed-inherited/sync-github-labels.mts",
@@ -667,9 +678,9 @@ test("packed generated governance self-check uses its relocated template and fai
       assert.equal((await stat(generated)).mode & 0o7777, 0o644);
     }
     assert.deepEqual(await verifyTypedRuntime(path.join(packageRoot, "scripts/typed-inherited"),
-      path.join(packageRoot, "scripts/typed-inherited-runtime")), ["check-pr-governance.js", "package.json", "sync-github-labels.js"]);
+      path.join(packageRoot, "scripts/typed-inherited-runtime")), ["check-delivery-contract.js", "check-pr-governance.js", "package.json", "sync-github-labels.js"]);
     assert.deepEqual(await verifyTypedRuntime(path.join(target, ".factory/scripts/typed-inherited"),
-      path.join(target, ".factory/scripts/typed-inherited-runtime")), ["check-pr-governance.js", "package.json", "sync-github-labels.js"]);
+      path.join(target, ".factory/scripts/typed-inherited-runtime")), ["check-delivery-contract.js", "check-pr-governance.js", "package.json", "sync-github-labels.js"]);
     const labels = path.join(target, ".factory/scripts/typed-inherited-runtime/sync-github-labels.js");
     assert.match((await execFileAsync(process.execPath, [labels, "--self-check"], { cwd: target })).stdout, /self-check OK\n$/u);
     assert.equal((await execFileAsync(process.execPath, [labels, "--dry-run", "--repo", "acme/example"], { cwd: target })).stdout.trim().split("\n").length, 10);
@@ -684,6 +695,17 @@ test("packed generated governance self-check uses its relocated template and fai
       await writeFile(packaged, original);
     }
     assert.equal((await execFileAsync(process.execPath, [path.join(root, "scripts/typed-inherited-runtime/check-pr-governance.js"), "--self-check"])).stdout, "self-check OK\n");
+    const sourceDelivery = path.join(root, "scripts/typed-inherited-runtime/check-delivery-contract.js");
+    const packedDelivery = path.join(packageRoot, "scripts/typed-inherited-runtime/check-delivery-contract.js");
+    const generatedDelivery = path.join(target, ".factory/scripts/typed-inherited-runtime/check-delivery-contract.js");
+    for (const delivery of [sourceDelivery, generatedDelivery]) {
+      assert.equal((await execFileAsync(process.execPath, [delivery, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
+      await assert.rejects(execFileAsync(process.execPath, [delivery], { cwd: target }), /usage: check-delivery-contract\.js --self-check\|--approval-self-check/u);
+    }
+    for (const delivery of [sourceDelivery, packedDelivery, generatedDelivery]) {
+      assert.equal((await execFileAsync(process.execPath, [delivery, "--approval-self-check"], { cwd: target })).stdout, "approval self-check OK\n");
+    }
+    await assert.rejects(execFileAsync(process.execPath, [packedDelivery, "--self-check"]), /required file missing: docs\/bindings\.md/u);
 
     const checker = path.join(target, ".factory/scripts/typed-inherited-runtime/check-pr-governance.js");
     assert.match(await readFile(path.join(target, ".github/workflows/governance.yml"), "utf8"), /node \.factory\/scripts\/typed-inherited-runtime\/check-pr-governance\.js/u);

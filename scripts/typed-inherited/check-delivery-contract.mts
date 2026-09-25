@@ -7,14 +7,14 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(scriptDirectory, path.basename(path.dirname(scriptDirectory)) === ".factory" ? "../.." : "..");
+const root = path.resolve(scriptDirectory, path.basename(path.dirname(path.dirname(scriptDirectory))) === ".factory" ? "../../.." : "../..");
 
 const providerDirectories = {
   task: "task",
   secrets: "secrets",
   "code-intel": "code-intel",
 };
-const documentSections = {
+const documentSections: Record<string, string[]> = {
   "AGENT.md": ["Project coordinates", "Archetype documents", "Operating rules", "Protected `status:approved` gate", "Bindings (provider contract)", "Reading order for a cold agent"],
   "agent-runbook.md": ["Why this is a contract, not a runner", "Convergence rules", "Principle: the session is disposable", "Session cycle", "Approval boundaries", "Guardrails"],
   "bindings.md": ["Protected `status:approved` gate"],
@@ -23,7 +23,7 @@ const contractInstance = /Contract\s+instance\s*:\s*\*{0,2}\s*\[[^\]]+\]\(([^)]+
 const localLink = /\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu;
 const codeIntelNoneMarkers = ["intentional minimal", "default", "no dependency"];
 const ciRecipeMarker = "# Instance of ci/_contract.md";
-const sectionAliases = {
+const sectionAliases: Record<string, string[]> = {
   "how the agent interacts": ["agent interaction"],
   "how the agent resolves secrets": ["agent interaction", "agent resolution"],
   "rules and limitations": ["rules"],
@@ -34,15 +34,15 @@ const approvalAction = "add status:approved";
 const allowedPrincipalRoles = ["MAINTAINER", "AUTHORIZED_APPROVER"];
 const allowedActorCapabilities = ["MAINTAIN", "ADMIN"];
 
-const display = (target, projectRoot) => {
+const display = (target: string, projectRoot: string): string => {
   const relative = path.relative(projectRoot, target);
   return relative && !relative.startsWith(`..${path.sep}`) && relative !== ".." ? relative.replaceAll(path.sep, "/") : path.basename(target);
 };
 
-const headings = (text) => [...String(text).matchAll(/^#{2,6}\s+(.+?)\s*$/gmu)].map((match) => match[1].trim().replace(/#+$/u, "").trim());
-const sectionKey = (section) => section.toLowerCase().split(" (", 1)[0].trim();
+const headings = (text: string): string[] => [...String(text).matchAll(/^#{2,6}\s+(.+?)\s*$/gmu)].map((match) => match[1].trim().replace(/#+$/u, "").trim());
+const sectionKey = (section: string): string => section.toLowerCase().split(" (", 1)[0].trim();
 
-const field = (text, name) => {
+const field = (text: string, name: string): string => {
   for (const rawLine of String(text).split("\n")) {
     const line = rawLine.replace(/^\s*[-*>]\s*/u, "").replaceAll("**", "");
     const match = line.match(/^\s*([^:*]+?)\s*:\s*(.*?)\s*$/u);
@@ -51,7 +51,7 @@ const field = (text, name) => {
   return "";
 };
 
-const sectionPresent = (text, section) => {
+const sectionPresent = (text: string, section: string): boolean => {
   const wanted = sectionKey(section);
   const sections = new Set(headings(text).map(sectionKey));
   if (sections.has(wanted)) return true;
@@ -61,7 +61,7 @@ const sectionPresent = (text, section) => {
   return (sectionAliases[wanted] ?? []).some((alias) => labels.has(alias));
 };
 
-const contractFiles = (projectRoot) => {
+const contractFiles = (projectRoot: string): string[] => {
   const factory = path.join(projectRoot, ".factory");
   const templates = fs.existsSync(factory) ? path.join(factory, "templates") : path.join(projectRoot, "templates");
   const files = [path.join(projectRoot, "AGENT.md"), path.join(templates, "agent-runbook.md"), path.join(projectRoot, "docs", "bindings.md")];
@@ -72,8 +72,8 @@ const contractFiles = (projectRoot) => {
   return files;
 };
 
-const providerFiles = async (projectRoot) => {
-  const files = [];
+const providerFiles = async (projectRoot: string): Promise<Array<[string, string]>> => {
+  const files: Array<[string, string]> = [];
   for (const [capability, directory] of Object.entries(providerDirectories)) {
     const providerDirectory = path.join(projectRoot, "providers", directory);
     for (const entry of await readdir(providerDirectory).catch(() => [])) {
@@ -83,7 +83,7 @@ const providerFiles = async (projectRoot) => {
   return files.sort((left, right) => left[1].localeCompare(right[1]));
 };
 
-const checkLinks = (target, text, projectRoot, errors) => {
+const checkLinks = (target: string, text: string, projectRoot: string, errors: string[]): void => {
   for (const match of text.matchAll(localLink)) {
     const link = match[1].replace(/^<|>$/gu, "");
     if (!link || link.startsWith("#") || /^[a-z][a-z0-9+.-]*:/iu.test(link)) continue;
@@ -91,7 +91,7 @@ const checkLinks = (target, text, projectRoot, errors) => {
   }
 };
 
-const checkDocument = (target, text, projectRoot, errors) => {
+const checkDocument = (target: string, text: string, projectRoot: string, errors: string[]): void => {
   for (const section of documentSections[path.basename(target)] ?? []) {
     if (!new Set(headings(text).map(sectionKey)).has(sectionKey(section))) errors.push(`${display(target, projectRoot)} missing section: ## ${section}`);
   }
@@ -103,7 +103,7 @@ const checkDocument = (target, text, projectRoot, errors) => {
   }
 };
 
-const checkProvider = (capability, target, contractPath, contractText, text, projectRoot, errors) => {
+const checkProvider = (capability: string, target: string, contractPath: string, contractText: string, text: string, projectRoot: string, errors: string[]): void => {
   const label = display(target, projectRoot);
   for (const section of headings(contractText)) if (!sectionPresent(text, section)) errors.push(`${label} missing contract section: ## ${section}`);
   const instance = text.match(contractInstance);
@@ -120,10 +120,10 @@ const checkProvider = (capability, target, contractPath, contractText, text, pro
   }
 };
 
-const checkCi = (target, projectRoot, errors) => {
+const checkCi = (target: string, projectRoot: string, errors: string[]): void => {
   const label = display(target, projectRoot);
-  let recipes;
-  try { recipes = JSON.parse(fs.readFileSync(target, "utf8")); } catch (error) { errors.push(`${label} invalid CI recipes: ${error.constructor.name}`); return; }
+  let recipes: Record<string, unknown>;
+  try { recipes = JSON.parse(fs.readFileSync(target, "utf8")); } catch (error) { errors.push(`${label} invalid CI recipes: ${(error as Error).constructor.name}`); return; }
   if (!recipes || typeof recipes !== "object" || Array.isArray(recipes) || Object.keys(recipes).length === 0) { errors.push(`${label} must contain at least one CI recipe`); return; }
   for (const [name, job] of Object.entries(recipes).sort(([left], [right]) => left.localeCompare(right))) {
     if (name === "_contract") { errors.push(`${label} must not select _contract`); continue; }
@@ -134,7 +134,7 @@ const checkCi = (target, projectRoot, errors) => {
   }
 };
 
-const inferRoot = (paths, projectRoot) => {
+const inferRoot = (paths: string[], projectRoot: string): string => {
   if (projectRoot !== root) return projectRoot;
   for (const target of paths) {
     const directory = path.dirname(target);
@@ -143,13 +143,13 @@ const inferRoot = (paths, projectRoot) => {
   return projectRoot;
 };
 
-export const check = async (paths, projectRoot = root) => {
+export const check = async (paths?: string[], projectRoot = root): Promise<string[]> => {
   let effectiveRoot = path.resolve(projectRoot);
   const defaultPaths = paths === undefined;
   if (!defaultPaths) effectiveRoot = inferRoot(paths, effectiveRoot);
   const selected = defaultPaths ? [...contractFiles(effectiveRoot), ...(await providerFiles(effectiveRoot)).map(([, target]) => target)] : paths.map((target) => path.isAbsolute(target) ? target : path.join(effectiveRoot, target));
-  const errors = [];
-  const present = [];
+  const errors: string[] = [];
+  const present: string[] = [];
   for (const target of selected) {
     if (!fs.existsSync(target)) errors.push(`required file missing: ${display(target, effectiveRoot)}`);
     else present.push(target);
@@ -160,7 +160,7 @@ export const check = async (paths, projectRoot = root) => {
     checkLinks(target, text, effectiveRoot, errors);
     checkDocument(target, text, effectiveRoot, errors);
   }
-  const contracts = new Map();
+  const contracts = new Map<string, [string, string]>();
   for (const [capability, directory] of Object.entries(providerDirectories)) {
     const target = path.join(effectiveRoot, "providers", directory, "_contract.md");
     if (fs.existsSync(target)) contracts.set(capability, [target, await readFile(target, "utf8")]);
@@ -177,7 +177,15 @@ export const check = async (paths, projectRoot = root) => {
   return errors;
 };
 
-export const delegatedApprovalErrors = (evidence, targetIssue) => {
+interface ApprovalEvidence {
+  instruction?: { source?: string; current?: boolean; issue?: number; action?: string; principal?: string };
+  principal?: { evidence_source?: string; subject?: string; role?: string };
+  actor?: { subject?: string; capability?: string };
+  operation?: { issue?: number; label?: string; attempts?: number; result?: string; sequence?: string[] };
+  readback?: { issue?: number; labels?: string[] };
+}
+
+export const delegatedApprovalErrors = (evidence: ApprovalEvidence, targetIssue: number): string[] => {
   const instruction = evidence.instruction ?? {};
   const principal = evidence.principal ?? {};
   const actor = evidence.actor ?? {};
@@ -189,10 +197,10 @@ export const delegatedApprovalErrors = (evidence, targetIssue) => {
   if (instruction.issue !== targetIssue) errors.push("instruction must name the exact target issue");
   if (instruction.action !== approvalAction) errors.push("instruction must name the exact approval action");
   if (principal.evidence_source !== "target-host") errors.push("principal authority must come from the target host");
-  if (!allowedPrincipalRoles.includes(principal.role)) errors.push("principal lacks target-host maintainer authority");
+  if (!allowedPrincipalRoles.includes(principal.role ?? "")) errors.push("principal lacks target-host maintainer authority");
   if (instruction.principal !== principal.subject) errors.push("instruction principal is not bound to target-host evidence");
   if (actor.subject !== principal.subject) errors.push("authenticated actor is not the authorized principal");
-  if (!allowedActorCapabilities.includes(actor.capability)) errors.push("actor lacks MAINTAIN or ADMIN capability");
+  if (!allowedActorCapabilities.includes(actor.capability ?? "")) errors.push("actor lacks MAINTAIN or ADMIN capability");
   if (operation.issue !== targetIssue || operation.label !== "status:approved") errors.push("operation is not scoped to the exact issue and label");
   if (operation.attempts !== 1) errors.push("operation must have exactly one add attempt");
   if (JSON.stringify(operation.sequence) !== JSON.stringify(["add", "readback"])) errors.push("readback must immediately follow the one add attempt");
@@ -201,7 +209,7 @@ export const delegatedApprovalErrors = (evidence, targetIssue) => {
   return errors;
 };
 
-export const delegatedApprovalAllowed = (evidence, targetIssue) => delegatedApprovalErrors(evidence, targetIssue).length === 0;
+export const delegatedApprovalAllowed = (evidence: ApprovalEvidence, targetIssue: number): boolean => delegatedApprovalErrors(evidence, targetIssue).length === 0;
 
 const approvalSelfCheck = () => {
   const valid = {
@@ -216,10 +224,10 @@ const approvalSelfCheck = () => {
     [["instruction", "issue"], 31], [["instruction", "current"], false], [["instruction"], {}],
     [["principal", "role"], "CONTRIBUTOR"], [["actor", "capability"], "TRIAGE"],
     [["operation", "result"], "unknown"], [["readback", "labels"], []],
-  ]) {
+  ] as Array<[string[], unknown]>) {
     const rejected = structuredClone(valid);
-    if (field.length === 2) rejected[field[0]][field[1]] = value;
-    else rejected[field[0]] = value;
+    if (field.length === 2) (rejected as Record<string, Record<string, unknown>>)[field[0]][field[1]] = value;
+    else (rejected as Record<string, unknown>)[field[0]] = value;
     assert.equal(delegatedApprovalAllowed(rejected, 32), false, field.join("."));
   }
   process.stdout.write("approval self-check OK\n");
@@ -252,7 +260,7 @@ const selfCheck = async () => {
 const main = async () => {
   if (process.argv.length === 3 && process.argv[2] === "--self-check") return selfCheck();
   if (process.argv.length === 3 && process.argv[2] === "--approval-self-check") return approvalSelfCheck();
-  throw new Error("usage: check-delivery-contract.mjs --self-check|--approval-self-check");
+  throw new Error("usage: check-delivery-contract.js --self-check|--approval-self-check");
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
