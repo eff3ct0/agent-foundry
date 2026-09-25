@@ -80,7 +80,8 @@ jobs:
           mkdir -p package local-package identity registry-package
           pnpm pack --ignore-scripts --pack-destination package
           test "$(find package -maxdepth 1 -name '*.tgz' -type f | wc -l)" = "1"
-          TARBALL="$(find package -maxdepth 1 -name '*.tgz' -type f -print -quit)"
+          # Keep the leading ./ : npm reads a bare dir/file.tgz argument as a GitHub owner/repo shorthand, not a local tarball.
+          TARBALL="./$(find package -maxdepth 1 -name '*.tgz' -type f -print -quit)"
           tar -xzf "$TARBALL" --strip-components=1 -C local-package
           node scripts/npm-release.mjs --command verify-local --package-root local-package --tarball "$TARBALL" --tag "$RELEASE_TAG" --source-sha "$RELEASE_SHA" --output identity/local.json
           printf 'TARBALL=%s\n' "$TARBALL" >> "$GITHUB_ENV"

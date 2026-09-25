@@ -206,6 +206,9 @@ const checkNpmRelease = (text) => {
   if (!buildPack.includes('printf \'TARBALL=%s\\n\' "$TARBALL" >> "$GITHUB_ENV"')) {
     fail("npm release build step must export the packed tarball path as TARBALL for the publish step");
   }
+  if (!buildPack.includes('TARBALL="./')) {
+    fail("npm release must reference the packed tarball as a local ./ path so npm does not treat it as a git spec");
+  }
   const publishStep = section(text, publish, readback);
   const gatedStep = `        working-directory: release-source
         env:
