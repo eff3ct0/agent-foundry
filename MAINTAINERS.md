@@ -193,7 +193,7 @@ permissions, retention, timeout, rollback, and any manual rerun.
 
 ## Ticket types (labels)
 The canonical label catalog is [`.github/labels.json`](.github/labels.json); run
-`node scripts/sync-github-labels.mjs` to create or update labels idempotently.
+`node scripts/typed-inherited-runtime/sync-github-labels.js` to create or update labels idempotently.
 
 - `type:product` - template improvements or changes.
 - `type:dx-feedback` - friction found while USING the archetype (see the [DX feedback issue form](.github/ISSUE_TEMPLATE/dx-feedback.yml) and [`docs/smoke-test.md`](docs/smoke-test.md)).

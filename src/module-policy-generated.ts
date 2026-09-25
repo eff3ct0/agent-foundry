@@ -3,6 +3,7 @@ import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { preparePlan, STATE_FILE, type CreatorOptions } from "./creator";
 import { checkModulePolicy, type ModulePolicyDiagnostic } from "./module-policy";
+import { verifyTypedRuntime } from "./typed-runtime-verifier";
 
 const digest = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
@@ -78,7 +79,30 @@ export const checkGeneratedModulePolicy = async (
   }
   const generated = new Set(owned);
   for (const file of await scanFactory(root)) generated.add(file);
+  const inheritedNames = ["check-pr-governance", "sync-github-labels"];
+  const paths = [".factory/scripts/typed-inherited-runtime/package.json",
+    ...inheritedNames.flatMap((name) => [`.factory/scripts/typed-inherited/${name}.mts`,
+      `.factory/scripts/typed-inherited-runtime/${name}.js`])];
+  if (paths.some((file) => !owned.has(file) || expected.get(file)?.mode !== 0o644)) {
+    throw new Error("generated inherited identities are incomplete or have wrong modes");
+  }
+  // Source-side verification ties the Git checkout to packaged and composed bytes.
+  const checkout = path.resolve(__dirname, "..");
+  for (const file of paths) {
+    const original = await onDisk(checkout, file.slice(".factory/".length));
+    if (original.mode !== 0o644 || !original.bytes.equals(expected.get(file)!.bytes)) {
+      throw new Error(`packaged inherited bytes or mode differ from source: ${file}`);
+    }
+  }
+  const emitted = await verifyTypedRuntime(path.join(root, ".factory/scripts/typed-inherited"),
+    path.join(root, ".factory/scripts/typed-inherited-runtime"));
+  if (JSON.stringify(emitted) !== JSON.stringify([...inheritedNames.map((name) => `${name}.js`), "package.json"].sort())) {
+    throw new Error("generated inherited compiler file set differs");
+  }
   return checkModulePolicy({
-    tracked: [], payload: [], generated: [...generated].sort(compare), generatedApplication: [], compiled: [],
+    tracked: [], payload: [], generated: [...generated].sort(compare), generatedApplication: [],
+    compiled: inheritedNames.map((name) => ({ sourceScope: "generated" as const,
+      source: `.factory/scripts/typed-inherited/${name}.mts`, outputScope: "generated" as const,
+      output: `.factory/scripts/typed-inherited-runtime/${name}.js` })),
   });
 };

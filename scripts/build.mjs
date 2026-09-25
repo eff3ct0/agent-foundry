@@ -16,6 +16,7 @@ if (result.status !== 0) process.exit(result.status ?? 1);
 // The compiler result is checked in a disposable directory before packaging, never copied over tracked JS.
 const { verifyTypedRuntime } = await import("../dist/typed-runtime-verifier.js");
 await verifyTypedRuntime(path.join(root, "scripts/typed"), path.join(root, "scripts/typed-runtime"));
+await verifyTypedRuntime(path.join(root, "scripts/typed-inherited"), path.join(root, "scripts/typed-inherited-runtime"));
 
 await chmod(path.join(dist, "index.js"), 0o755);
 await buildPayload({ root, dist });

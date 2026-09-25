@@ -199,5 +199,38 @@ export const checkSourceModulePolicy = async (root: string, gitExecutable: strin
         outputScope: "tracked" as const, output: `${typedRuntimeRoot}${file}` });
     }
   }
+  const inheritedNames = ["check-pr-governance", "sync-github-labels"];
+  const inheritedSources = inheritedNames.map((name) => `scripts/typed-inherited/${name}.mts`);
+  const inheritedRuntime = inheritedNames.map((name) => `scripts/typed-inherited-runtime/${name}.js`);
+  const inheritedFiles = [...inheritedSources, ...inheritedRuntime, "scripts/typed-inherited-runtime/package.json"];
+  const inheritedTracked = tracked.filter((file) => file.path.startsWith("scripts/typed-inherited/") ||
+    file.path.startsWith("scripts/typed-inherited-runtime/"));
+  const inheritedPayload = payload.filter((file) => inheritedFiles.includes(file.path));
+  const inheritedSourceExists = await exists(path.join(root, "scripts/typed-inherited"));
+  const inheritedRuntimeExists = await exists(path.join(root, "scripts/typed-inherited-runtime"));
+  if (inheritedTracked.length || inheritedPayload.length || inheritedSourceExists || inheritedRuntimeExists) {
+    if (JSON.stringify(inheritedTracked.map((file) => file.path).sort()) !== JSON.stringify([...inheritedFiles].sort()) ||
+      JSON.stringify(inheritedPayload.map((file) => file.path).sort()) !== JSON.stringify([...inheritedFiles].sort()) ||
+      [...inheritedTracked, ...inheritedPayload].some((file) => file.mode !== "100644")) {
+      throw new Error("inherited source/runtime tracked and payload identities differ");
+    }
+    const git = await trustedGitExecutable(await realpath(root), gitExecutable);
+    for (const file of inheritedFiles) {
+      const { stdout } = await execFileAsync(git, ["-c", "core.fsmonitor=false", "show", `:${file}`], {
+        cwd: root, env: gitEnvironment(), encoding: "buffer", maxBuffer: 1024 * 1024,
+      });
+      if (!Buffer.from(stdout).equals(await readFile(path.join(root, file)))) {
+        throw new Error(`inherited tracked bytes differ: ${file}`);
+      }
+    }
+    const emitted = await verifyTypedRuntime(path.join(root, "scripts/typed-inherited"), path.join(root, "scripts/typed-inherited-runtime"));
+    if (JSON.stringify(emitted) !== JSON.stringify([...inheritedNames.map((name) => `${name}.js`), "package.json"].sort())) {
+      throw new Error("inherited compiler file set differs");
+    }
+    for (const scope of ["tracked", "payload"] as const) {
+      for (const name of inheritedNames) compiled.push({ sourceScope: scope,
+        source: `scripts/typed-inherited/${name}.mts`, outputScope: scope, output: `scripts/typed-inherited-runtime/${name}.js` });
+    }
+  }
   return checkModulePolicy({ tracked, payload, generated: [], generatedApplication: [], compiled });
 };

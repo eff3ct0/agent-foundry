@@ -6,36 +6,41 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const generatedLayout = path.basename(path.dirname(scriptDirectory)) === ".factory";
-const root = path.resolve(scriptDirectory, generatedLayout ? "../.." : "..");
+const generatedLayout = path.basename(path.dirname(path.dirname(scriptDirectory))) === ".factory";
+const root = path.resolve(scriptDirectory, generatedLayout ? "../../.." : "../..");
 const closeReference = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?:(?<owner>[A-Za-z0-9_.-]+)\/(?<repo>[A-Za-z0-9_.-]+))?#(?<number>[0-9]+)\b/giu;
 const defaultTaskProvider = "github-issues";
 const githubTaskProviders = new Set(["github-issues", "github-projects"]);
-const taskReferences = {
+const taskReferences: Record<string, RegExp> = {
   jira: /\bJira\s*:\s*[A-Za-z][A-Za-z0-9_]*-[0-9]+\b/iu,
   linear: /\bLinear\s*:\s*[A-Za-z][A-Za-z0-9_]*-[0-9]+\b/iu,
   custom: /\bTask\s*:\s*[A-Za-z0-9][A-Za-z0-9_.:/-]*\b/iu,
 };
 
-export const boundTaskProvider = async (projectRoot = root) => {
+interface PullRequest { body?: string | null; labels?: Array<{ name?: string } | null> }
+interface Event { pull_request?: PullRequest }
+type IssueLabels = Record<number, string[]>;
+type IssueFetch = typeof fetch;
+
+export const boundTaskProvider = async (projectRoot = root): Promise<string> => {
   const bindings = await readFile(path.join(projectRoot, "docs", "bindings.md"), "utf8").catch(() => undefined);
   return bindings?.match(/^> \*\*Capability:\*\* `task`\s*$\n^> \*\*Provider:\*\* `([^`]+)`$/mu)?.[1] ?? defaultTaskProvider;
 };
 
-export const issueNumbers = (body, repository = "") => {
-  const references = [];
+export const issueNumbers = (body: string | null | undefined, repository = ""): number[] => {
+  const references: number[] = [];
   const expectedRepository = repository.toLowerCase();
   for (const match of String(body ?? "").matchAll(closeReference)) {
-    const qualified = match.groups.owner && `${match.groups.owner}/${match.groups.repo}`;
+    const qualified = match.groups?.owner && `${match.groups.owner}/${match.groups.repo}`;
     if (qualified && qualified.toLowerCase() !== expectedRepository) continue;
-    const number = Number.parseInt(match.groups.number, 10);
+    const number = Number.parseInt(match.groups!.number, 10);
     if (!references.includes(number)) references.push(number);
   }
   return references;
 };
 
-export const validatePr = (pullRequest, issueLabels = {}, repository, provider = defaultTaskProvider) => {
-  const errors = [];
+export const validatePr = (pullRequest: PullRequest | undefined, issueLabels: IssueLabels = {}, repository = "", provider = defaultTaskProvider): string[] => {
+  const errors: string[] = [];
   const labels = Array.isArray(pullRequest?.labels) ? pullRequest.labels.map((label) => label?.name) : [];
   if (labels.filter((label) => typeof label === "string" && label.startsWith("type:")).length !== 1) {
     errors.push("PR must have exactly one type:* label");
@@ -59,28 +64,30 @@ export const validatePr = (pullRequest, issueLabels = {}, repository, provider =
   return errors;
 };
 
-export const githubIssueLabels = async (repository, token, number, fetchImpl = fetch) => {
+export const githubIssueLabels = async (repository: string, token: string, number: number, fetchImpl: IssueFetch = fetch): Promise<string[]> => {
   const response = await fetchImpl(`https://api.github.com/repos/${repository}/issues/${number}`, {
     headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28" },
   });
   if (!response.ok) throw new Error(`GitHub issue lookup failed with status ${response.status}`);
-  const issue = await response.json();
+  const issue: { labels?: Array<{ name?: string } | null> } = await response.json();
   if (!Array.isArray(issue.labels)) throw new Error("GitHub issue lookup returned malformed labels");
-  return issue.labels.map((label) => label?.name).filter((label) => typeof label === "string");
+  return issue.labels.map((label) => label?.name).filter((label): label is string => typeof label === "string");
 };
 
-export const validateEvent = async (event, repository, token, options = {}) => {
+export const validateEvent = async (event: Event | undefined, repository: string, token: string, options: {
+  provider?: string; fetchImpl?: IssueFetch;
+} = {}): Promise<string[]> => {
   const provider = options.provider ?? await boundTaskProvider();
   const fetchImpl = options.fetchImpl ?? fetch;
   const pullRequest = event?.pull_request ?? {};
-  const issueLabels = {};
+  const issueLabels: IssueLabels = {};
   if (githubTaskProviders.has(provider)) {
     for (const number of issueNumbers(pullRequest.body, repository)) issueLabels[number] = await githubIssueLabels(repository, token, number, fetchImpl);
   }
   return validatePr(pullRequest, issueLabels, repository, provider);
 };
 
-const selfCheck = async () => {
+const selfCheck = async (): Promise<void> => {
   const workflow = await readFile(path.join(root, ".github", "workflows", "governance.yml"), "utf8");
   const provider = await boundTaskProvider(root);
   assert.match(workflow, /^  validate:$/mu);
@@ -113,7 +120,7 @@ const selfCheck = async () => {
   const valid = { body: "Summary\n\nCloses #42.", labels: [{ name: "type:product" }] };
   assert.deepEqual(validatePr(valid, { 42: ["status:approved"] }, "acme/example", "github-issues"), []);
   assert.deepEqual(issueNumbers("Fixes acme/example#7 and closes other/repo#8", "acme/example"), [7]);
-  assert.deepEqual(validatePr({ body: "Jira: FEX-1", labels: [{ name: "type:product" }] }, {}, undefined, "jira"), []);
+  assert.deepEqual(validatePr({ body: "Jira: FEX-1", labels: [{ name: "type:product" }] }, {}, "", "jira"), []);
   const directory = await mkdtemp(path.join(os.tmpdir(), "governance-bindings-"));
   try {
     await mkdir(path.join(directory, "docs"));
@@ -125,15 +132,15 @@ const selfCheck = async () => {
   process.stdout.write("self-check OK\n");
 };
 
-const main = async () => {
+const main = async (): Promise<void> => {
   if (process.argv.length === 3 && process.argv[2] === "--self-check") return selfCheck();
   const { GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: repository, GITHUB_TOKEN: token } = process.env;
   if (!eventPath || !repository || !token) throw new Error("GITHUB_EVENT_PATH, GITHUB_REPOSITORY, and GITHUB_TOKEN are required");
-  let errors;
+  let errors: string[];
   try {
     errors = await validateEvent(JSON.parse(await readFile(eventPath, "utf8")), repository, token);
   } catch (error) {
-    throw new Error(`Unable to validate PR governance: ${error.message}`);
+    throw new Error(`Unable to validate PR governance: ${(error as Error).message}`);
   }
   if (errors.length > 0) {
     for (const error of errors) process.stdout.write(`::error::${error}\n`);
@@ -144,7 +151,7 @@ const main = async () => {
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  main().catch((error) => {
+  main().catch((error: Error) => {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;
   });
