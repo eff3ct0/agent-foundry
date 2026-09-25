@@ -160,7 +160,8 @@ export const claimPublishAttempt = async ({ transport, downloadTransport, reposi
       });
       if (created.status === 422) return blocked("claim_exists");
       if (created.status !== 201) return blocked("claim_unknown");
-      const asset = await claimJson(created, CLAIM_MAX_BYTES);
+      // GitHub's asset object (with its nested uploader) exceeds the 1 KiB claim-body cap; read it at the metadata bound.
+      const asset = await claimJson(created, CLAIM_LIST_MAX_BYTES);
       if (!uploadedAsset(asset, PUBLISH_CLAIM_ASSET, body.length)) return blocked("claim_unverified");
 
       const listed = await request("GET", `https://api.github.com${base}/assets?per_page=100`, {
