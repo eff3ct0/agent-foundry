@@ -202,6 +202,10 @@ const checkNpmRelease = (text) => {
   if (text.includes('grep -q \'"source_sha"\' identity/local.json')) fail("npm release workflow checks a nonexistent root source_sha");
   if (resolve.includes("EXPECTED_SHA") || resolve.includes("resolvePublishedRelease")) fail("npm release identity step bypasses the event SHA guard");
   if ((text.match(/npm publish /gu) ?? []).length !== 1) fail("npm release must publish exactly once");
+  const buildPack = section(text, "      - name: Build and pack the exact package once\n", publish);
+  if (!buildPack.includes('printf \'TARBALL=%s\\n\' "$TARBALL" >> "$GITHUB_ENV"')) {
+    fail("npm release build step must export the packed tarball path as TARBALL for the publish step");
+  }
   const publishStep = section(text, publish, readback);
   const gatedStep = `        working-directory: release-source
         env:

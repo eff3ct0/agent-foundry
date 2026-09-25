@@ -458,6 +458,10 @@ test("npm release workflow is explicit, immutable, and publish-once", async () =
     await replace(directory, "npmRelease", "release:\n    types: [published]", "push:\n    branches: [main]");
     await reject(directory, "npm release workflow is missing release:\n    types: [published]");
   });
+  await fixture(async (directory) => {
+    await replace(directory, "npmRelease", "printf 'TARBALL=%s\\n' \"$TARBALL\" >> \"$GITHUB_ENV\"", "printf 'tarball=%s\\n' \"$TARBALL\" >> \"$GITHUB_ENV\"");
+    await reject(directory, "npm release build step must export the packed tarball path as TARBALL for the publish step");
+  });
 });
 
 const gateMessage = "npm release publish step must gate npm publish behind the version probe and exclusive claim without bypass";
