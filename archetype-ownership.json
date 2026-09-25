@@ -182,6 +182,7 @@
         {"path": "scripts/check-pr-governance.mjs", "kind": "file"},
         {"path": "scripts/task-adapter.mjs", "kind": "file"},
         {"path": "scripts/task-jira-read.mjs", "kind": "file"},
+        {"path": "scripts/task-github-issues-read.mjs", "kind": "file"},
         {"path": "scripts/sync-github-labels.mjs", "kind": "file"},
         {"path": "start.mjs", "kind": "file"},
         {"path": "templates", "kind": "directory"},

@@ -11,12 +11,13 @@ import { createJiraReadPort } from "../scripts/task-jira-read.mjs";
 const exec = promisify(execFile);
 const identity = { provider: "jira", tracker: "jira-project:tenant", trackerKey: "OPS", nativeId: "OPS-17" };
 const issue = { key: "OPS-17", fields: { project: { key: "OPS" }, status: { name: "In Progress" } } };
+const handoff = { phase: "VERIFICATION", status: "ACTIVE", completedWork: "Implemented read-only mapping", nextAction: "Run focused tests", branch: "feat/issue-178-jira", commit: "WIP", verification: "Not yet run", resumeEvidence: "Inspect native issue and comments" };
 const comment = (id, operationId, kind = "comment", content = "Native checkpoint") => ({
   id, body: `task-adapter:v1:${JSON.stringify({ operationId, kind, content })}`,
 });
 const native = (options = {}) => ({
   readIssue: async () => options.issue ?? issue,
-  readComments: async () => options.page ?? { complete: true, comments: [comment("100", "run-17"), comment("101", "phase-17", "handoff", '{"phase":"VERIFICATION"}')] },
+  readComments: async () => options.page ?? { complete: true, comments: [comment("100", "run-17"), comment("101", "phase-17", "handoff", JSON.stringify(handoff))] },
 });
 
 test("native Jira project, opaque key, named status and exact correlated comments are read only", async () => {
@@ -40,7 +41,7 @@ test("native Jira project, opaque key, named status and exact correlated comment
     const snapshot = await adapter.read(identity);
     assert.deepEqual(snapshot, { identity, status: "In Progress", entries: [
       { operationId: "run-17", kind: "comment", content: "Native checkpoint" },
-      { operationId: "phase-17", kind: "handoff", content: '{"phase":"VERIFICATION"}' },
+      { operationId: "phase-17", kind: "handoff", content: JSON.stringify(handoff) },
     ] });
     await assert.rejects(adapter.write(identity, { kind: "comment", operationId: "new", status: "In Progress", content: "No native write" }), { code: "native_unsupported" });
     assert.equal(githubCalls, 0);
@@ -72,6 +73,35 @@ test("incomplete, unavailable, duplicate or unprovable comment evidence never be
   assert.deepEqual((await ordinary.read(identity)).entries, []);
   await assert.rejects(createJiraReadPort({ readIssue: async () => issue, readComments: async () => { throw Error("offline"); } }).read(identity), { code: "readback_unavailable" });
   assert.throws(() => createJiraReadPort({ readIssue: async () => issue }), { code: "native_unsupported" });
+});
+
+test("correlated Jira handoffs reject malformed or incomplete evidence, including blocked continuation", async () => {
+  for (const content of [
+    '{"phase":"VERIFICATION"}',
+    '{invalid',
+    JSON.stringify({ ...handoff, nextAction: "" }),
+    JSON.stringify({ ...handoff, status: "BLOCKED" }),
+    JSON.stringify({ ...handoff, phase: "BLOCKED" }),
+    JSON.stringify({ ...handoff, phase: "BLOCKED", status: "BLOCKED: requires approval", resumePhase: "VERIFICATION" }),
+    JSON.stringify({ ...handoff, phase: "BLOCKED", status: "BLOCKED", resumePhase: "DONE", blocker: "Await approval" }),
+  ]) {
+    const port = createJiraReadPort(native({ page: { complete: true, comments: [comment("101", "phase-17", "handoff", content)] } }));
+    await assert.rejects(port.read(identity), { code: "readback_mismatch", message: /handoff.*101/u });
+  }
+  const blocked = { ...handoff, phase: "BLOCKED", status: "BLOCKED: requires approval", resumePhase: "VERIFICATION", blocker: "Await approval" };
+  const port = createJiraReadPort(native({ page: { complete: true, comments: [comment("101", "phase-17", "handoff", JSON.stringify(blocked))] } }));
+  assert.deepEqual((await port.read(identity)).entries, [{ operationId: "phase-17", kind: "handoff", content: JSON.stringify(blocked) }]);
+});
+
+test("correlated Jira handoffs reject duplicate JSON keys before parsing", async () => {
+  for (const key of ['"phase"', '"ph\\u0061se"']) {
+    const content = JSON.stringify(handoff).replace('"phase":"VERIFICATION"', `${key}:"DEFINITION","phase":"VERIFICATION"`);
+    const port = createJiraReadPort(native({ page: { complete: true, comments: [comment("101", "phase-17", "handoff", content)] } }));
+    await assert.rejects(port.read(identity), { code: "readback_mismatch", message: /handoff.*101/u });
+  }
+  const valid = { ...handoff, nextAction: 'Review "phase": {DONE} evidence' };
+  const port = createJiraReadPort(native({ page: { complete: true, comments: [comment("102", "phase-18", "handoff", JSON.stringify(valid))] } }));
+  assert.equal((await port.read(identity)).entries[0].content, JSON.stringify(valid));
 });
 
 test("fresh offline generated Jira target imports retained native port without src or odd", async () => {

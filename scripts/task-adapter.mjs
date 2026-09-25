@@ -25,6 +25,7 @@ const fail = (code, message) => { throw new TaskAdapterError(code, message); };
 /** @param {unknown} value */
 const nonempty = (value) => typeof value === "string" && value.length > 0 && value === value.trim() && !/[\r\n]/u.test(value);
 const providers = new Set(["jira", "github-issues", "github-projects", "linear", "custom"]);
+const activePhases = ["DEFINITION", "IMPLEMENTATION", "TESTING/TDD", "VERIFICATION", "EVIDENCE/DELIVERY"];
 
 /** Parse ONLY the identity section emitted by creator's composeBindings. */
 export const parseTaskBinding = (text) => {
@@ -52,16 +53,51 @@ export const parseTaskBinding = (text) => {
 };
 
 /** @param {TaskHandoff} value */
-const handoffContent = (value) => {
+export const handoffContent = (value) => {
   if (!value || typeof value !== "object") fail("handoff_invalid", "Handoff requires phase, status and resume evidence");
   const required = ["phase", "status", "completedWork", "nextAction", "branch", "commit", "verification", "resumeEvidence"];
   if (required.some((key) => !nonempty(value[/** @type {keyof TaskHandoff} */ (key)]))
-      || !["DEFINITION", "IMPLEMENTATION", "TESTING/TDD", "VERIFICATION", "EVIDENCE/DELIVERY", "BLOCKED", "DONE"].includes(value.phase)
+      || ![...activePhases, "BLOCKED", "DONE"].includes(value.phase)
       || !["ACTIVE", "BLOCKED", "BLOCKED: requires approval", "DONE"].includes(value.status)
-      || (value.status.startsWith("BLOCKED") && (!nonempty(value.resumePhase) || !nonempty(value.blocker)))) {
+      || ((value.phase === "BLOCKED" || value.status.startsWith("BLOCKED")) && (!activePhases.includes(value.resumePhase ?? "") || !nonempty(value.blocker)))) {
     fail("handoff_invalid", "Handoff fields or blocked continuation are missing or malformed");
   }
   return JSON.stringify(value);
+};
+
+/** Reject ambiguous JSON evidence before parsing can discard duplicate keys. @param {string} content */
+export const parseHandoffContent = (content) => {
+  let handoff;
+  try { handoff = JSON.parse(content); }
+  catch { fail("handoff_invalid", "Handoff JSON is malformed"); }
+  /** @type {Array<{keys: Set<string>, expectsKey: boolean}|null>} */
+  const stack = [];
+  for (let index = 0; index < content.length; index++) {
+    const character = content[index];
+    if (character === '"') {
+      const start = index++;
+      while (index < content.length) {
+        if (content[index] === "\\") index += 2;
+        else if (content[index] === '"') break;
+        else index++;
+      }
+      const frame = stack[stack.length - 1];
+      if (frame?.expectsKey) {
+        const key = JSON.parse(content.slice(start, index + 1));
+        if (frame.keys.has(key)) fail("handoff_invalid", `Handoff JSON has duplicate key: ${key}`);
+        frame.keys.add(key);
+        frame.expectsKey = false;
+      }
+    } else if (character === "{") stack.push({ keys: new Set(), expectsKey: true });
+    else if (character === "[") stack.push(null);
+    else if (character === "}" || character === "]") stack.pop();
+    else if (character === ",") {
+      const frame = stack[stack.length - 1];
+      if (frame) frame.expectsKey = true;
+    }
+  }
+  handoffContent(handoff);
+  return handoff;
 };
 
 /** @param {TaskSnapshot} snapshot @param {TaskIdentity} identity */
