@@ -79,28 +79,30 @@ export const checkGeneratedModulePolicy = async (
   }
   const generated = new Set(owned);
   for (const file of await scanFactory(root)) generated.add(file);
-  const sourcePath = ".factory/scripts/typed-inherited/sync-github-labels.mts";
-  const runtimePath = ".factory/scripts/typed-inherited-runtime/sync-github-labels.js";
-  const manifestPath = ".factory/scripts/typed-inherited-runtime/package.json";
-  const paths = [sourcePath, runtimePath, manifestPath];
+  const inheritedNames = ["check-pr-governance", "sync-github-labels"];
+  const paths = [".factory/scripts/typed-inherited-runtime/package.json",
+    ...inheritedNames.flatMap((name) => [`.factory/scripts/typed-inherited/${name}.mts`,
+      `.factory/scripts/typed-inherited-runtime/${name}.js`])];
   if (paths.some((file) => !owned.has(file) || expected.get(file)?.mode !== 0o644)) {
-    throw new Error("generated inherited label identities are incomplete or have wrong modes");
+    throw new Error("generated inherited identities are incomplete or have wrong modes");
   }
   // Source-side verification ties the Git checkout to packaged and composed bytes.
   const checkout = path.resolve(__dirname, "..");
   for (const file of paths) {
     const original = await onDisk(checkout, file.slice(".factory/".length));
     if (original.mode !== 0o644 || !original.bytes.equals(expected.get(file)!.bytes)) {
-      throw new Error(`packaged inherited label bytes or mode differ from source: ${file}`);
+      throw new Error(`packaged inherited bytes or mode differ from source: ${file}`);
     }
   }
   const emitted = await verifyTypedRuntime(path.join(root, ".factory/scripts/typed-inherited"),
     path.join(root, ".factory/scripts/typed-inherited-runtime"));
-  if (JSON.stringify(emitted) !== JSON.stringify(["package.json", "sync-github-labels.js"])) {
-    throw new Error("generated inherited label compiler file set differs");
+  if (JSON.stringify(emitted) !== JSON.stringify([...inheritedNames.map((name) => `${name}.js`), "package.json"].sort())) {
+    throw new Error("generated inherited compiler file set differs");
   }
   return checkModulePolicy({
     tracked: [], payload: [], generated: [...generated].sort(compare), generatedApplication: [],
-    compiled: [{ sourceScope: "generated", source: sourcePath, outputScope: "generated", output: runtimePath }],
+    compiled: inheritedNames.map((name) => ({ sourceScope: "generated" as const,
+      source: `.factory/scripts/typed-inherited/${name}.mts`, outputScope: "generated" as const,
+      output: `.factory/scripts/typed-inherited-runtime/${name}.js` })),
   });
 };

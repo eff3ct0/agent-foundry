@@ -49,8 +49,8 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 922,
-      "sha256": "22858bd646b6225fd5e5ad585eeee34dfeada0f2fa8ecacad3441fd7eb9bd912"
+      "size": 1165,
+      "sha256": "e75dd491ef3379adb36ed41aadf31352edd62b0c36d0869fb9502e46544aea7c"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 9789,
-      "sha256": "303b4a97b79123907ae0634543b562787f9abbda57cfb9d9bfeb674054fb1529"
+      "size": 9975,
+      "sha256": "f1ef991367f12ffcf4a6deed86d2314908102ad043db2582b72d579c68f33234"
     },
     {
       "path": "ci/_contract.md",
@@ -127,14 +127,14 @@
     {
       "path": "docs/factory-layout.md",
       "mode": "100644",
-      "size": 9133,
-      "sha256": "5f13d43fd30ab22c09609d8fcf417933f69bf4d57aed7e48c1cc94096b6d5536"
+      "size": 9160,
+      "sha256": "05fbb448de8e667bfdeecfd1eb4143612c53aadf8b13a1da78b721326b745396"
     },
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 2600,
-      "sha256": "05b3936d529125484423daf3ac481bb94c2e71034694bbe9134ec3f8b079a6f0"
+      "size": 3028,
+      "sha256": "e098a81dae5f7a8009d9bdfb1c459ca01bd505454af607da555054bf9eb0630f"
     },
     {
       "path": "docs/org-factory.md",
@@ -317,10 +317,10 @@
       "sha256": "eebb06f13cf54efb3b5ca6cb18fa550b855cb85e7c1e32a6842a33f58523aa6b"
     },
     {
-      "path": "scripts/check-pr-governance.mjs",
+      "path": "scripts/typed-inherited-runtime/check-pr-governance.js",
       "mode": "100644",
-      "size": 7848,
-      "sha256": "5ef10c1aba882d278af63b74bfaae927e78438dbc7dcb40dc56d510f71be2d77"
+      "size": 8296,
+      "sha256": "da34121c4c5ba0dc0d49c35c46d1bd2046929b85044c796eaf39b56bd542e203"
     },
     {
       "path": "scripts/typed-inherited-runtime/package.json",
@@ -333,6 +333,12 @@
       "mode": "100644",
       "size": 3330,
       "sha256": "17f51332147b031c6a529abbf6283400c523e4e3d948ef951a20186f165bf14d"
+    },
+    {
+      "path": "scripts/typed-inherited/check-pr-governance.mts",
+      "mode": "100644",
+      "size": 8521,
+      "sha256": "d2a229f9c32476a82d570a8b4ccdf13d04f70537fa26e8e461b6cda2ffd8ae4a"
     },
     {
       "path": "scripts/typed-inherited/sync-github-labels.mts",
@@ -389,5 +395,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:578f3cd05d2f106f935d795711b81760788a363d8f2993adc62dddc8781d7825"
+  "payload_digest": "sha256:5f4e837651761e6c10bd2ed8c353945df935df3458d5072d1f35e94a2cd6c06f"
 }

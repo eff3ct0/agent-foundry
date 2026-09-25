@@ -580,6 +580,18 @@ const renderTextFile = (
     }
     rendered = rendered.replaceAll("scripts/typed-inherited", ".factory/scripts/typed-inherited");
   }
+  if (source.path === ".github/workflows/governance.yml") {
+    if (!rendered.includes("node scripts/typed-inherited-runtime/check-pr-governance.js")) {
+      throw new CreatorError("composition_invalid", "governance workflow is missing its inherited runtime command");
+    }
+    rendered = rendered.replaceAll("scripts/typed-inherited", ".factory/scripts/typed-inherited");
+    // The generated project has no archetype compiler toolchain; its verified payload is already compiled.
+    if (destinationPath === ".github/workflows/governance.yml") {
+      const buildStep = "      - name: Verify committed typed runtime\n        run: |\n          npm install --global pnpm@12.4.2\n          pnpm install --frozen-lockfile --ignore-scripts\n          pnpm build\n";
+      if (!rendered.includes(buildStep)) throw new CreatorError("composition_invalid", "governance workflow build step differs");
+      rendered = rendered.replace(buildStep, "");
+    }
+  }
   if (destinationPath.endsWith(".md")) rendered = renderMarkdown(rendered, source.path, destinationPath, destinations, removed);
   for (const key of Object.keys(config.values)) {
     if (rendered.includes(`<${key}>`)) throw new CreatorError("unresolved_placeholder", `generated file contains unresolved placeholder: ${key}`, { path: destinationPath });

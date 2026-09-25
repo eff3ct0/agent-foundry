@@ -88,13 +88,15 @@ test("generated module inventory uses the composed creator plan, not application
     assert.deepEqual(baseline, [
       ".factory/scripts/check-delivery-contract.mjs",
       ".factory/scripts/check-factory-layout.mjs",
-      ".factory/scripts/check-pr-governance.mjs",
       "start.mjs",
     ].map((name) => ({ scope: "generated", path: name, reason: "untyped .mjs module" })));
     assert.ok(await stat(path.join(target, ".opencode/plugins/factory-start.ts")));
     assert.ok(await stat(path.join(target, ".github/workflows/ci.yml")));
     const labelScript = path.join(target, ".factory/scripts/typed-inherited-runtime/sync-github-labels.js");
     const labelsWorkflow = await readFile(path.join(target, ".github/workflows/sync-labels.yml"), "utf8");
+    const governanceWorkflow = await readFile(path.join(target, ".github/workflows/governance.yml"), "utf8");
+    assert.match(governanceWorkflow, /node \.factory\/scripts\/typed-inherited-runtime\/check-pr-governance\.js/u);
+    assert.doesNotMatch(governanceWorkflow, /pnpm build/u);
     assert.match(labelsWorkflow, /node \.factory\/scripts\/typed-inherited-runtime\/sync-github-labels\.js --repo/u);
     assert.match(labelsWorkflow, /\.factory\/scripts\/typed-inherited\/sync-github-labels\.mts/u);
     const selfCheck = await execFileAsync(process.execPath, [labelScript, "--self-check"], { cwd: target });
@@ -102,6 +104,8 @@ test("generated module inventory uses the composed creator plan, not application
     const dryRun = await execFileAsync(process.execPath, [labelScript, "--dry-run", "--repo", "acme/example"], { cwd: target });
     assert.equal(dryRun.stdout.trim().split("\n").length, 10);
     for (const relative of [
+      ".factory/scripts/typed-inherited/check-pr-governance.mts",
+      ".factory/scripts/typed-inherited-runtime/check-pr-governance.js",
       ".factory/scripts/typed-inherited/sync-github-labels.mts",
       ".factory/scripts/typed-inherited-runtime/sync-github-labels.js",
       ".factory/scripts/typed-inherited-runtime/package.json",
@@ -145,7 +149,7 @@ test("generated module inventory uses the composed creator plan, not application
     await assert.rejects(checkGeneratedModulePolicy(options), /does not match the composed creator plan/u);
     await writeFile(statePath, originalState);
 
-    const owned = path.join(target, ".factory/scripts/check-pr-governance.mjs");
+    const owned = path.join(target, ".factory/scripts/typed-inherited-runtime/check-pr-governance.js");
     const originalOwned = await readFile(owned);
     await rm(owned);
     await symlink(path.join(target, "app/own.js"), owned);
