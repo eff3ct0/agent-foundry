@@ -4,13 +4,15 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+interface Label { name: string; color: string; description: string }
+
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(scriptsDirectory, path.basename(path.dirname(scriptsDirectory)) === ".factory" ? "../.." : "..");
+const root = path.resolve(scriptsDirectory, path.basename(path.dirname(path.dirname(scriptsDirectory))) === ".factory" ? "../../.." : "../..");
 const catalogPath = path.join(root, ".github", "labels.json");
 
 const invalidCatalog = () => new Error("labels.json must contain unique non-empty label names");
 
-export const loadLabels = async (file = catalogPath) => {
+export const loadLabels = async (file = catalogPath): Promise<Label[]> => {
   const parsed = JSON.parse(await readFile(file, "utf8"));
   const labels = parsed.labels;
   if (!Array.isArray(labels) || labels.length === 0) throw invalidCatalog();
@@ -26,12 +28,14 @@ export const loadLabels = async (file = catalogPath) => {
   return labels;
 };
 
-const commandFor = (label, repo) => [
+const commandFor = (label: Label, repo?: string): string[] => [
   "label", "create", label.name, "--color", label.color, "--description", label.description, "--force",
   ...(repo ? ["--repo", repo] : []),
 ];
 
-export const syncLabels = (labels, { repo, dryRun = false, runner = spawnSync } = {}) => {
+export const syncLabels = (labels: Label[], { repo, dryRun = false, runner = spawnSync }: {
+  repo?: string; dryRun?: boolean; runner?: typeof spawnSync;
+} = {}): void => {
   for (const label of labels) {
     const args = commandFor(label, repo);
     if (dryRun) {
@@ -44,8 +48,8 @@ export const syncLabels = (labels, { repo, dryRun = false, runner = spawnSync } 
   }
 };
 
-const parseArguments = (values) => {
-  const options = { dryRun: false, selfCheck: false, repo: undefined };
+const parseArguments = (values: string[]) => {
+  const options: { dryRun: boolean; selfCheck: boolean; repo?: string } = { dryRun: false, selfCheck: false };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (value === "--dry-run") options.dryRun = true;
@@ -59,7 +63,7 @@ const parseArguments = (values) => {
   return options;
 };
 
-export const main = async (values = process.argv.slice(2)) => {
+export const main = async (values = process.argv.slice(2)): Promise<void> => {
   const options = parseArguments(values);
   const labels = await loadLabels();
   if (options.selfCheck) {

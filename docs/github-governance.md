@@ -27,6 +27,12 @@ The candidate validator receives only the explicitly read-only workflow token. T
 permissions or secrets, and checkout does not persist credentials in the trusted worktree. Do not loosen those
 boundaries when changing the governance workflow.
 
+The trusted checkout builds and verifies the compiler-derived
+`scripts/typed-inherited-runtime/check-pr-governance.js` before invoking it with the token. An initialized
+project runs the same CLI at `.factory/scripts/typed-inherited-runtime/check-pr-governance.js` without
+installing an archetype compiler toolchain; its
+`--self-check` validates the relocated `.factory/templates/pull-request.md` without making an API request.
+
 ## `main` enforcement
 
 The effective GitHub settings for `main` must provide all of the following:

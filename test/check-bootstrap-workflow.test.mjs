@@ -108,6 +108,22 @@ test("bootstrap rejects unpinned, unverified, and missing required actions", asy
 
 test("bootstrap rejects weak lifecycle permission and token boundaries", async () => {
   await fixture(async (directory) => {
+    await replaceFirst(directory, "bootstrap", './scripts/typed-runtime/hosted-lifecycle-mutation-client.js', './scripts/hosted-lifecycle-mutation-client.mjs');
+    await reject(directory, 'bootstrap must use the typed provisioning importer import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";');
+  });
+  await fixture(async (directory) => {
+    const target = path.join(directory, workflows, files.bootstrap);
+    const source = await readFile(target, "utf8");
+    const boundary = source.indexOf("\n  cleanup:\n");
+    assert.notEqual(boundary, -1);
+    await writeFile(target, source.slice(0, boundary) + source.slice(boundary).replace('./scripts/typed-runtime/hosted-lifecycle-mutation-client.js', './scripts/hosted-lifecycle-mutation-client.mjs'));
+    await reject(directory, 'cleanup must use the trusted proof-based policy import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";');
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "./scripts/typed-runtime/resource-provision-and-proof.js", "./scripts/resource-provision-and-proof.mjs");
+    await reject(directory, "bootstrap must use the typed provisioning importer ./scripts/typed-runtime/resource-provision-and-proof.js");
+  });
+  await fixture(async (directory) => {
     await replace(directory, "bootstrap", "permissions: {}", "permissions: read-all");
     await reject(directory, "workflow must default to no permissions");
   });
@@ -137,6 +153,10 @@ test("bootstrap rejects weak cleanup, report, and credential isolation", async (
   await fixture(async (directory) => {
     await replace(directory, "bootstrap", "ref: ${{ github.workflow_sha }}", "ref: ${{ needs.prepare.outputs.sha }}");
     await reject(directory, "cleanup must use the trusted proof-based policy ref: ${{ github.workflow_sha }}");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "./scripts/typed-runtime/resource-proof-cleanup.js", "./scripts/resource-proof-cleanup.mjs");
+    await reject(directory, "cleanup must use the trusted proof-based policy scripts/typed-runtime/resource-proof-cleanup.js");
   });
   await fixture(async (directory) => {
     await replace(directory, "bootstrap", "  bootstrap:\n", "  bootstrap:\n    env:\n      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n");
