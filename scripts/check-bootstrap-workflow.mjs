@@ -96,7 +96,27 @@ const checkTemplateBootstrap = (text) => {
   if (bootstrap.includes("GITHUB_TOKEN") || !report.includes("if: always()") || !report.includes("needs: [prepare, bootstrap]") || !report.includes("GITHUB_TOKEN: ${{ github.token }}")) fail("template reporter must be always-run and credential-separated");
 };
 
+const checkJourneyRunIndentation = (text) => {
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const run = /^([ ]*)run: \|[+-]?$/u.exec(lines[index]);
+    if (!run) continue;
+    let contentIndent;
+    for (let next = index + 1; next < lines.length; next++) {
+      if (!lines[next].trim()) continue;
+      const indent = /^ */u.exec(lines[next])[0].length;
+      if (indent <= run[1].length) break;
+      contentIndent ??= indent;
+      if (indent < contentIndent || lines[next][indent] === "\t") {
+        fail(`real-agent journey run block has invalid YAML indentation at line ${next + 1}`);
+      }
+    }
+    if (contentIndent === undefined) fail(`real-agent journey run block is empty at line ${index + 1}`);
+  }
+};
+
 const checkJourney = (text, projectRoot) => {
+  checkJourneyRunIndentation(text);
   const uses = actionReferences(text);
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("real-agent journey action is not pinned to a full commit SHA");
   if (!/^  JOURNEY_TEMPLATE: eff3ct0\/agent-foundry$/mu.test(text)) fail("real-agent journey source repository must be eff3ct0/agent-foundry");
@@ -115,6 +135,26 @@ const checkJourney = (text, projectRoot) => {
   const agent = section(text, "\n  agent:\n", "\n  assert:\n");
   const creationStep = section(agent, "\n      - name: Create initial branch and apply the exact published creator package\n", "\n      - name: Install selected runtime\n");
   const creationRun = section(creationStep, "\n        run: |\n");
+  const metadataGuard = [
+    '          node --input-type=module <<\'NODE\'',
+    '          import { readFile, writeFile } from "node:fs/promises";',
+    '          const metadata = JSON.parse(await readFile("package-metadata.json", "utf8"));',
+    '          const name = "@eff3ct/agent-foundry";',
+    '          const spec = process.env.JOURNEY_PACKAGE_SPEC ?? "";',
+    '          const version = spec.slice(`${name}@`.length);',
+    '          const identifier = "(?:0|[1-9]\\\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)";',
+    '          const semver = new RegExp(`^(?:0|[1-9]\\\\d*)\\\\.(?:0|[1-9]\\\\d*)\\\\.(?:0|[1-9]\\\\d*)(?:-${identifier}(?:\\\\.${identifier})*)?(?:\\\\+[0-9A-Za-z-]+(?:\\\\.[0-9A-Za-z-]+)*)?$`);',
+    '          if (process.env.JOURNEY_PACKAGE_NAME !== name || spec !== `${name}@${version}` || !semver.test(version)) throw new Error("journey package spec must identify the exact scoped package and version");',
+    '          if (metadata.name !== name || metadata.version !== version) throw new Error("published package metadata does not match the exact journey package");',
+    '          await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: process.env.JOURNEY_PACKAGE_SPEC }, null, 2)}\\n`);',
+    '          NODE',
+    '',
+  ].join("\n");
+  const actualGuard = section(creationRun, '          npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json\n', '          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply');
+  if (!creationStep.includes('JOURNEY_PACKAGE_SPEC: ${{ env.JOURNEY_PACKAGE_NAME }}@${{ needs.prepare.outputs.package_version }}')
+      || actualGuard !== metadataGuard) {
+    fail("real-agent journey must verify exact scoped package metadata before apply");
+  }
   const generatedCommits = [...creationRun.matchAll(/\bgit[ \t]+-C[ \t]+generated[ \t]+commit\b[^\r\n]*/gu)];
   const expectedSequence = [
     '          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply --target generated --config answers.json --non-interactive --yes',
