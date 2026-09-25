@@ -434,15 +434,18 @@ test("source policy refuses unpaired JavaScript in the reserved typed runtime", 
   }
 });
 
-test("inherited label provenance requires complete tracked payload and fresh compiler bytes", async () => {
+test("inherited governance and label provenance requires complete tracked payload and fresh compiler bytes", async () => {
   const repository = await sourceFixture();
   const source = "scripts/typed-inherited/sync-github-labels.mts";
+  const governanceSource = "scripts/typed-inherited/check-pr-governance.mts";
   const runtime = "scripts/typed-inherited-runtime/sync-github-labels.js";
+  const governanceRuntime = "scripts/typed-inherited-runtime/check-pr-governance.js";
   const manifest = "scripts/typed-inherited-runtime/package.json";
-  const paths = [source, runtime, manifest];
+  const paths = [source, governanceSource, runtime, governanceRuntime, manifest];
   try {
     await mkdir(path.join(repository, "scripts/typed-inherited"));
     await writeFile(path.join(repository, source), "export const labels: number = 181;\n");
+    await writeFile(path.join(repository, governanceSource), "export const governance: number = 181;\n");
     await emitTypedModules(path.join(repository, "scripts/typed-inherited"), path.join(repository, "scripts/typed-inherited-runtime"));
     const declaration = path.join(repository, "package/payload-files.json");
     const lock = path.join(repository, "package/payload-manifest.json");
@@ -463,12 +466,18 @@ test("inherited label provenance requires complete tracked payload and fresh com
       await execFileAsync(trustedGit, ["add", "--", file], { cwd: repository });
       const original = await readFile(path.join(repository, file));
       await writeFile(path.join(repository, file), Buffer.concat([original, Buffer.from("\n")]));
-      await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /inherited label tracked bytes differ/u);
+       await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /inherited tracked bytes differ/u);
       await writeFile(path.join(repository, file), original);
     }
     await writeFile(path.join(repository, "scripts/typed-inherited-runtime/extra.js"), "export {};\n");
     await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /typed runtime file set differs/u);
     await rm(path.join(repository, "scripts/typed-inherited-runtime/extra.js"));
+    await writeFile(path.join(repository, governanceSource), "export const governance: number = 181;\n\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /inherited tracked bytes differ/u);
+    await writeFile(path.join(repository, governanceSource), "export const governance: number = 181;\n");
+    await writeFile(path.join(repository, governanceRuntime), "export const governance = 182;\n");
+    await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /inherited tracked bytes differ/u);
+    await writeFile(path.join(repository, governanceRuntime), "export const governance = 181;\n");
     if (process.platform !== "win32") {
       await chmod(path.join(repository, runtime), 0o755);
       await assert.rejects(checkSourceModulePolicy(repository, trustedGit), /source inventory mode mismatch/u);
@@ -642,13 +651,15 @@ test("packed generated governance self-check uses its relocated template and fai
     assert.equal((await create("apply")).status, "noop");
     assert.equal(JSON.parse((await execFileAsync(process.execPath,
       [path.join(target, "start.mjs"), "--cwd", target, "--json"])).stdout).mode, "WORK");
-    const labelPaths = [
+    const inheritedPaths = [
+      "scripts/typed-inherited/check-pr-governance.mts",
+      "scripts/typed-inherited-runtime/check-pr-governance.js",
       "scripts/typed-inherited/sync-github-labels.mts",
       "scripts/typed-inherited-runtime/sync-github-labels.js",
       "scripts/typed-inherited-runtime/package.json",
     ];
     const packageRoot = path.join(installDirectory, "node_modules/@eff3ct/agent-foundry/dist/payload");
-    for (const name of labelPaths) {
+    for (const name of inheritedPaths) {
       const source = await readFile(path.join(root, name));
       assert.deepEqual(await readFile(path.join(packageRoot, name)), source);
       const generated = path.join(target, ".factory", name);
@@ -656,13 +667,13 @@ test("packed generated governance self-check uses its relocated template and fai
       assert.equal((await stat(generated)).mode & 0o7777, 0o644);
     }
     assert.deepEqual(await verifyTypedRuntime(path.join(packageRoot, "scripts/typed-inherited"),
-      path.join(packageRoot, "scripts/typed-inherited-runtime")), ["package.json", "sync-github-labels.js"]);
+      path.join(packageRoot, "scripts/typed-inherited-runtime")), ["check-pr-governance.js", "package.json", "sync-github-labels.js"]);
     assert.deepEqual(await verifyTypedRuntime(path.join(target, ".factory/scripts/typed-inherited"),
-      path.join(target, ".factory/scripts/typed-inherited-runtime")), ["package.json", "sync-github-labels.js"]);
+      path.join(target, ".factory/scripts/typed-inherited-runtime")), ["check-pr-governance.js", "package.json", "sync-github-labels.js"]);
     const labels = path.join(target, ".factory/scripts/typed-inherited-runtime/sync-github-labels.js");
     assert.match((await execFileAsync(process.execPath, [labels, "--self-check"], { cwd: target })).stdout, /self-check OK\n$/u);
     assert.equal((await execFileAsync(process.execPath, [labels, "--dry-run", "--repo", "acme/example"], { cwd: target })).stdout.trim().split("\n").length, 10);
-    for (const name of labelPaths) {
+    for (const name of inheritedPaths) {
       const packaged = path.join(packageRoot, name);
       const original = await readFile(packaged);
       await writeFile(packaged, Buffer.concat([original, Buffer.from("\n")]));
@@ -672,12 +683,16 @@ test("packed generated governance self-check uses its relocated template and fai
       });
       await writeFile(packaged, original);
     }
-    assert.equal((await execFileAsync(process.execPath, [path.join(root, "scripts/check-pr-governance.mjs"), "--self-check"])).stdout, "self-check OK\n");
+    assert.equal((await execFileAsync(process.execPath, [path.join(root, "scripts/typed-inherited-runtime/check-pr-governance.js"), "--self-check"])).stdout, "self-check OK\n");
 
-    const checker = path.join(target, ".factory/scripts/check-pr-governance.mjs");
+    const checker = path.join(target, ".factory/scripts/typed-inherited-runtime/check-pr-governance.js");
+    assert.match(await readFile(path.join(target, ".github/workflows/governance.yml"), "utf8"), /node \.factory\/scripts\/typed-inherited-runtime\/check-pr-governance\.js/u);
     const relocated = path.join(target, ".factory/templates/pull-request.md");
     const original = await readFile(relocated, "utf8");
     assert.equal((await execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
+    await assert.rejects(execFileAsync(process.execPath, [checker, "--dry-run"], { cwd: target, env: {
+      PATH: process.env.PATH, HOME: process.env.HOME,
+    } }), /GITHUB_EVENT_PATH, GITHUB_REPOSITORY, and GITHUB_TOKEN are required/u);
     await mkdir(path.join(target, "templates"));
     await writeFile(path.join(target, "templates/pull-request.md"), original);
     await rm(relocated);

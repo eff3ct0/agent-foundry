@@ -7,11 +7,11 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { test } from "node:test";
 
-import { boundTaskProvider, githubIssueLabels, issueNumbers, validateEvent, validatePr } from "../scripts/check-pr-governance.mjs";
+import { boundTaskProvider, githubIssueLabels, issueNumbers, validateEvent, validatePr } from "../scripts/typed-inherited-runtime/check-pr-governance.js";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const script = path.join(root, "scripts", "check-pr-governance.mjs");
+const script = path.join(root, "scripts", "typed-inherited-runtime", "check-pr-governance.js");
 const linearFixture = path.join(root, "test", "fixtures", "pr-governance", "linear.json");
 const approved = { 42: ["status:approved"] };
 const githubPr = { body: "Summary\n\nCloses #42 and fixes acme/example#42.", labels: [{ name: "type:product" }] };
@@ -80,12 +80,23 @@ test("required validate runs trusted validator and bindings despite PR replaceme
     await mkdir(path.join(untrusted, "docs"));
     await mkdir(path.join(untrusted, "scripts"));
     await writeFile(path.join(untrusted, "docs", "bindings.md"), "> **Capability:** `task`\n> **Provider:** `linear`\n", "utf8");
-    await writeFile(path.join(untrusted, "scripts", "check-pr-governance.mjs"), "process.exit(0);\n", "utf8");
+    await mkdir(path.join(untrusted, "scripts", "typed-inherited-runtime"));
+    await writeFile(path.join(untrusted, "scripts", "typed-inherited-runtime", "check-pr-governance.js"), "process.exit(0);\n", "utf8");
 
     assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/u);
     assert.doesNotMatch(workflow, /merge_commit_sha/u);
     assert.equal((workflow.match(/uses: actions\/checkout@/gu) ?? []).length, 1);
-    assert.match(workflow, /run: node scripts\/check-pr-governance\.mjs/u);
+    assert.match(workflow, /run: node scripts\/typed-inherited-runtime\/check-pr-governance\.js/u);
+    const buildStep = "      - name: Verify committed typed runtime\n        run: |\n          npm install --global pnpm@12.4.2\n          pnpm install --frozen-lockfile --ignore-scripts\n          pnpm build\n";
+    const validateStep = "      - name: Validate PR metadata\n        run: node scripts/typed-inherited-runtime/check-pr-governance.js\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n";
+    assert.ok(workflow.indexOf(buildStep) > workflow.indexOf("persist-credentials: false"));
+    assert.ok(workflow.indexOf(validateStep) > workflow.indexOf(buildStep));
+    assert.equal((workflow.match(/pnpm build/gu) ?? []).length, 1);
+    assert.equal((workflow.match(/GITHUB_TOKEN:/gu) ?? []).length, 1);
+    assert.equal((workflow.match(/uses: actions\/checkout@11bd71901bbe5b1630ceea73d27597364c9af683/gu) ?? []).length, 1);
+    for (const changed of [workflow.replace(buildStep, ""), workflow.replace(buildStep, "").replace(validateStep, validateStep + buildStep)]) {
+      assert.equal(changed.indexOf(buildStep) < changed.indexOf(validateStep) && changed.indexOf(buildStep) >= 0, false);
+    }
     assert.doesNotMatch(workflow, /check-pr-governance\.py/u);
     assert.equal(await boundTaskProvider(root), "github-issues");
     assert.equal(await boundTaskProvider(untrusted), "linear");
