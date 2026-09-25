@@ -198,6 +198,20 @@ test("redirected claims block absent, unapproved or credential-bearing download 
   assert.equal(sameTransport.calls.length, 3);
 });
 
+test("claims when the created asset metadata exceeds the small claim-body cap", async () => {
+  const large = JSON.stringify(asset({ label: "x".repeat(2000) }));
+  assert.ok(Buffer.byteLength(large) > 1024, "fixture must exceed the 1 KiB claim-body cap");
+  const fixture = claimFixture([binaryResponse(large, 201), response([asset()]), binaryResponse(claimBody)]);
+  assert.deepEqual(await fixture.attempt(), { status: "claimed", releaseId: 123, assetId: 789 });
+});
+
+test("blocks a created asset metadata response beyond the metadata cap", async () => {
+  const huge = JSON.stringify(asset({ label: "x".repeat(70 * 1024) }));
+  const fixture = claimFixture([binaryResponse(huge, 201)]);
+  assert.equal((await fixture.attempt()).status, "blocked");
+  assert.deepEqual(fixture.calls.map(({ method }) => method), ["POST"]);
+});
+
 test("redirected claims block secondary redirects, mismatched or oversized bytes and timeout without retry", async () => {
   for (const download of [redirectResponse(), binaryResponse("wrong"), binaryResponse("x".repeat(1025))]) {
     const fixture = claimFixture([claimedResponses()[0], claimedResponses()[1], redirectResponse()]);
