@@ -83,7 +83,7 @@ jobs:
           TARBALL="$(find package -maxdepth 1 -name '*.tgz' -type f -print -quit)"
           tar -xzf "$TARBALL" --strip-components=1 -C local-package
           node scripts/npm-release.mjs --command verify-local --package-root local-package --tarball "$TARBALL" --tag "$RELEASE_TAG" --source-sha "$RELEASE_SHA" --output identity/local.json
-          printf 'tarball=%s\n' "$TARBALL" >> "$GITHUB_ENV"
+          printf 'TARBALL=%s\n' "$TARBALL" >> "$GITHUB_ENV"
       - name: Publish the exact package with npm provenance
         working-directory: release-source
         env:
