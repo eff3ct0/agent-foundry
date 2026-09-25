@@ -5,7 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { allowlistedEnvironment } from "./installed-runner.mjs";
-import { consumerArtifactIdentity } from "./artifact-identity.mjs";
+import { consumerArtifactIdentity } from "./typed-runtime/artifact-identity.js";
 import { sanitizeEvidenceText } from "./local-matrix.mjs";
 
 const execFileAsync = promisify(execFile);

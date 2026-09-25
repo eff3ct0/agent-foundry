@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cleanupProvisionedResource } from "../scripts/resource-proof-cleanup.mjs";
-import { serializeProvisioningProof } from "../scripts/resource-provisioning-proof.mjs";
+import { cleanupProvisionedResource, ResourceProofCleanupError } from "../scripts/typed-runtime/resource-proof-cleanup.js";
+import { serializeProvisioningProof } from "../scripts/typed-runtime/resource-provisioning-proof.js";
 
 const owner = "sandbox-owner";
 const runId = "123";
@@ -106,4 +106,32 @@ test("requires recovery after an indeterminate or rejected bounded deletion", as
     assert.equal((await cleanupProvisionedResource(supplied)).code, code);
     assert.equal(supplied.artifacts[0].code, code);
   }
+});
+
+test("rejects missing injected boundaries with stable error codes before downloading", async () => {
+  for (const [field, code] of [
+    ["evidence", "invalid_evidence"],
+    ["artifact", "invalid_artifact"],
+    ["readClient", "invalid_read_client"],
+    ["mutationClient", "invalid_mutation_client"],
+  ]) {
+    const supplied = input({ [field]: null });
+    await assert.rejects(cleanupProvisionedResource(supplied), (error) =>
+      error instanceof ResourceProofCleanupError && error.code === code);
+    assert.deepEqual(supplied.events, []);
+  }
+});
+
+test("keeps download, mutation, and artifact failure contracts offline", async () => {
+  const download = input({ evidence: { async download() { throw new Error("offline"); } } });
+  assert.equal((await cleanupProvisionedResource(download)).code, "proof_download_failed");
+  assert.deepEqual(download.events, ["write"]);
+
+  const mutation = input({ mutationClient: { async deleteRepository() { throw new Error("offline"); } } });
+  assert.equal((await cleanupProvisionedResource(mutation)).code, "delete_indeterminate");
+  assert.deepEqual(mutation.events, ["download", `read:/repos/${target}`, "write"]);
+
+  const store = input({ artifact: { async write() { throw new Error("offline"); } } });
+  await assert.rejects(cleanupProvisionedResource(store), (error) =>
+    error instanceof ResourceProofCleanupError && error.code === "artifact_write_failed");
 });

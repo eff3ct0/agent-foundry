@@ -574,6 +574,24 @@ const renderTextFile = (
   if (!Buffer.from(text, "utf8").equals(source.bytes)) return source.bytes;
   let rendered = text;
   for (const [key, value] of Object.entries(config.values)) rendered = rendered.replaceAll(`<${key}>`, () => value);
+  if (source.path === ".github/workflows/sync-labels.yml") {
+    if (!rendered.includes("node scripts/typed-inherited-runtime/sync-github-labels.js")) {
+      throw new CreatorError("composition_invalid", "label workflow is missing its inherited runtime command");
+    }
+    rendered = rendered.replaceAll("scripts/typed-inherited", ".factory/scripts/typed-inherited");
+  }
+  if (source.path === ".github/workflows/governance.yml") {
+    if (!rendered.includes("node scripts/typed-inherited-runtime/check-pr-governance.js")) {
+      throw new CreatorError("composition_invalid", "governance workflow is missing its inherited runtime command");
+    }
+    rendered = rendered.replaceAll("scripts/typed-inherited", ".factory/scripts/typed-inherited");
+    // The generated project has no archetype compiler toolchain; its verified payload is already compiled.
+    if (destinationPath === ".github/workflows/governance.yml") {
+      const buildStep = "      - name: Verify committed typed runtime\n        run: |\n          npm install --global pnpm@12.4.2\n          pnpm install --frozen-lockfile --ignore-scripts\n          pnpm build\n";
+      if (!rendered.includes(buildStep)) throw new CreatorError("composition_invalid", "governance workflow build step differs");
+      rendered = rendered.replace(buildStep, "");
+    }
+  }
   if (destinationPath.endsWith(".md")) rendered = renderMarkdown(rendered, source.path, destinationPath, destinations, removed);
   for (const key of Object.keys(config.values)) {
     if (rendered.includes(`<${key}>`)) throw new CreatorError("unresolved_placeholder", `generated file contains unresolved placeholder: ${key}`, { path: destinationPath });
@@ -683,7 +701,14 @@ const composeBindings = (
   const secrets = config.values.SECRETS_PROVIDER || "none";
   const codeIntel = config.values.CODE_INTELLIGENCE || "none";
   if (!task) throw new CreatorError("configuration_invalid", "TASK_TRACKER is required for binding composition");
-  const parts = [renderMarkdown(bindingHeader, "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd()];
+  const parts = [renderMarkdown(bindingHeader, "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd(),
+    `## Bound task identity
+
+- Task provider (TASK_TRACKER): ${task}
+- Tracker (TRACKER): ${config.values.TRACKER}
+- Project/board (TRACKER_KEY): ${config.values.TRACKER_KEY || "not configured; resolve before durable task operations"}
+
+Use only this provider and tracker for every durable harness task/TODO. Confirm each native operation and read back the intended task identity, state, and handoff before claiming success. Missing identity or readback blocks the operation; local files and task UIs are not fallback stores.`];
   for (const [capability, name] of [["task", task], ["secrets", secrets]] as const) {
     const source = providerFragment(sources, capability, name);
     parts.push(renderTextFile(source, "docs/bindings.md", config, new Set([source.path]), destinations, removed).toString("utf8").trimEnd());
@@ -693,6 +718,21 @@ const composeBindings = (
     parts.push(renderTextFile(source, "docs/bindings.md", config, new Set([source.path]), destinations, removed).toString("utf8").trimEnd());
   }
   return Buffer.from(`${parts.join("\n\n")}\n`, "utf8");
+};
+
+const nativeTaskReferences: Record<string, string> = {
+  jira: "Jira: <TICKET_ID>",
+  linear: "Linear: <TICKET_ID>",
+  custom: "Task: <TICKET_ID>",
+};
+
+const composePrTaskReference = (bytes: Buffer, task: string): Buffer => {
+  const reference = nativeTaskReferences[task];
+  if (!reference) return bytes;
+  const text = bytes.toString("utf8");
+  const marker = /(<!-- provider-governance:start -->)[\s\S]*?(<!-- provider-governance:end -->)/u;
+  if (!marker.test(text)) throw new CreatorError("composition_invalid", "pull-request template is missing its provider-governance section");
+  return Buffer.from(text.replace(marker, `$1\n${reference}\n<!-- Approval is confirmed by the bound task provider. -->\n$2`), "utf8");
 };
 
 const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buffer | undefined => {
@@ -758,7 +798,9 @@ const readPayloadFiles = async (
   for (const source of sourceFiles.values()) {
     if (!destinations.has(source.path)) continue;
     const destinationPath = destinations.get(source.path)!;
-    const bytes = renderTextFile(source, destinationPath, config, textFiles, destinations, removedSourcePaths);
+    const rendered = renderTextFile(source, destinationPath, config, textFiles, destinations, removedSourcePaths);
+    const bytes = source.path === "templates/pull-request.md" || source.path === ".github/pull_request_template.md"
+      ? composePrTaskReference(rendered, config.values.TASK_TRACKER) : rendered;
     files.push({ relativePath: destinationPath, bytes, mode: source.mode, sha256: sha256(bytes), size: bytes.byteLength });
   }
   const generatedPaths = new Set(ownershipEntries(ownership).filter(({ definition }) => definition.disposition === "generated").map(({ entry }) => entry.path));

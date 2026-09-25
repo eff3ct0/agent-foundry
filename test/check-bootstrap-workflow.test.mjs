@@ -13,8 +13,8 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(root, "scripts", "check-bootstrap-workflow.mjs");
 const workflows = path.join(".github", "workflows");
-const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml" });
-const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK"];
+const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml", archetypeNode20: "archetype-node20.yml" });
+const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
 
 const fixture = async (callback) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bootstrap-workflow-contract-"));
@@ -65,6 +65,32 @@ test("the Node CLI emits the Python parity success output", async () => {
   assert.equal(result.stderr, "");
 });
 
+test("archetype Node 20 PR check rejects trigger, authority, pin, version, and pre-build execution drift", async () => {
+  const changes = [
+    ["  pull_request:", "  pull_request_target:"],
+    ["  contents: read", "  contents: write"],
+    ["actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", "actions/checkout@v4"],
+    [`actions/setup-node@${bootstrapPinnedActions["actions/setup-node"]}`, "actions/setup-node@v4"],
+    ["node-version: 20.19.0", "node-version: 22"],
+    ["npm install --global pnpm@12.4.2", "corepack enable\n          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2"],
+    ["npm install --global pnpm@12.4.2", "npm install --global pnpm@latest"],
+    ['test "$(pnpm --version)" = "12.4.2"', 'test "$(pnpm --version)" = "latest"'],
+    ["pnpm test:package-consumer", "pnpm build"],
+    ["node scripts/typed-runtime/check-real-agent-workflow.js", "node scripts/missing-checker.js"],
+    ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/typed-runtime/check-real-agent-workflow.js\n          pnpm test"],
+    ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/check-determinism.mjs\n          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js"],
+    ["node scripts/check-determinism.mjs", "node scripts/missing-determinism.mjs"],
+    ["          pnpm typecheck", "          pnpm typecheck\n          node -e 'console.log(process.env)'"],
+    ["  verify:\n", "  verify:\n    env:\n      TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"],
+  ];
+  for (const [from, to] of changes) {
+    await fixture(async (directory) => {
+      await replace(directory, "archetypeNode20", from, to);
+      await reject(directory, "archetype Node 20 PR workflow differs from its read-only contract");
+    });
+  }
+});
+
 test("bootstrap rejects unpinned, unverified, and missing required actions", async () => {
   await fixture(async (directory) => {
     await replace(directory, "bootstrap", "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", "actions/checkout@v4");
@@ -81,6 +107,22 @@ test("bootstrap rejects unpinned, unverified, and missing required actions", asy
 });
 
 test("bootstrap rejects weak lifecycle permission and token boundaries", async () => {
+  await fixture(async (directory) => {
+    await replaceFirst(directory, "bootstrap", './scripts/typed-runtime/hosted-lifecycle-mutation-client.js', './scripts/hosted-lifecycle-mutation-client.mjs');
+    await reject(directory, 'bootstrap must use the typed provisioning importer import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";');
+  });
+  await fixture(async (directory) => {
+    const target = path.join(directory, workflows, files.bootstrap);
+    const source = await readFile(target, "utf8");
+    const boundary = source.indexOf("\n  cleanup:\n");
+    assert.notEqual(boundary, -1);
+    await writeFile(target, source.slice(0, boundary) + source.slice(boundary).replace('./scripts/typed-runtime/hosted-lifecycle-mutation-client.js', './scripts/hosted-lifecycle-mutation-client.mjs'));
+    await reject(directory, 'cleanup must use the trusted proof-based policy import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";');
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "./scripts/typed-runtime/resource-provision-and-proof.js", "./scripts/resource-provision-and-proof.mjs");
+    await reject(directory, "bootstrap must use the typed provisioning importer ./scripts/typed-runtime/resource-provision-and-proof.js");
+  });
   await fixture(async (directory) => {
     await replace(directory, "bootstrap", "permissions: {}", "permissions: read-all");
     await reject(directory, "workflow must default to no permissions");
@@ -111,6 +153,10 @@ test("bootstrap rejects weak cleanup, report, and credential isolation", async (
   await fixture(async (directory) => {
     await replace(directory, "bootstrap", "ref: ${{ github.workflow_sha }}", "ref: ${{ needs.prepare.outputs.sha }}");
     await reject(directory, "cleanup must use the trusted proof-based policy ref: ${{ github.workflow_sha }}");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "./scripts/typed-runtime/resource-proof-cleanup.js", "./scripts/resource-proof-cleanup.mjs");
+    await reject(directory, "cleanup must use the trusted proof-based policy scripts/typed-runtime/resource-proof-cleanup.js");
   });
   await fixture(async (directory) => {
     await replace(directory, "bootstrap", "  bootstrap:\n", "  bootstrap:\n    env:\n      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n");
