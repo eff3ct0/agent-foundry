@@ -88,6 +88,9 @@ test("generated module inventory uses the composed creator plan, not application
     assert.deepEqual(baseline, [
       ".factory/scripts/check-delivery-contract.mjs",
       ".factory/scripts/check-factory-layout.mjs",
+      ".factory/scripts/task-adapter.mjs",
+      ".factory/scripts/task-github-issues-read.mjs",
+      ".factory/scripts/task-jira-read.mjs",
       "start.mjs",
     ].map((name) => ({ scope: "generated", path: name, reason: "untyped .mjs module" })));
     assert.ok(await stat(path.join(target, ".opencode/plugins/factory-start.ts")));
@@ -132,9 +135,8 @@ test("generated module inventory uses the composed creator plan, not application
     await mkdir(path.join(target, ".factory/scripts/nested"));
     await writeFile(path.join(target, ".factory/scripts/nested/rogue.js"), "export {};");
     assert.deepEqual(await checkGeneratedModulePolicy(options), [
-      ...baseline.slice(0, 3),
+      ...baseline,
       { scope: "generated", path: ".factory/scripts/nested/rogue.js", reason: "untyped JavaScript module" },
-      ...baseline.slice(3),
     ].sort((a, b) => a.path.localeCompare(b.path, "en")));
 
     await symlink(path.join(target, "app/own.js"), path.join(target, ".factory/scripts/nested/link.js"));
@@ -517,6 +519,95 @@ test("composes bindings and CI recipes, then removes creator-only inputs", async
   const rerun = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
   assert.equal(rerun.code, 0, rerun.stderr);
   assert.equal(json(rerun).status, "noop");
+});
+
+test("all task selections generate exclusive, readable provider-native bindings", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-task-bindings-"));
+  const selections = [
+    ["jira", "Jira workspace", "JRA"],
+    ["github-issues", "GitHub repository", "owner/repo"],
+    ["github-projects", "GitHub project", "board-42"],
+    ["linear", "Linear workspace", "LIN"],
+    ["custom", "Team tracker", "team-board"],
+  ];
+  for (const [provider, tracker, key] of selections) {
+    const directory = path.join(parent, provider);
+    await mkdir(directory);
+    const target = path.join(directory, "project");
+    const config = await configFile(directory, { TASK_TRACKER: provider, TRACKER: tracker, TRACKER_KEY: key });
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, `${provider}: ${applied.stderr}`);
+    const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+    assert.ok(bindings.includes(`Task provider (TASK_TRACKER): ${provider}`), provider);
+    assert.ok(bindings.includes(`Tracker (TRACKER): ${tracker}`), provider);
+    assert.ok(bindings.includes(`Project/board (TRACKER_KEY): ${key}`), provider);
+    assert.ok(bindings.includes(`**Provider:** \`${provider}\``), provider);
+    assert.match(bindings, /Every durable harness task\/TODO\s+uses/iu, provider);
+    assert.match(bindings, /cold\s+resume/u, provider);
+    assert.match(bindings, /confirmation and fresh readback/u, provider);
+    assert.match(bindings, /comment\/handoff/u, provider);
+    assert.match(bindings, /optional derived projections/u, provider);
+    assert.match(bindings, /unavailable(?:\s+or\s+|,\s*|\/)malformed(?:\s+or\s+|,\s*or\s+|\/)mismatched/u, provider);
+    assert.match(bindings, /exact .*operation/u, provider);
+    assert.match(bindings, /Use only this provider and tracker for every durable harness task\/TODO/u, provider);
+    assert.match(bindings, /read back the intended task identity, state, and handoff/u, provider);
+    assert.match(bindings, /local files and task UIs are not fallback stores/u, provider);
+    assert.match(bindings, /(?:unsupported|unavailable)[\s\S]*?ambiguous[\s\S]*?readback/u, provider);
+    assert.match(bindings, /malformed[\s\S]*?(?:stop|blocks)/u, provider);
+    assert.match(bindings, /evidence\s+needed to\s+resume/u, provider);
+    assert.doesNotMatch(bindings, /Do not leave state only in Jira/u, provider);
+    if (provider === "github-projects") {
+      assert.match(bindings, /draft\s+or project-only item without a linked issue/u);
+      assert.match(bindings, /without a confirmed link and approval, block PR/u);
+    }
+    if (provider === "custom") assert.match(bindings, /no supported native comment or/u);
+    if (provider === "jira" || provider === "linear" || provider === "custom") {
+      assert.match(bindings, /(?:Do not|Never) substitute GitHub/u, provider);
+    }
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    assert.ok(agent.includes(`- Task tracker: \`${tracker}\` (project/board \`${key}\`)`), provider);
+    assert.match(agent, /optional,[\s\S]*?derived,[\s\S]*?non-authoritative projection/u, provider);
+    assert.match(agent, /unsupported, fails, has ambiguous identity,[\s\S]*?readback is unavailable, malformed, or mismatched/u, provider);
+    const runbook = await readFile(path.join(target, ".factory", "templates", "agent-runbook.md"), "utf8");
+    assert.ok(runbook.includes(`${provider}`) && runbook.includes(key), provider);
+    assert.match(runbook, /Never require them or use them as fallback task stores/u, provider);
+    assert.match(runbook, /provider-native[\s\S]*?confirmation and fresh readback/u, provider);
+    assert.match(runbook, /A malformed readback is not confirmation/u, provider);
+    const handoff = await readFile(path.join(target, ".factory", "templates", "handoff.md"), "utf8");
+    assert.match(handoff, /Confirm the comment or native handoff operation[\s\S]*?read back its intended content/u, provider);
+    assert.match(handoff, /unsupported, fails, identifies an ambiguous task, or cannot be read back/u, provider);
+    assert.match(handoff, /returns malformed data, stop without claiming success/u, provider);
+    const agentInit = await readFile(path.join(target, ".factory", "docs", "agent-init.md"), "utf8");
+    assert.match(agentInit, /Verify provider confirmation and readback of the intended task identity and state/u, provider);
+    assert.match(agentInit, /neither required nor fallback stores/u, provider);
+    assert.match(agentInit, /returns malformed readback, stop/u, provider);
+    await assert.rejects(stat(path.join(target, "odd")), undefined, provider);
+    if (provider === "jira" || provider === "linear" || provider === "custom") {
+      assert.doesNotMatch(bindings, /Task provider \(TASK_TRACKER\): github-(?:issues|projects)/u, provider);
+      assert.match(bindings, /(?:Do not|Never) substitute GitHub/u, provider);
+      const reference = provider === "custom" ? "Task:" : `${provider === "jira" ? "Jira" : "Linear"}:`;
+      for (const template of [".github/pull_request_template.md", ".factory/templates/pull-request.md"]) {
+        const pr = await readFile(path.join(target, template), "utf8");
+        assert.ok(pr.includes(reference), `${provider}: ${template} must use native task reference`);
+        assert.doesNotMatch(pr, /Closes #|linked GitHub issue must have status:approved/u, `${provider}: ${template}`);
+      }
+    } else {
+      for (const template of [".github/pull_request_template.md", ".factory/templates/pull-request.md"]) {
+        const pr = await readFile(path.join(target, template), "utf8");
+        assert.match(pr, /Closes #<TICKET_ID>/u, `${provider}: ${template}`);
+      }
+    }
+    const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(verified.code, 0, `${provider}: ${verified.stderr}`);
+  }
+  const missing = path.join(parent, "missing-board");
+  await mkdir(missing);
+  const config = await configFile(missing, { TASK_TRACKER: "linear" });
+  const target = path.join(missing, "project");
+  const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(applied.code, 0, applied.stderr);
+  const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+  assert.match(bindings, /Project\/board \(TRACKER_KEY\): not configured; resolve before durable task operations/u);
 });
 
 test("compatibility fixtures produce stable plans for task, secrets, and code-intelligence bindings", async () => {
