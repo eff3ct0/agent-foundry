@@ -241,6 +241,18 @@ test("real-agent journey rejects the retired source repository before hosted exe
   });
 });
 
+test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
+  for (const [line, number] of [
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 175],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 288],
+  ]) {
+    await fixture(async (directory) => {
+      await replaceFirst(directory, "journey", line, ` ${line}`);
+      await reject(directory, `real-agent journey run block has invalid YAML indentation at line ${number}`);
+    });
+  }
+});
+
 test("real-agent journey pins its executable scoped package metadata guard", async () => {
   const mutations = [
     ['const version = spec.slice(`${name}@`.length);', 'const [name, version] = spec.split("@");'],

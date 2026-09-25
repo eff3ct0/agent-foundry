@@ -171,7 +171,7 @@ jobs:
       - name: Read generated default branch
         id: provision
         run: |
-           branch=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("stage-input/provision.json", "utf8")).identifiers.default_branch)')
+          branch=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("stage-input/provision.json", "utf8")).identifiers.default_branch)')
           case "$branch" in
             [A-Za-z0-9._/-]*) printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT" ;;
             *) printf 'generated default branch is invalid\n' >&2; exit 1 ;;
@@ -284,7 +284,7 @@ jobs:
         env:
           AGENT_EVIDENCE: stage-input/agent.json
         run: |
-           branch=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.AGENT_EVIDENCE, "utf8")).identifiers.branch)')
+          branch=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.env.AGENT_EVIDENCE, "utf8")).identifiers.branch)')
           case "$branch" in
             feature/[0-9]*-[a-z0-9-]*) printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT" ;;
             *) printf 'agent branch is invalid\n' >&2; exit 1 ;;
