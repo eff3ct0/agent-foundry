@@ -460,23 +460,21 @@ test("npm release workflow is explicit, immutable, and publish-once", async () =
   });
 });
 
-test("npm release stop cannot be deleted, moved, disguised or bypassed", async () => {
-  const stop = "          printf '%s\\n' 'npm release publication blocked: exclusive publish gate not installed' >&2\n          exit 1\n";
-  const publishCommand = '          npm publish "$TARBALL" --provenance --access public\n';
-  const variants = [
-    [stop, ""],
-    [stop, stop.replace(/^          /gmu, "          # ")],
-    ["          exit 1\n", "          # exit 1\n"],
-    ["          exit 1\n", "          exit 0\n"],
-    ["          exit 1\n", "          if false; then exit 1; fi\n"],
-    ["          exit 1\n", "          exit 1 || true\n"],
-    [stop + '          test -n "$NODE_AUTH_TOKEN"\n' + publishCommand,
-      publishCommand + stop + '          test -n "$NODE_AUTH_TOKEN"\n'],
+const gateMessage = "npm release publish step must gate npm publish behind the version probe and exclusive claim without bypass";
+
+test("npm release gated publish step cannot be weakened or bypassed", async () => {
+  const mutations = [
+    // Removing the read-only version probe breaks the immutable gated step.
+    ['          import { probeExactVersion } from "./scripts/npm-release.mjs";\n', ""],
+    // Removing the exclusive first-publish claim breaks the immutable gated step.
+    ['          import { claimPublishAttempt } from "./scripts/release-readback.mjs";\n', ""],
+    // Forcing an unconditional "publish" decision bypasses the probe and claim.
+    ["          process.stdout.write(await decide());\n", '          process.stdout.write("publish");\n'],
   ];
-  for (const [from, to] of variants) {
+  for (const [from, to] of mutations) {
     await fixture(async (directory) => {
-      await replaceFirst(directory, "npmRelease", from, to);
-      await reject(directory, "npm release publish step must stop before npm publish without bypass");
+      await replace(directory, "npmRelease", from, to);
+      await reject(directory, gateMessage);
     });
   }
   for (const bypass of [
@@ -488,17 +486,12 @@ test("npm release stop cannot be deleted, moved, disguised or bypassed", async (
     await fixture(async (directory) => {
       await replaceFirst(directory, "npmRelease", "      - name: Publish the exact package with npm provenance\n",
         `      - name: Publish the exact package with npm provenance\n${bypass}`);
-      await reject(directory, "npm release publish step must stop before npm publish without bypass");
+      await reject(directory, gateMessage);
     });
   }
-  await fixture(async (directory) => {
-    await replaceFirst(directory, "npmRelease", stop, "");
-    await append(directory, "npmRelease", `\n# ${stop.trim()}\n`);
-    await reject(directory, "npm release publish step must stop before npm publish without bypass");
-  });
 });
 
-test("npm release stop exits before npm or token checks for both trigger paths", async () => {
+test("npm release gated publish step only runs npm publish on a granted decision with a token", async () => {
   await fixture(async (directory) => {
     const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
     const step = workflow.split("      - name: Publish the exact package with npm provenance\n")[1]
@@ -510,16 +503,33 @@ test("npm release stop exits before npm or token checks for both trigger paths",
     await mkdir(bin);
     const marker = path.join(directory, "npm-called");
     const fakeNpm = path.join(bin, "npm");
-    await writeFile(fakeNpm, '#!/bin/sh\n: > "$FAKE_NPM_MARKER"\nexit 93\n');
+    await writeFile(fakeNpm, '#!/bin/sh\n: > "$FAKE_NPM_MARKER"\nexit 0\n');
     await chmod(fakeNpm, 0o755);
-    for (const eventName of ["release", "workflow_dispatch"]) {
-      for (const token of ["", "offline-placeholder"]) {
-        await assert.rejects(execFileAsync("bash", ["-eo", "pipefail", "-c", scriptText], {
-          cwd: directory, env: { PATH: `${bin}:${process.env.PATH}`, NODE_AUTH_TOKEN: token,
-            TARBALL: "not-a-package.tgz", FAKE_NPM_MARKER: marker, GITHUB_EVENT_NAME: eventName },
-        }), (error) => error.code === 1 && error.stderr.includes("publication blocked"));
-        await assert.rejects(readFile(marker), { code: "ENOENT" });
-      }
+    // A fake node stands in for the real probe+claim decision so the shell gate is exercised offline.
+    const fakeNode = path.join(bin, "node");
+    await writeFile(fakeNode, '#!/bin/sh\nprintf "%s" "$FAKE_NODE_DECISION"\nexit "${FAKE_NODE_EXIT:-0}"\n');
+    await chmod(fakeNode, 0o755);
+    const run = (env) => execFileAsync("bash", ["-eo", "pipefail", "-c", scriptText], {
+      cwd: directory, env: { PATH: `${bin}:${process.env.PATH}`, TARBALL: "not-a-package.tgz", FAKE_NPM_MARKER: marker, ...env },
+    });
+    // Granted decision with a token is the only path that reaches npm publish.
+    await rm(marker, { force: true });
+    await run({ FAKE_NODE_DECISION: "publish", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "offline-placeholder" });
+    await readFile(marker);
+    // An already-published version skips publication and exits 0 without invoking npm.
+    await rm(marker, { force: true });
+    const skipped = await run({ FAKE_NODE_DECISION: "skip", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "offline-placeholder" });
+    assert.equal(skipped.stdout.includes("publication skipped"), true);
+    await assert.rejects(readFile(marker), { code: "ENOENT" });
+    // Fail closed: an inconclusive/unknown or ungranted decision, or a missing token, never publishes.
+    for (const env of [
+      { FAKE_NODE_DECISION: "", FAKE_NODE_EXIT: "1", NODE_AUTH_TOKEN: "offline-placeholder" },
+      { FAKE_NODE_DECISION: "garbage", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "offline-placeholder" },
+      { FAKE_NODE_DECISION: "publish", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "" },
+    ]) {
+      await rm(marker, { force: true });
+      await assert.rejects(run(env));
+      await assert.rejects(readFile(marker), { code: "ENOENT" });
     }
   });
 });
