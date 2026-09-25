@@ -74,6 +74,7 @@
         {"path": "odd/tasks/issue-98-journey-reporting.md", "kind": "file"},
         {"path": "odd/tasks/issue-96-runtime-catalog.md", "kind": "file"},
         {"path": "odd/tasks/issue-97-release-trigger.md", "kind": "file"},
+        {"path": "odd/tasks/issue-176-python-equivalence.md", "kind": "file"},
         {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
         {"path": "scripts/check-determinism.mjs", "kind": "file"},
         {"path": "odd", "kind": "directory"}

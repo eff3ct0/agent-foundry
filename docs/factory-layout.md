@@ -23,7 +23,7 @@ under `.factory/`.
 | `.claude/` | Root-required, optional | Claude Code discovers project settings from `.claude/`; only host configuration belongs here. |
 | `.pi/` | Root-required, optional | Pi discovers project extensions from `.pi/extensions/`; only host configuration belongs here. |
 | `docs/bindings.md` | Generated project output | The initializer currently generates this path, and `AGENT.md`, `CLAUDE.md`, and the runbook link to it. Keep this output path stable until a compatibility-preserving migration is implemented. |
-| `.github/workflows/ci.yml` | Generated project output | GitHub Actions requires this root-relative path for the generated workflow. |
+| `.github/workflows/ci.yml` | Generated project output, optional | Created only when CI is selected. If generated, GitHub Actions requires this root-relative path; the checker validates it when present. |
 | `.opencode/plugins/factory-start.ts` | Generated project output | OpenCode requires the plugin under its root-discovered directory; generation remains opt-in. |
 | Toolchain manifests | Application-owned, root-allowed | Stack detection intentionally reads root manifests such as `Cargo.toml`, `package.json`, `tsconfig.json`, `pyproject.toml`, `requirements.txt`, and `go.mod` (see `docs/agent-init.md`). |
 | Application paths | Application-owned, root-allowed | Project source, tests, assets, and other product paths are not factory support and remain owned by the initialized project. |
@@ -67,7 +67,7 @@ The first level under `.factory/` is fixed and intentionally small:
 
 | Path | Contents | Compatibility rule |
 | --- | --- | --- |
-| `.factory/checks/` | Retained offline structural and phase checks. | Checks resolve the repository root explicitly; they do not infer it from the current working directory. |
+| `.factory/checks/` | Retained offline checks, when the payload includes checks content. | This directory is absent when no checks content is generated. If present, it must be a directory; checks resolve the repository root explicitly. |
 | `.factory/docs/` | Retained generic factory workflow, handbook, bootstrap, and governance documentation. | Relative links are rebased during relocation and must resolve from their new location. |
 | `.factory/hooks/` | Source adapters for Claude Code, Pi, and OpenCode. | Adapters invoke the root `start.mjs` with shell-free Node argv; host-discovered copies/configuration stay in `.claude/`, `.pi/`, and `.opencode`. |
 | `.factory/scripts/` | Retained generic checkers and local synchronization helpers. | Documented commands use an explicit `.factory/scripts/...` path or a root wrapper; no command silently changes provider semantics. |
@@ -76,6 +76,18 @@ The first level under `.factory/` is fixed and intentionally small:
 No `.factory/layout.json`, pointer file, or second manifest is required. The
 directory contract above is the single physical boundary; the ownership
 inventory remains authoritative for initialization lifecycle classification.
+The source archetype's `checks/` inventory is not an obligation to create an
+empty `.factory/checks/` in a generated project. Its required inherited
+support remains `.factory/docs/`, `.factory/hooks/`, `.factory/scripts/`,
+`.factory/templates/`, including the layout contract, hooks README, checker,
+and agent runbook files.
+`docs/bindings.md` remains required; CI and `.factory/checks/` are optional,
+and malformed present reserved paths fail the structural check.
+The standalone layout checker has no CI-selection context: an absent `ci.yml`
+passes its structural check even when CI was selected. The plan-aware creator
+`verify` command enforces selected outputs; for a CI-selected project, a missing
+`.github/workflows/ci.yml` yields `not-created`. Keep both gates in generated
+project verification rather than making CI globally mandatory.
 
 ## Compatibility matrix
 
@@ -91,10 +103,11 @@ inventory remains authoritative for initialization lifecycle classification.
 | Generic commands | `scripts/*.mjs` | `.factory/scripts/*.mjs` | Commands are documented with their explicit new path or retain a deliberate root wrapper. |
 | Provider/CI inputs | `providers/`, `ci/` | Removed after initialization | They are composition inputs, not initialized-project support assets; provider and CI semantics do not change. |
 
-The structural regression check builds a fresh fixture from this contract,
-checks the allowlist and `.factory/` children, verifies generated outputs, and
-proves that legacy root support directories and pointer manifests fail. It is
-offline and performs no GitHub or provider operation.
+The structural self-check builds synthetic minimal and optional-output fixtures,
+then mutates required and reserved paths to prove fail-closed behavior. It is
+offline and performs no GitHub or provider operation. It is not proof of a
+creator-generated target; the packed-consumer test installs the actual package,
+generates a fresh project, and runs its inherited checker against that project.
 
 Run it from the source template root with:
 
