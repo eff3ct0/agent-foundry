@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -23,7 +23,6 @@ const location = "node_modules/@eff3ct/agent-foundry";
 const expected = { packageName: name, version: "0.1.0", registry, repository: repo, ref,
   commit: "a".repeat(40), location, workflowIdentity: identity,
   sha256: `sha256:${digest("sha256", tarball)}` };
-const npmCli = path.resolve(path.dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js");
 
 const certificate = () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "audit-fixture-cert-"));
@@ -48,7 +47,14 @@ const auditFixture = () => ({ invalid: [], missing: [], verified: [{ name, versi
     verificationMaterial: { certificate: { rawBytes: certificate() } },
   } }] }] });
 
-const fixture = (change = () => {}) => {
+const fixture = (t, change = () => {}) => {
+  const cliRoot = mkdtempSync(path.join(os.tmpdir(), "audit-fixture-npm-"));
+  t.after(() => rmSync(cliRoot, { recursive: true, force: true }));
+  const npmCli = path.join(cliRoot, "bin", "npm-cli.js");
+  mkdirSync(path.dirname(npmCli));
+  // The fake CLI is never executed: every fixture injects run and fetcher.
+  writeFileSync(npmCli, "");
+  writeFileSync(path.join(cliRoot, "package.json"), JSON.stringify({ name: "npm", version: "11.19.1" }));
   const metadata = { name, version: "0.1.0", dist: { integrity, tarball: tarballUrl } };
   const lock = { packages: { "": { dependencies: { [name]: "0.1.0" } },
     [location]: { version: "0.1.0", resolved: tarballUrl, integrity } } };
@@ -82,8 +88,8 @@ const fixture = (change = () => {}) => {
 };
 const execute = (f) => auditPublishedProvenanceWithFixtures(f);
 
-test("offline subprocess/HTTP boundary requires isolated install, independent bytes and audit", async () => {
-  const f = fixture();
+test("offline subprocess/HTTP boundary requires isolated install, independent bytes and audit", async (t) => {
+  const f = fixture(t);
   const result = await execute(f);
   assert.equal(result.status, "policy_matched");
   assert.equal(result.source_commit, expected.commit);
@@ -94,7 +100,20 @@ test("offline subprocess/HTTP boundary requires isolated install, independent by
   assert.ok(f.calls[2].includes("--include-attestations"));
 });
 
-test("rejects failed, wrong-version, malformed, ambiguous and forged audit results", async () => {
+test("rejects invalid CLI metadata or path before injected subprocess and HTTP calls", async (t) => {
+  for (const change of [
+    (f) => writeFileSync(path.join(path.dirname(f.npmCli), "../package.json"),
+      JSON.stringify({ name: "npm", version: "10.9.8" })),
+    (f) => { f.npmCli = path.join(path.dirname(f.npmCli), "missing-cli.js"); },
+  ]) {
+    const f = fixture(t, change);
+    await assert.rejects(execute(f), /could not establish trusted evidence/u);
+    assert.deepEqual(f.calls, []);
+    assert.equal(f.requests, 0);
+  }
+});
+
+test("rejects failed, wrong-version, malformed, ambiguous and forged audit results", async (t) => {
   const changes = [
     (f) => { f.outputs[0].stdout = "11.19.2"; },
     (f) => { f.outputs[0].code = 1; },
@@ -110,11 +129,11 @@ test("rejects failed, wrong-version, malformed, ambiguous and forged audit resul
     (f) => { f.expected.commit = "b".repeat(40); },
   ];
   for (const [index, change] of changes.entries()) {
-    await assert.rejects(execute(fixture(change)), /could not establish trusted evidence/u, `case ${index}`);
+    await assert.rejects(execute(fixture(t, change)), /could not establish trusted evidence/u, `case ${index}`);
   }
 });
 
-test("rejects wrong installed dependency, lock identity and registry tarball independently", async () => {
+test("rejects wrong installed dependency, lock identity and registry tarball independently", async (t) => {
   const changes = [
     (f) => { f.installed.version = "0.2.0"; },
     (f) => { f.lock.packages[location].version = "0.2.0"; },
@@ -142,13 +161,13 @@ test("rejects wrong installed dependency, lock identity and registry tarball ind
     (f) => { f.fetcher = async () => { throw new Error("offline transport failure"); }; },
   ];
   for (const [index, change] of changes.entries()) {
-    await assert.rejects(execute(fixture(change)), /could not establish trusted evidence/u, `case ${index}`);
+    await assert.rejects(execute(fixture(t, change)), /could not establish trusted evidence/u, `case ${index}`);
   }
 });
 
-test("production entrypoint rejects malformed release identity before accepting injected evidence", async () => {
+test("production entrypoint rejects malformed release identity before accepting injected evidence", async (t) => {
   let called = false;
-  const forged = { ...fixture(), expected: { ...expected, version: "not a version" }, npmCli: "/missing/npm-cli.js",
+  const forged = { ...fixture(t), expected: { ...expected, version: "not a version" }, npmCli: "/missing/npm-cli.js",
     run: async () => { called = true; return { code: 0, stdout: "11.19.1" }; },
     fetcher: async () => { called = true; return new Response("{}"); } };
   await assert.rejects(auditPublishedProvenance(forged), /could not establish trusted evidence/u);
