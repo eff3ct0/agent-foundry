@@ -117,10 +117,10 @@ jobs:
           mkdir -p evidence
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from "node:fs/promises";
-          import { createHostedLifecycleMutationClient } from "./scripts/hosted-lifecycle-mutation-client.mjs";
+          import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";
           import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
           import { matrixConfiguration } from "./scripts/local-matrix.mjs";
-          import { provisionAndProve } from "./scripts/resource-provision-and-proof.mjs";
+          import { provisionAndProve } from "./scripts/typed-runtime/resource-provision-and-proof.js";
           import { buildReleasePackage, runReleasedValidationCase } from "./scripts/released-validation-runner.mjs";
           import { validateModel } from "./scripts/triage-bootstrap-failure.mjs";
           const transport = ({ url, method = "GET", headers, body, signal }) => fetch(url, { method, headers, body, signal });
@@ -212,9 +212,9 @@ jobs:
           mkdir -p cleanup
           node --input-type=module <<'NODE'
           import { readFile, writeFile } from "node:fs/promises";
-          import { createHostedLifecycleMutationClient } from "./scripts/hosted-lifecycle-mutation-client.mjs";
+          import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";
           import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
-          import { cleanupProvisionedResource } from "./scripts/resource-proof-cleanup.mjs";
+          import { cleanupProvisionedResource } from "./scripts/typed-runtime/resource-proof-cleanup.js";
           const transport = ({ url, method = "GET", headers, body, signal }) => fetch(url, { method, headers, body, signal });
           const token = process.env.BOOTSTRAP_E2E_TOKEN;
           const result = await cleanupProvisionedResource({ evidence: { download: () => readFile(`evidence/${process.env.STACK}.proof.json`, "utf8") }, artifact: { write: (value) => writeFile(`cleanup/${process.env.STACK}.json`, value) }, readClient: createHostedLifecycleReadClient({ token, transport }), mutationClient: createHostedLifecycleMutationClient({ token, transport }), owner: process.env.BOOTSTRAP_E2E_OWNER, target: process.env.STACK, runId: process.env.RUN_ID });

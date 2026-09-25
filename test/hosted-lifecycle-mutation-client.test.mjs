@@ -7,7 +7,7 @@ import {
   REQUEST_TIMEOUT_MS,
   HostedLifecycleMutationError,
   createHostedLifecycleMutationClient,
-} from "../scripts/hosted-lifecycle-mutation-client.mjs";
+} from "../scripts/typed-runtime/hosted-lifecycle-mutation-client.js";
 
 const response = (body, status = 201, headers = {}) => new Response(body, { status, headers });
 const client = (transport, token = "github_pat_secret-value") => createHostedLifecycleMutationClient({ transport, token });
@@ -68,5 +68,24 @@ test("normalizes timeout, network, and 5xx outcomes without retries or tokens", 
     assert.deepEqual(result, { status: "indeterminate", code: "mutation_indeterminate" });
     assert.equal(calls, 1);
     assert.equal(JSON.stringify(result).includes("github_pat_secret-value"), false);
+  }
+});
+
+test("preserves rejection codes and one-attempt outcomes for each mutation", async () => {
+  for (const operation of [
+    (lifecycle) => lifecycle.createTemplateRepository({ template: "acme/template", owner: "acme", name: "repo" }),
+    (lifecycle) => lifecycle.createEmptyRepository({ owner: "acme", name: "repo" }),
+    (lifecycle) => lifecycle.deleteRepository({ owner: "acme", name: "repo" }),
+  ]) {
+    for (const [reply, expected] of [
+      [() => response("denied", 403), { status: "rejected", code: "mutation_rejected" }],
+      [() => response("unavailable", 503), { status: "indeterminate", code: "mutation_indeterminate" }],
+      [() => ({ status: "invalid" }), { status: "rejected", code: "invalid_response" }],
+    ]) {
+      let calls = 0;
+      const result = await operation(client(async () => { calls += 1; return reply(); }));
+      assert.deepEqual(result, expected);
+      assert.equal(calls, 1);
+    }
   }
 });

@@ -17,14 +17,19 @@ jobs:
     steps:
       # The PR event supplies metadata only. Run the validator and bindings from
       # the trusted base revision so a PR cannot replace required-check code.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20.19.0
+      - name: Verify committed typed runtime
+        run: |
+          npm install --global pnpm@12.4.2
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm build
       - name: Validate PR metadata
-        run: node scripts/check-pr-governance.mjs
+        run: node scripts/typed-inherited-runtime/check-pr-governance.js
         env:
           GITHUB_TOKEN: ${{ github.token }}

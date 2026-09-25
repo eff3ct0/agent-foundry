@@ -49,14 +49,14 @@
     {
       "path": ".github/workflows/governance.yml",
       "mode": "100644",
-      "size": 922,
-      "sha256": "22858bd646b6225fd5e5ad585eeee34dfeada0f2fa8ecacad3441fd7eb9bd912"
+      "size": 1165,
+      "sha256": "e75dd491ef3379adb36ed41aadf31352edd62b0c36d0869fb9502e46544aea7c"
     },
     {
       "path": ".github/workflows/sync-labels.yml",
       "mode": "100644",
-      "size": 575,
-      "sha256": "f50ce7dcf82cbfda5f360a20b3fce39a96d2a978f11acdfe16ff81e420048cf7"
+      "size": 985,
+      "sha256": "0f0d19f5c21ebce6bbfe1d949164dd05c10d3e3f4109f1e2e7302371cedb331a"
     },
     {
       "path": ".gitignore",
@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 9071,
-      "sha256": "80355fae4938a61fe30a43ffd2bbd6c4359ba61e5dfed3be241752955baefb25"
+      "size": 10218,
+      "sha256": "6ec1d76d5645a4b4820e85ba56b44e74db60e121b30d0ee1fa093ca0ba1c9ba5"
     },
     {
       "path": "ci/_contract.md",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 2668,
-      "sha256": "b29acd1b711be1d0f0be4e6016bf72485f6035ae4097fda612b0bdec7e381205"
+      "size": 2749,
+      "sha256": "f35b81a59b000ff76d517058b370b104c10c7e50f0575a62566d47157aeef34a"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -127,14 +127,14 @@
     {
       "path": "docs/factory-layout.md",
       "mode": "100644",
-      "size": 9084,
-      "sha256": "e709ca41709727cc309fbf128cfdfafabf1414e257f474cd87c2b2ebb4765ce1"
+      "size": 9160,
+      "sha256": "05fbb448de8e667bfdeecfd1eb4143612c53aadf8b13a1da78b721326b745396"
     },
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 2600,
-      "sha256": "05b3936d529125484423daf3ac481bb94c2e71034694bbe9134ec3f8b079a6f0"
+      "size": 3028,
+      "sha256": "e098a81dae5f7a8009d9bdfb1c459ca01bd505454af607da555054bf9eb0630f"
     },
     {
       "path": "docs/org-factory.md",
@@ -317,18 +317,6 @@
       "sha256": "eebb06f13cf54efb3b5ca6cb18fa550b855cb85e7c1e32a6842a33f58523aa6b"
     },
     {
-      "path": "scripts/check-pr-governance.mjs",
-      "mode": "100644",
-      "size": 7461,
-      "sha256": "2ecb665cd645d151af476e70d7b7363738c533ee124773facfe043c82480d29b"
-    },
-    {
-      "path": "scripts/sync-github-labels.mjs",
-      "mode": "100644",
-      "size": 3083,
-      "sha256": "181618275724d6f48b42b0f38aa85490ed7fc47a6767c00937950516540ad776"
-    },
-    {
       "path": "scripts/task-adapter.mjs",
       "mode": "100644",
       "size": 11445,
@@ -345,6 +333,36 @@
       "mode": "100644",
       "size": 5859,
       "sha256": "e0e4c6fc7c44fababfa56c7d492162c437c4c8a5c781ccfe63eefafcccac6352"
+    },
+    {
+      "path": "scripts/typed-inherited-runtime/check-pr-governance.js",
+      "mode": "100644",
+      "size": 8296,
+      "sha256": "da34121c4c5ba0dc0d49c35c46d1bd2046929b85044c796eaf39b56bd542e203"
+    },
+    {
+      "path": "scripts/typed-inherited-runtime/package.json",
+      "mode": "100644",
+      "size": 18,
+      "sha256": "1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae"
+    },
+    {
+      "path": "scripts/typed-inherited-runtime/sync-github-labels.js",
+      "mode": "100644",
+      "size": 3330,
+      "sha256": "17f51332147b031c6a529abbf6283400c523e4e3d948ef951a20186f165bf14d"
+    },
+    {
+      "path": "scripts/typed-inherited/check-pr-governance.mts",
+      "mode": "100644",
+      "size": 8521,
+      "sha256": "d2a229f9c32476a82d570a8b4ccdf13d04f70537fa26e8e461b6cda2ffd8ae4a"
+    },
+    {
+      "path": "scripts/typed-inherited/sync-github-labels.mts",
+      "mode": "100644",
+      "size": 3363,
+      "sha256": "2b8dc0fd3d59868e8db28ef699bebddbb18686892778882b2e5397c0b047c995"
     },
     {
       "path": "start.mjs",
@@ -395,5 +413,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:f249d77b3e97b8ceeb2f97e4e2a9265e330338cdb929e144e1901b0dd6a53d39"
+  "payload_digest": "sha256:5a5f0ed86495f9ebf3754f69bf0f4b6c2b84551008889f3d0ef1df991015e6dc"
 }
