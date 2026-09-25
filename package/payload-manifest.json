@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 9975,
-      "sha256": "f1ef991367f12ffcf4a6deed86d2314908102ad043db2582b72d579c68f33234"
+      "size": 10169,
+      "sha256": "cd242a2e943f02c584e055c2eec192976616248f12574d0502c08c6feaeb8bed"
     },
     {
       "path": "ci/_contract.md",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 2749,
-      "sha256": "f35b81a59b000ff76d517058b370b104c10c7e50f0575a62566d47157aeef34a"
+      "size": 2860,
+      "sha256": "e866c55145f5474cad668907a74a111dd4a79c3340207bb1508fac6123745e82"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -127,8 +127,8 @@
     {
       "path": "docs/factory-layout.md",
       "mode": "100644",
-      "size": 9160,
-      "sha256": "05fbb448de8e667bfdeecfd1eb4143612c53aadf8b13a1da78b721326b745396"
+      "size": 9188,
+      "sha256": "a2fce84ac99abbf81aef327d160fce3871bdbeea0eee9460923604da61b07e6b"
     },
     {
       "path": "docs/github-governance.md",
@@ -305,16 +305,16 @@
       "sha256": "1639ecf1e4f66e84405690ffe99d62104645168daa539f55c57ecdd72ed7ceda"
     },
     {
-      "path": "scripts/check-delivery-contract.mjs",
-      "mode": "100644",
-      "size": 16356,
-      "sha256": "a83a5bdd8dd16b6c8bd837c0be542015e33c5770009c9a8ea6c9228fb443c7e1"
-    },
-    {
       "path": "scripts/check-factory-layout.mjs",
       "mode": "100644",
       "size": 3170,
       "sha256": "eebb06f13cf54efb3b5ca6cb18fa550b855cb85e7c1e32a6842a33f58523aa6b"
+    },
+    {
+      "path": "scripts/typed-inherited-runtime/check-delivery-contract.js",
+      "mode": "100644",
+      "size": 17493,
+      "sha256": "8ebca3ec142f470712a07832d97daace1cf5b25a4d07272328dd99d02d416e4d"
     },
     {
       "path": "scripts/typed-inherited-runtime/check-pr-governance.js",
@@ -333,6 +333,12 @@
       "mode": "100644",
       "size": 3330,
       "sha256": "17f51332147b031c6a529abbf6283400c523e4e3d948ef951a20186f165bf14d"
+    },
+    {
+      "path": "scripts/typed-inherited/check-delivery-contract.mts",
+      "mode": "100644",
+      "size": 17550,
+      "sha256": "6bd472874206a15613e5b1c2b006a3a9f391afd8158eaa710b1ae35f57e1ae45"
     },
     {
       "path": "scripts/typed-inherited/check-pr-governance.mts",
@@ -395,5 +401,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:5f4e837651761e6c10bd2ed8c353945df935df3458d5072d1f35e94a2cd6c06f"
+  "payload_digest": "sha256:95fafcf87ea2beab098031aa653b29c5830764c0f2e3842a4e6be845c4c3a814"
 }

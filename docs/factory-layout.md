@@ -88,7 +88,7 @@ inventory remains authoritative for initialization lifecycle classification.
 | GitHub workflows/forms | `.github/` | `.github/` | GitHub's root discovery is preserved; workflows and forms are never hidden under `.factory/`. |
 | Generated bindings | `docs/bindings.md` | `docs/bindings.md` | Existing links and generated-provider content remain valid; relocation must update links atomically if this path ever changes. |
 | Generic documentation | `docs/*.md` | `.factory/docs/*.md` | Every relative Markdown link is checked after rebasing; root-facing entrypoints link to the new location. |
-| Generic commands | `scripts/*.mjs`, `scripts/typed-inherited-runtime/*.js` | `.factory/scripts/` | Commands use explicit relocated paths; the label synchronizer and PR governance checker run from their packaged ESM runtime scope. |
+| Generic commands | `scripts/*.mjs`, `scripts/typed-inherited-runtime/*.js` | `.factory/scripts/` | Commands use explicit relocated paths; the label synchronizer, PR governance checker, and delivery contract checker run from their packaged ESM runtime scope. |
 | Provider/CI inputs | `providers/`, `ci/` | Removed after initialization | They are composition inputs, not initialized-project support assets; provider and CI semantics do not change. |
 
 The structural regression check builds a fresh fixture from this contract,

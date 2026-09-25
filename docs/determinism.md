@@ -14,7 +14,7 @@ the same content and reports `noop` for unchanged files.
 | `foundry verify` | Read-only, offline | Revalidates generated contracts and ownership |
 | `foundry doctor` | Read-only, offline | Reports interrupted staging, payload mismatch, and drift |
 | `scripts/check-determinism.mjs` | Source-only static audit | Same result for unchanged source and package contracts |
-| `scripts/check-delivery-contract.mjs` | Node structural contract | Validates docs, providers, and CI recipe data |
+| `scripts/typed-inherited-runtime/check-delivery-contract.js` | Compiler-derived structural contract | Validates docs, providers, and CI recipe data; generated projects run it from `.factory/scripts/typed-inherited-runtime/` |
 | `scripts/check-factory-layout.mjs` | Node layout contract | Validates initialized-project support boundaries |
 | `scripts/check-bootstrap-workflow.mjs` | Node workflow contract | Rejects floating actions and unsafe release boundaries |
 | `scripts/typed-runtime/check-real-agent-workflow.js` | Compiled Node workflow contract | Rejects unpinned or cross-credential real-agent paths; build verifies exact typed-source output before packaging |
