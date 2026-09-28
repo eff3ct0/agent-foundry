@@ -58,19 +58,6 @@ jobs:
           node scripts/real-agent-journey-agent.mjs --self-check
           node scripts/real-agent-journey-assert.mjs --self-check
           node scripts/real-agent-journey-cleanup.mjs --self-check
-      - name: Probe OpenAI API credential
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
-            --output /dev/null --write-out '%{http_code}' \
-            --header "Authorization: Bearer $OPENAI_API_KEY" \
-            "https://api.openai.com/v1/models/gpt-4.1-mini")
-          if [ "$status" != "200" ]; then
-            printf 'OpenAI REST credential probe returned HTTP %s\n' "$status" >&2
-            exit 1
-          fi
-          printf 'OpenAI REST credential probe returned HTTP 200\n'
       - name: Resolve immutable source revision
         id: source
         env:
@@ -249,6 +236,19 @@ jobs:
           unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
       - name: Install selected runtime
         run: node scripts/real-agent-journey.mjs install --runtime "$JOURNEY_RUNTIME"
+      - name: Probe OpenAI API credential
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          status=$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+            --output /dev/null --write-out '%{http_code}' \
+            --header "Authorization: Bearer $OPENAI_API_KEY" \
+            "https://api.openai.com/v1/models/gpt-4.1-mini")
+          if [ "$status" != "200" ]; then
+            printf 'OpenAI REST credential probe returned HTTP %s\n' "$status" >&2
+            exit 1
+          fi
+          printf 'OpenAI REST credential probe returned HTTP 200\n'
       - name: Run cold-agent adapter
         env:
           JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
