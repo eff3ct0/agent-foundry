@@ -15,7 +15,7 @@ const script = path.join(root, "scripts", "check-bootstrap-workflow.mjs");
 const workflows = path.join(".github", "workflows");
 const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml", archetypeNode20: "archetype-node20.yml" });
 const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
-const generatedPush = '          git -c http.extraheader="AUTHORIZATION: bearer $JOURNEY_TOKEN" -C generated push origin HEAD:main';
+const generatedPush = '          git -c http.extraheader="AUTHORIZATION: basic $(printf \'x-access-token:%s\' "$JOURNEY_TOKEN" | base64 -w0)" -C generated push origin HEAD:main';
 
 const fixture = async (callback) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bootstrap-workflow-contract-"));
@@ -419,15 +419,23 @@ test("real-agent journey requires the Agent Foundry generated commit caption exa
   });
 });
 
-test("real-agent journey requires command-local JOURNEY_TOKEN authentication for the generated repository push", async () => {
+test("real-agent journey uses checkout-style Basic JOURNEY_TOKEN authentication for the generated repository push", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
+    assert.equal((workflow.match(/AUTHORIZATION: basic /gu) ?? []).length, 1);
+    assert.ok(workflow.includes(generatedPush));
+    assert.equal(workflow.includes("AUTHORIZATION: bearer"), false);
+    assert.equal(workflow.includes("GIT_CONFIG_COUNT"), false);
+  });
   for (const replacement of [
     "          git -C generated push origin HEAD:main",
     "",
+    '          git -c http.extraheader="AUTHORIZATION: bearer $JOURNEY_TOKEN" -C generated push origin HEAD:main',
     '          export GIT_CONFIG_COUNT=1\n          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader\n          export GIT_CONFIG_VALUE_0="AUTHORIZATION: bearer $JOURNEY_TOKEN"\n          git -C generated push origin HEAD:main\n          unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0',
   ]) {
     await fixture(async (directory) => {
       await replace(directory, "journey", generatedPush, replacement);
-      await reject(directory, "real-agent journey generated repository push must use command-local JOURNEY_TOKEN authentication");
+      await reject(directory, "real-agent journey generated repository push must use command-local Basic JOURNEY_TOKEN authentication");
     });
   }
 });

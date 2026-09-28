@@ -185,14 +185,15 @@ const checkJourney = (text, projectRoot) => {
     '          git -C generated remote add origin "https://github.com/$JOURNEY_REPOSITORY.git"',
   ].join("\n");
   if (generatedCommits.length !== 1 || !creationRun.includes(expectedSequence)) fail("real-agent journey generated commit caption must name Agent Foundry");
-  const generatedPush = '          git -c http.extraheader="AUTHORIZATION: bearer $JOURNEY_TOKEN" -C generated push origin HEAD:main';
+  const generatedPush = '          git -c http.extraheader="AUTHORIZATION: basic $(printf \'x-access-token:%s\' "$JOURNEY_TOKEN" | base64 -w0)" -C generated push origin HEAD:main';
   const generatedRemote = '          git -C generated remote add origin "https://github.com/$JOURNEY_REPOSITORY.git"';
   if (!creationRun.includes(`${generatedRemote}\n${generatedPush}`)
       || creationRun.includes("git -C generated push origin HEAD:main")
+      || creationRun.includes("AUTHORIZATION: bearer")
       || creationRun.includes("GIT_CONFIG_COUNT")
       || creationRun.includes("GIT_CONFIG_KEY_0")
       || creationRun.includes("GIT_CONFIG_VALUE_0")) {
-    fail("real-agent journey generated repository push must use command-local JOURNEY_TOKEN authentication");
+    fail("real-agent journey generated repository push must use command-local Basic JOURNEY_TOKEN authentication");
   }
   if (!agent.includes("OPENAI_API_KEY") || agent.includes("BOOTSTRAP_E2E_TOKEN")) fail("agent credentials are not isolated");
   for (const other of [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n")]) if (other.includes("OPENAI_API_KEY")) fail("agent API credentials crossed a stage boundary");
