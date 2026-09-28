@@ -1,6 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { providerDiagnostic } from "../scripts/real-agent-e2e.mjs";
+import { buildPhaseSchema, providerDiagnostic } from "../scripts/real-agent-e2e.mjs";
+
+const assertStrictSchema = (schema, properties) => {
+  assert.equal(schema.type, "object");
+  assert.equal(schema.additionalProperties, false);
+  assert.deepEqual(Object.keys(schema.properties), properties);
+  assert.deepEqual(schema.required, properties);
+  assert.equal(Object.hasOwn(schema.properties, "unexpected"), false);
+};
+
+test("Codex request and execution schemas are strict and preserve their field contracts", () => {
+  const request = buildPhaseSchema("request");
+  const execution = buildPhaseSchema("execution");
+
+  assertStrictSchema(request, ["required_documents"]);
+  assert.deepEqual(request.properties.required_documents, { type: "array", items: { type: "string" } });
+
+  const executionFields = ["status", "issue_url", "branch", "commit", "tests", "approval_gate"];
+  assertStrictSchema(execution, executionFields);
+  assert.deepEqual(execution.properties.status, { type: "string", enum: ["passed"] });
+  assert.deepEqual(execution.properties.tests, { anyOf: [{ type: "string" }, { type: "boolean" }] });
+});
 
 test("provider diagnostics are bounded, redacted, and do not retain stdout prompts", () => {
   const secret = "sk-live-provider-secret";
