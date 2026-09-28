@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { parseDocument } from "yaml";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -352,6 +353,79 @@ test("factory Git verification ignores inherited repository and configuration ov
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
+});
+
+test("source Rust seed generates one pinned caller without leaking into projects", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-rust-seed-"));
+  try {
+    const ownership = JSON.parse(await readFile(path.join(root, "archetype-ownership.json"), "utf8"));
+    assert.equal(ownership.categories.factory_source_seed.disposition, "removed");
+    assert.deepEqual(ownership.categories.factory_source_seed.paths.map(({ path: entry }) => entry),
+      ["factory.defaults.json", ".github/workflows/rust.yml", "factory-seed"]);
+    const defaults = JSON.parse(await readFile(path.join(root, "factory.defaults.json"), "utf8"));
+    assert.deepEqual(defaults, { schema_version: 1, values: {
+      FACTORY_REQUIRED: "true", TASK_TRACKER: "github-issues", CI_SYSTEM: "GitHub Actions",
+      REPO_LANGUAGE: "en", SECRETS_PROVIDER: "none",
+    }});
+    const workflow = await readFile(path.join(root, ".github/workflows/rust.yml"), "utf8");
+    const document = parseDocument(workflow, { version: "1.2", uniqueKeys: true });
+    assert.deepEqual(document.errors, []);
+    const parsed = document.toJS();
+    assert.ok(Object.hasOwn(parsed.on, "workflow_call"));
+    assert.equal(parsed.jobs.rust["runs-on"], "ubuntu-latest");
+    assert.equal(parsed.jobs.rust.steps[0].uses, "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683");
+    const recipe = JSON.parse(await readFile(path.join(root, "ci/recipes.json"), "utf8")).rust;
+    assert.deepEqual(parsed.jobs.rust.steps.slice(1).map(({ run: command }) => command),
+      [...recipe.matchAll(/run: (.+)/gu)].map(([, command]) => command));
+
+    const factory = path.join(parent, "factory");
+    await mkdir(path.join(factory, ".github/workflows"), { recursive: true });
+    await execFileAsync("git", ["init", "-q", factory]);
+    await copyFile(path.join(root, "factory.defaults.json"), path.join(factory, "factory.defaults.json"));
+    await copyFile(path.join(root, ".github/workflows/rust.yml"), path.join(factory, ".github/workflows/rust.yml"));
+    const git = async (...args) => (await execFileAsync("git", ["-C", factory, ...args])).stdout.trim();
+    await git("add", "factory.defaults.json", ".github/workflows/rust.yml");
+    await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "local fixture");
+    await git("tag", "v1");
+    const sha = await git("rev-parse", "HEAD");
+    assert.match(sha, /^[0-9a-f]{40}$/u);
+    assert.equal(await git("rev-parse", "refs/tags/v1^{commit}"), sha);
+    assert.equal(await git("status", "--porcelain", "--untracked-files=all"), "");
+
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1", CI_STACKS: "rust" });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const first = await run(["plan", ...args]);
+    assert.equal(first.code, 0, first.stdout);
+    assert.equal((await run(["plan", ...args])).stdout, first.stdout);
+    await assert.rejects(stat(target));
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stdout);
+    assert.equal(json(applied).verification, "verified");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    assert.equal(await readFile(path.join(target, ".github/workflows/ci.yml"), "utf8"),
+      "name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n  rust:\n    uses: eff3ct0/factory/.github/workflows/rust.yml@v1\n");
+    assert.match(await readFile(path.join(target, "AGENT.md"), "utf8"), /eff3ct0\/factory@v1/u);
+    assert.equal((await execFileAsync(process.execPath,
+      [path.join(target, ".factory/scripts/check-factory-layout.mjs"), "--target", target], { cwd: target })).stdout.trim(), "factory layout OK");
+    for (const entry of ["factory.defaults.json", ".github/workflows/rust.yml", "factory-seed"]) {
+      await assert.rejects(stat(path.join(root, "dist/payload", entry)));
+      await assert.rejects(stat(path.join(target, entry)));
+    }
+
+    const sample = path.join(root, "factory-seed/rust-sample");
+    await mkdir(path.join(target, "src"));
+    await copyFile(path.join(sample, "Cargo.toml"), path.join(target, "Cargo.toml"));
+    await copyFile(path.join(sample, "src/lib.rs"), path.join(target, "src/lib.rs"));
+    const env = { ...process.env, CARGO_NET_OFFLINE: "true", CARGO_TARGET_DIR: path.join(parent, "cargo-target") };
+    for (const command of [
+      ["fmt", "--all", "--", "--check"],
+      ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+      ["test", "--all"],
+      ["build", "--release"],
+    ]) await execFileAsync("cargo", command, { cwd: target, env });
+  } finally { await rm(parent, { recursive: true, force: true }); }
 });
 
 test("pinned factory CI emits selected versioned callers and protects creator ownership", async () => {
