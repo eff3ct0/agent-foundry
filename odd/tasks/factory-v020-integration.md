@@ -2,7 +2,7 @@
 
 ## Objective and baseline
 
-Integrate the first reviewable Factory v0.2.0 units without publishing or merging. The authoritative starting revision is `d6f60debcf4fa5fccb0fb42d697f79e50df38244`; earlier issue branches are evidence, not integration bases. Issue #1 supplies generic organization defaults and issue #3 supplies pinned defaults, reusable CI, a runner guard, and a Rust factory v1 seed. Issue #176 is the optional layout/checks prerequisite: a generated project without CI or checks must pass its inherited layout checker before the defaults chain can rely on that checker.
+Integrate the first reviewable Factory v0.2.0 units without publishing or merging. The authoritative starting revision is `a93cde93ae477cc3145984045b6b77b144962bcc`; the former baseline `d6f60debcf4fa5fccb0fb42d697f79e50df38244` and earlier issue branches are historical evidence, not integration bases. Issue #1 supplies generic organization defaults and issue #3 supplies pinned defaults, reusable CI, a runner guard, and a Rust factory v1 seed. Issue #176 is the optional layout/checks prerequisite: a generated project without CI or checks must pass its inherited layout checker before the defaults chain can rely on that checker.
 
 ## Problem and scope
 
@@ -27,4 +27,4 @@ Source dependency: the creator emits `.github/workflows/ci.yml` only for selecte
 
 ## Evidence and next action
 
-Planning checkpoint: source baseline `d6f60debcf4fa5fccb0fb42d697f79e50df38244`; FI-01 verification not yet run. Mirror: Engram project `agent-foundry`, topic `odd/factory-v020-integration/tasks`, relative locator `odd/tasks/factory-v020-integration.md`. Next: commit this tracker-only definition, branch FI-01 from tracker HEAD, reconcile the accepted #176 unit, and run the checks above. No hosted proof or publication is claimed.
+Planning checkpoint: source baseline `a93cde93ae477cc3145984045b6b77b144962bcc`; FI-01 verification against this baseline not yet run. Historical tracker `7899721bf03274a4a19fd402f2a8dc8acafb3a8a` (based on `d6f60debcf4fa5fccb0fb42d697f79e50df38244`) rebased to `ef5db821f20d7dad47620e88c09c73aaf228c391`; the documentation-only baseline correction is a separate tracker commit. Mirror: Engram project `agent-foundry`, topic `odd/factory-v020-integration/tasks`, relative locator `odd/tasks/factory-v020-integration.md`. Next: reconcile FI-01 onto the corrected tracker and run the checks above. No hosted proof or publication is claimed.
