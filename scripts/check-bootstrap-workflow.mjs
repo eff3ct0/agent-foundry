@@ -124,7 +124,7 @@ const checkJourney = (text, projectRoot) => {
   for (const [action, sha] of Object.entries(pinnedActions)) if (!uses.includes(`${action}@${sha}`)) fail(`real-agent journey is missing required action pin: ${action}`);
   requireText(text, [
      "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.mjs collect", "retention-days: 7",
-      "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY", "package_version", "JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'", "--package-name '@eff3ct/agent-foundry'", "npx --yes --package", "foundry apply",
+      "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY", "package_version", "JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'", "--package-name '@eff3ct/agent-foundry'", "npm exec --yes --prefix journey-runner --package", "-- foundry apply",
       "release-resolve.mjs --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"", "JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || '' }}", "package.json version must be exact",
   ], "real-agent journey is missing");
   if (text.indexOf("Resolve immutable source revision") > text.indexOf("\n  provision:\n")) fail("real-agent journey must resolve its source before provisioning");
@@ -152,14 +152,14 @@ const checkJourney = (text, projectRoot) => {
     '          NODE',
     '',
   ].join("\n");
-  const actualGuard = section(creationRun, '          npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json\n', '          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply');
+  const actualGuard = section(creationRun, '          npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json\n', '          npm exec --yes --prefix journey-runner --package "$JOURNEY_PACKAGE_SPEC" -- foundry apply');
   if (!creationStep.includes('JOURNEY_PACKAGE_SPEC: ${{ env.JOURNEY_PACKAGE_NAME }}@${{ needs.prepare.outputs.package_version }}')
       || actualGuard !== metadataGuard) {
     fail("real-agent journey must verify exact scoped package metadata before apply");
   }
   const generatedCommits = [...creationRun.matchAll(/\bgit[ \t]+-C[ \t]+generated[ \t]+commit\b[^\r\n]*/gu)];
   const expectedSequence = [
-    '          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply --target generated --config answers.json --non-interactive --yes',
+    '          npm exec --yes --prefix journey-runner --package "$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers.json --non-interactive --yes',
     "          git -C generated init -b main",
     '          git -C generated config user.name "real-agent-journey"',
     '          git -C generated config user.email "real-agent-journey@users.noreply.github.com"',
