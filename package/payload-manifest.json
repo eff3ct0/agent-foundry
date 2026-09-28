@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 13640,
-      "sha256": "0ef39179bc398d223d76355a410103e1516e3f6074039b29ddd72277b3468c06"
+      "size": 14360,
+      "sha256": "1613684f6da70891828fe520eeb76098b49afd0ac529097b7201bfbbf65af88a"
     },
     {
       "path": "CLAUDE.md",
@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 10805,
-      "sha256": "cebe3f3543b07868f4b4d447ca8fc6f83bdcf3acbcc1d0780cd50a173572d67e"
+      "size": 10909,
+      "sha256": "0706303d20675caffad2a468878cb4a6353c096d272f973960724a48762098c5"
     },
     {
       "path": "ci/_contract.md",
@@ -145,8 +145,8 @@
     {
       "path": "docs/workflow.md",
       "mode": "100644",
-      "size": 5358,
-      "sha256": "cb9b2941c2ebcbbeecf4b592840782fe8f04d5fa224e800fd115815e6b096805"
+      "size": 6041,
+      "sha256": "b84bee7b1d997adf0ef89f60eb0eb96e016dee6634f441d649af7b5141275f2f"
     },
     {
       "path": "hooks/README.md",
@@ -385,8 +385,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 10760,
-      "sha256": "471073823ed485623f9aacec7d31b53cf5cca0cd5fa09d1dd41fa40884d6fee0"
+      "size": 11451,
+      "sha256": "bb11c695438e780e57e46536e09f913dd8b8ce32f400427b1ded512cc89a2334"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -397,8 +397,8 @@
     {
       "path": "templates/handoff.md",
       "mode": "100644",
-      "size": 3711,
-      "sha256": "9009c1210589b0a3ae453007a561d9f61310b26f7f20b39e798cc85c904925b3"
+      "size": 6095,
+      "sha256": "8ba625f9fe9f0269fe20bb53553ce4beb66345b82c7b0bbd94bc3c3cde04a2ef"
     },
     {
       "path": "templates/pull-request.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:903963572d85d183a56a89e979315e32a76325b01051fa6f3c5e7774c28f5c24"
+  "payload_digest": "sha256:b2acaa8586d78ff29dd0b0a5cb69957576089da1e93d283e38ee4692d89fce98"
 }

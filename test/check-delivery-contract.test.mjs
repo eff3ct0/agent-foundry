@@ -215,6 +215,35 @@ test("review contract describes candidate binding and separate PR protection", a
   }
 });
 
+test("integration handoff scenarios keep PR, merge, and deployment evidence separate", async () => {
+  const files = ["AGENT.md", "docs/workflow.md", "templates/agent-runbook.md", "templates/handoff.md"];
+  for (const relative of files) {
+    const text = await readFile(path.join(root, relative), "utf8");
+    assert.match(text, /PR.{0,180}(?:not|does not).{0,80}merg/iu, relative);
+    assert.match(text, /merge.{0,200}(?:not|does not).{0,80}deploy/iu, relative);
+    assert.match(text, /environment readback/iu, relative);
+    assert.match(text, /(?:unknown|failed).{0,120}mutation/iu, relative);
+    assert.match(text, /(?:no blind retry|do not retry blindly)/iu, relative);
+  }
+
+  const handoff = await readFile(path.join(root, "templates/handoff.md"), "utf8");
+  for (const field of ["PR identity", "Integration evidence", "Deployment evidence", "Next owner and action"]) {
+    assert.ok(handoff.includes(`- ${field}:`), field);
+  }
+  const rows = [...handoff.matchAll(/^\| (PR only|Confirmed merge|Missing deployment readback|Verified deployment) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$/gmu)];
+  assert.equal(rows.length, 4, "four explicit handoff examples");
+  const outcomes = Object.fromEntries(rows.map(([, name, pr, integration, deployment, next]) =>
+    [name, { pr: pr.trim(), integration: integration.trim(), deployment: deployment.trim(), next: next.trim() }]));
+  assert.match(outcomes["PR only"].pr, /open.*unmerged/iu);
+  assert.match(outcomes["PR only"].integration, /unverified/iu);
+  assert.match(outcomes["PR only"].next, /owner.*review/iu);
+  assert.match(outcomes["Confirmed merge"].integration, /confirmed.*merge.*readback/iu);
+  assert.match(outcomes["Confirmed merge"].deployment, /unverified/iu);
+  assert.match(outcomes["Missing deployment readback"].deployment, /unverified.*unknown mutation/iu);
+  assert.match(outcomes["Missing deployment readback"].next, /stop.*no blind retry/iu);
+  assert.match(outcomes["Verified deployment"].deployment, /verified.*environment readback/iu);
+});
+
 test("the Node CLI self-check is the structural delivery-contract command", async () => {
   const result = await execFileAsync(process.execPath, [script, "--self-check"], { cwd: root });
   assert.equal(result.stdout, "self-check OK\n");

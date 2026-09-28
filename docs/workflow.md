@@ -53,6 +53,7 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 ## 9. Integration and deployment
 - `<INTEGRATION_BRANCH>` -> `<ENVIRONMENTS>` (dev -> staging -> prod).
 - Approval gates: do not execute `<APPROVAL_GATED_ACTIONS>` without explicit human approval.
+- An open PR is routine delivery, not merge or deployment: record its identity, open/unmerged state, and next owner/action in the bound-provider handoff. Independently confirmed authorized merge plus target-branch readback establishes integration, not deployment. Claim deployment only with independent environment readback of the deployed revision and environment; human consent to merge or deploy is not evidence of the outcome. For an unknown or failed remote mutation, record the target and missing proof, stop with no blind retry and no success claim. No new task status, tracker, or automated production gate is required; use [`templates/handoff.md`](../templates/handoff.md).
 
 ## 10. Persistence language
 - The agent's conversation language is independent of `<REPO_LANGUAGE>`.
