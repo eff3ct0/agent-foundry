@@ -115,12 +115,29 @@ const git = (workspace, args) => {
 };
 
 const makeGuard = async (directory, name, body) => { const file = path.join(directory, name); await writeFile(file, body); await chmod(file, 0o700); return file; };
+export const buildPhaseSchema = (phase) => {
+  const properties = phase === "request"
+    ? { required_documents: { type: "array", items: { type: "string" } } }
+    : phase === "execution"
+      ? {
+          status: { type: "string", enum: ["passed"] },
+          issue_url: { type: "string" },
+          branch: { type: "string" },
+          commit: { type: "string" },
+          tests: { anyOf: [{ type: "string" }, { type: "boolean" }] },
+          approval_gate: { type: "string", enum: ["not-approved", "blocked"] },
+        }
+      : null;
+  if (!properties) throw new JourneyError(`unknown agent phase: ${phase}`, "configuration_invalid");
+  return { type: "object", properties, required: Object.keys(properties), additionalProperties: false };
+};
+
 const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), `real-agent-${phase}-`));
   try {
     const home = path.join(directory, "codex-home"); const guards = path.join(directory, "guards"); const blocked = path.join(directory, "blocked");
     await mkdir(home); await mkdir(guards); const schema = path.join(directory, "schema.json"); const final = path.join(directory, "final.json");
-    await writeFile(schema, JSON.stringify({ type: "object" }));
+    await writeFile(schema, JSON.stringify(buildPhaseSchema(phase)));
     const realGh = spawnSync("sh", ["-c", "command -v gh"], { encoding: "utf8" }).stdout.trim(); const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
     if (!realGh || !realGit) throw new JourneyError("required GitHub or Git executable is unavailable", "runtime_missing");
     const gh = await makeGuard(guards, "gh", `#!/bin/sh\ncase "$*" in *status:approved*|*"pr merge"*|*"release create"*|*"release publish"*|*"repo delete"*|*"issue edit"*) : > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GH" "$@";; esac\n`);
