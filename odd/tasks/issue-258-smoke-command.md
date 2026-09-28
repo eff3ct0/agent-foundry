@@ -16,8 +16,8 @@ Make the maintainer smoke procedure executable with the exact-version installed 
 - [x] Document a complete illustrative answers file for human review and an exact-version installed-creator plan/apply/verify/doctor flow using one explicit disposable target; use an offline local built-CLI equivalent for execution evidence. Actual human consent and registry execution remain untested.
 - [x] Align cold kickoff and success criteria with the already-applied target and approved decisions; explain local-only cleanup without deleting unrelated paths.
 - [x] Verify actual local plan/apply/verify/doctor against a disposable synthetic fixture, inspect generated outputs, and clean only that target; the local build is not a published package.
-- [x] Pass `node --test test/creator.test.mjs`, `pnpm build`, `pnpm typecheck`, `pnpm test`, `node scripts/check-factory-layout.mjs`, and `node scripts/check-determinism.mjs`; check `git diff --check origin/main...HEAD` after the commit. No network installation.
-- [ ] Review status, diff, and recent log; commit only intended files with a Conventional Commit mentioning #258. Record commit SHA and hosted-checks-pending state in the task mirror.
+- [x] Pass `node --test test/creator.test.mjs`, `pnpm build`, `pnpm typecheck`, `pnpm test`, `node scripts/check-factory-layout.mjs`, `node scripts/check-determinism.mjs`, and `git diff --check origin/main...HEAD`. No network installation.
+- [x] Review status, diff, and recent log; commit only intended files with a Conventional Commit mentioning #258. Record commit SHA and hosted-checks-pending state in the task mirror.
 
 ## Planning and verification policy
 
@@ -32,4 +32,4 @@ Runtime harness: a local built creator CLI applied to a disposable target with c
 - Focused `node --test test/creator.test.mjs`: 23/23 passed. `pnpm build`: passed. `pnpm typecheck`: passed. `pnpm test`: 281/281 passed. `node scripts/check-factory-layout.mjs`: `factory layout structural self-check OK`. `node scripts/check-determinism.mjs`: `determinism and Python-removal audit OK`. `node scripts/build-payload.mjs --write-lock` regenerated payload digest `sha256:0fb5c189247ebcbb789e4c10743b4adde1e1c0ac834188b4f9f16b6a2eef2e3c` after ownership registration.
 - Limit: no published exact-version `pnpm dlx` execution, hosted workflow, cold human/agent session, provider write, or approved human decision was performed. Those remain external checks; no GitHub issue state was changed.
 - Rollback boundary: the four tracked paths in this work unit (`docs/smoke-test.md`, `odd/tasks/issue-258-smoke-command.md`, `archetype-ownership.json`, `package/payload-manifest.json`). No other path or hosted resource needs rollback.
-- Work-unit commit: pending. Hosted checks and the bound GitHub Issues readback are pending; this local projection does not mark #258 closed.
+- Work-unit commit: `c4b1b707c5e35e6fc00b0c779dba02f252681015` (`docs(smoke): make creator kickoff executable (#258)`). Authored change: 126 additions + 19 deletions = 145 lines, under the advisory 400-line heuristic; `ask-on-risk` was not triggered. `git diff --check origin/main...HEAD` passed after commit. This evidence-only receipt records that commit; hosted checks and the bound GitHub Issues readback are pending, so this local projection does not mark #258 closed.
