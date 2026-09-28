@@ -10,7 +10,7 @@ export const check = async (projectRoot = root) => {
     const journeyWorkflow = await readFile(path.join(projectRoot, ".github/workflows/real-agent-journey.yml"), "utf8");
     const journeyReporter = await readFile(path.join(projectRoot, "scripts/real-agent-journey.mjs"), "utf8");
     const contract = `${workflow}\n${helper}`;
-    const required = ["workflow_call:", "workflow_dispatch:", "permissions: {}", "repository:", "expected_sha:", "persist-credentials: false", "@0.148.0", 'spawnSync("codex", ["exec"', "--json", "--ephemeral", "--ignore-user-config", "--sandbox", "--ask-for-approval", "OPENAI_API_KEY", "AGENT_GITHUB_TOKEN", "network_proxy", "if: always()", "retention-days: 7"];
+    const required = ["workflow_call:", "workflow_dispatch:", "permissions: {}", "repository:", "expected_sha:", "persist-credentials: false", "@0.156.0", 'spawnSync("codex", ["exec"', "--json", "--ephemeral", "--ignore-user-config", "--sandbox", "--ask-for-approval", "OPENAI_API_KEY", "AGENT_GITHUB_TOKEN", "network_proxy", "if: always()", "retention-days: 7"];
     for (const value of required)
         if (!contract.includes(value))
             throw new Error(`real-agent workflow is missing ${value}`);

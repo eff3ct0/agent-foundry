@@ -141,7 +141,7 @@ uses the exact published creator package. The parent workflow owns stage
 ordering, run identity, credential separation, fail-closed aggregation, and
 bounded evidence.
 The canonical runtime catalog is `scripts/real-agent-runtime-catalog.json`.
-Its supported `codex-cli` entry selects the pinned `@openai/codex@0.148.0`
+Its supported `codex-cli` entry selects the pinned `@openai/codex@0.156.0`
 runtime without selecting a secret. Operators choose it from the parent
 workflow's dispatch control once the dedicated agent API key, model variable,
 and GitHub App credentials are available; missing credentials must fail closed
@@ -157,7 +157,7 @@ runs the agent helper. Its inputs are `repository`, the fresh checkout's full
 `AGENT_API_KEY` and a repository-scoped `AGENT_GITHUB_TOKEN`; no lifecycle token,
 secrets-manager credential, or source checkout credential is passed to Codex.
 
-The selected runtime is Codex CLI `@openai/codex@0.148.0`, invoked with
+The selected runtime is Codex CLI `@openai/codex@0.156.0`, invoked with
 `codex exec --json --ephemeral --ignore-user-config --sandbox workspace-write
 --ask-for-approval never`. Each run gets a new `CODEX_HOME`; discovery is a
 read-only cold turn and execution is a second cold turn. The agent must run

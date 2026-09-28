@@ -10,7 +10,7 @@ invocation remain upstream responsibilities.
 is the canonical runtime catalog. Each entry has a stable machine identifier,
 display label, executable adapter path, pinned package/version, required
 credential names, and support status. The current supported choice is
-`codex-cli` (OpenAI Codex CLI), which installs `@openai/codex@0.148.0` and uses
+`codex-cli` (OpenAI Codex CLI), which installs `@openai/codex@0.156.0` and uses
 `scripts/real-agent-journey-agent.mjs`. Disabled entries remain documented in
 the catalog but cannot be selected or run.
 
