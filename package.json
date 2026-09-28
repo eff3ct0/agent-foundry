@@ -29,6 +29,8 @@
     "test:local-release-e2e": "pnpm build && node --test test/local-release-e2e.test.mjs",
     "verify:package-consumer": "pnpm build && node scripts/package-consumer-verify.mjs",
     "release-e2e:local": "pnpm build && node scripts/local-release-e2e.mjs",
+    "release:notes": "node scripts/release-notes.mjs",
+    "check:release-notes": "node scripts/check-release-notes.mjs",
     "test:workflow-contract": "pnpm build && node --test test/check-bootstrap-workflow.test.mjs",
     "test:installer-ux": "pnpm build && node --test test/installer-ui.test.mjs test/installer-pty.test.mjs test/creator.test.mjs",
     "test:provisioning": "pnpm build && node --test test/github-provisioning.test.mjs",
