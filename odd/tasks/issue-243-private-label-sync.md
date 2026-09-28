@@ -29,11 +29,15 @@
 - [x] Fresh disposable generated consumer and source each lack `contents: read` on this base: new focused tests fail 2/28 before the change, pass 28/28 afterward. Generated target retains non-persistent checkout and typed-runtime build before the relocated script.
 - [x] Normalize `package/payload-manifest.json` with `node scripts/build-payload.mjs --write-lock` after source edits; only workflow size/hash and payload digest change.
 - [x] Run `node --test test/sync-github-labels.test.mjs test/creator.test.mjs` (28/28), `pnpm build` (exit 0), `pnpm typecheck` (exit 0), `pnpm test` (281/281), `node scripts/check-bootstrap-workflow.mjs` (six checks OK), `node scripts/check-factory-layout.mjs` (OK), `node scripts/check-determinism.mjs` (OK), and pre-commit `git diff --check` (exit 0). Node v26.9.0, pnpm 12.4.2, no downloaded dependencies.
-- [ ] Record exact new results, work-unit commit, authored-line count, and clean branch readback.
+- [x] Record exact new results and work-unit commit; clean branch readback follows this receipt commit.
 - [ ] Private hosted repository checkout and label synchronization: N/A, not authorized. Do not claim Definition of Done or close the issue.
 
 ## Next action and rollback
 
-- Next: commit the one work unit, record its identity and authored-line count in the document receipt, then verify a clean branch and read back both evidence copies. Hosted private-repository verification remains pending.
+- Next: after this passive receipt commit, confirm clean branch and matching task document/Engram mirror. Hosted private-repository verification remains pending authorization.
 - Runtime harness: `test/creator.test.mjs` applies/verifies/noops a disposable generated target, asserts the permission map, non-persistent checkout, typed-runtime install/build before the relocated label script, and runs its label-script self-check and dry run. Source CLI `node scripts/typed-inherited-runtime/sync-github-labels.js --self-check` passes without network/API mutation. No creator application to this source repository; hosted private checkout remains pending authorization.
 - Rollback boundary: this task record, `.github/workflows/sync-labels.yml`, `package/payload-manifest.json`, and focused assertions in `test/sync-github-labels.test.mjs` and `test/creator.test.mjs`; leave current main typed-runtime behavior and other features intact.
+
+## Local delivery identity
+
+- Work-unit commit: `e4ef8f09a77ece9d39a7eb8a31816c6b3cf7661b` (`fix(labels): allow private checkout in sync workflow (#243)`); 50 authored additions plus deletions (47 additions, 3 deletions) across five paths, including the task record. This receipt is a documentation-only follow-up and does not change tested behavior.
