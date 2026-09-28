@@ -557,8 +557,9 @@ const validateFactoryWorkflows = async (git: (...args: string[]) => Promise<stri
         if (job.has("uses") && (typeof job.get("uses") !== "string" || !job.get("uses").trim())) throw new Error("job uses must be a nonempty string");
         if (job.has("steps") && (!Array.isArray(job.get("steps")) || !job.get("steps").length
             || job.get("steps").some((step: unknown) => !(step instanceof Map)
+              || step.has("run") === step.has("uses")
               || !["run", "uses"].some((field) => typeof step.get(field) === "string" && step.get(field).trim())))) {
-          throw new Error("job steps must run a command or use an action");
+          throw new Error("job steps must contain exactly one nonempty run or uses field");
         }
       }
     } catch {

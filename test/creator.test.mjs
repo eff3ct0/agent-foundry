@@ -393,18 +393,35 @@ test("pinned factory CI emits selected versioned callers and protects creator ow
   } finally { await rm(parent, { recursive: true, force: true }); }
 });
 
+test("pinned factory CI accepts run-only and uses-only steps and reusable jobs", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-steps-"));
+  try {
+    const workflow = `${callableWorkflow}      - uses: actions/checkout@v4\n  delegate:\n    uses: example/factory/.github/workflows/check.yml@v1\n`;
+    const fixture = await factoryFixture(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust" }, { rust: workflow });
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", fixture.sha, "--non-interactive"];
+    const plan = await run(["plan", ...args]);
+    assert.equal(plan.code, 0, plan.stdout);
+    assert.equal(json(plan).status, "planned");
+    await assert.rejects(stat(target));
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
 test("pinned factory CI rejects missing, symlinked and invalid YAML before writes", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-invalid-"));
   try {
     const fixture = await factoryFixture(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust" });
     const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1" });
     const target = path.join(parent, "project");
-    const args = (sha) => ["apply", "--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", sha, "--non-interactive"];
+    const args = (command, sha) => [command, "--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", sha, "--non-interactive"];
     const rejected = async (sha) => {
-      const result = await run(args(sha));
-      assert.notEqual(result.code, 0, result.stdout);
-      assert.ok(json(result).diagnostics.some(({ code }) => code === "ci_invalid"), result.stdout);
-      await assert.rejects(stat(target));
+      for (const command of ["plan", "apply"]) {
+        const result = await run(args(command, sha));
+        assert.notEqual(result.code, 0, result.stdout);
+        assert.ok(json(result).diagnostics.some(({ code }) => code === "ci_invalid"), result.stdout);
+        await assert.rejects(stat(target));
+      }
     };
     await rejected(fixture.sha);
     const workflowPath = path.join(fixture.factory, ".github/workflows/rust.yml");
@@ -425,6 +442,10 @@ test("pinned factory CI rejects missing, symlinked and invalid YAML before write
       "on:\n  workflow_call:\njobs:\n  check:\n    uses: example/action@v1\n    steps:\n      - run: echo ok\n",
       "on:\n  push:\njobs:\n  check:\n    steps:\n      - run: echo ok\n",
       "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: true\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: echo ok\n        uses: actions/checkout@v4\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: ''\n        uses: actions/checkout@v4\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - name: missing command\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - {}\n",
       "on:\n  workflow_call:\njobs:\n  __proto__:\n    steps:\n      - run: echo ok\n",
       "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: &cmd echo ok\n      - run: *cmd\n",
       `${callableWorkflow}${"#".repeat(65 * 1024)}\n`,
