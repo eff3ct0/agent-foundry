@@ -73,6 +73,7 @@ test("CLI reads the catalog from the initialized factory layout", async () => {
 
 test("label workflow pins the Node runtime required by the package", async () => {
   const text = await readFile(workflow, "utf8");
+  assert.match(text, /^permissions:\n  contents: read\n  issues: write\n/mu);
   assert.match(text, /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/);
   assert.match(text, /node-version: 20\.19\.0/);
   assert.match(text, /persist-credentials: false/u);
