@@ -239,6 +239,39 @@ test("pinned defaults merge per key, preserve explicit clears and verify generat
   }
 });
 
+test("pinned defaults refuse committed or symlinked factory answers before creating a target", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-answers-"));
+  try {
+    const { factory, git } = await factoryFixture(parent, { PROJECT_NAME: "Organization" });
+    const inside = await configFile(factory, { FACTORY_SPEC: "acme/factory@v1" });
+    await git("add", "answers.json");
+    await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "committed answers");
+    await git("tag", "-f", "v1");
+    const sha = await git("rev-parse", "HEAD");
+    const target = path.join(parent, "project");
+    const flags = ["--target", target, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const linked = path.join(parent, "linked-answers.json");
+    await symlink(inside, linked);
+    for (const config of [inside, `${factory}/../factory/answers.json`, linked]) {
+      for (const command of ["plan", "apply", "verify"]) {
+        const result = await run([command, ...flags, "--config", config]);
+        assert.notEqual(result.code, 0, result.stdout);
+        assert.ok(json(result).diagnostics.some(({ code }) => code === "factory_invalid"), result.stdout);
+        await assert.rejects(stat(target));
+      }
+    }
+    assert.equal(json(await run(["plan", "--target", target, "--config", inside, "--non-interactive"])).status, "planned");
+    const external = await configFile(parent, { FACTORY_SPEC: "acme/factory@v1" });
+    const args = [...flags, "--config", external];
+    assert.equal(json(await run(["plan", ...args])).status, "planned");
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("invalid factory pins, checkout state and membership reject before target writes", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-invalid-"));
   try {

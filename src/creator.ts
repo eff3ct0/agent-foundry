@@ -545,15 +545,32 @@ const resolveConfig = async (
   factoryRoot?: string,
   factorySha?: string,
 ): Promise<CreatorConfig> => {
+  if ((factoryRoot !== undefined || factorySha !== undefined)
+      && (!factoryRoot || !factorySha || !configPath)) {
+    throw new CreatorError("factory_invalid", "factory defaults require --factory-root, --factory-sha, and external --config together");
+  }
+  if (factoryRoot && factorySha && configPath) {
+    const factory = path.resolve(factoryRoot);
+    const config = path.resolve(configPath);
+    const inside = (candidate: string, root: string): boolean => {
+      const relative = path.relative(root, candidate);
+      return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+    };
+    // Refuse both a lexical path in the checkout and an outside link back into it.
+    if (inside(config, factory)) {
+      throw new CreatorError("factory_invalid", "--config must be outside the factory checkout", { path: configPath });
+    }
+    const canonicalFactory = await realpath(factory).catch(() => { throw new CreatorError("factory_invalid", "--factory-root must be a real local checkout directory"); });
+    const canonicalConfig = await realpath(config).catch(() => { throw new CreatorError("invalid_json", "configuration cannot be read", { path: configPath }); });
+    if (inside(canonicalConfig, canonicalFactory)) {
+      throw new CreatorError("factory_invalid", "--config must be outside the factory checkout", { path: configPath });
+    }
+  }
   let input: Record<string, unknown> = {};
   if (configPath) input = valueFromInput(await parseJson(path.resolve(process.cwd(), configPath), "configuration"));
   const knownKeys = new Set(manifest.placeholders.map((placeholder) => placeholder.key));
   const unknownKeys = Object.keys(input).filter((key) => !knownKeys.has(key));
   if (unknownKeys.length > 0) throw new CreatorError("configuration_invalid", `configuration contains unknown keys: ${unknownKeys.sort().join(", ")}`);
-  if ((factoryRoot !== undefined || factorySha !== undefined)
-      && (!factoryRoot || !factorySha || !configPath)) {
-    throw new CreatorError("factory_invalid", "factory defaults require --factory-root, --factory-sha, and external --config together");
-  }
   const organization = factoryRoot && factorySha ? await loadFactoryDefaults(factoryRoot, factorySha, input.FACTORY_SPEC, manifest) : {};
   if (organization.FACTORY_REQUIRED === "true" && Object.prototype.hasOwnProperty.call(input, "FACTORY_REQUIRED") && String(input.FACTORY_REQUIRED) !== "true") {
     throw new CreatorError("factory_invalid", "project answers cannot disable organization FACTORY_REQUIRED");

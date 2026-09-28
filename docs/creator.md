@@ -34,7 +34,10 @@ foundry apply --target ./new-project --config answers.json --factory-root ./fact
 foundry verify --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive
 ```
 
-Both flags and `--config` are required together. The creator checks the local
+Both flags and `--config` are required together. Project answers must be outside
+the factory checkout: paths inside it and outside symlinks resolving into it
+are rejected before any target write. A project config elsewhere is allowed.
+The creator checks the local
 Git root, clean checkout, `HEAD`, `vX` tag, tracked regular root defaults file,
 and exact caller-supplied SHA before using the defaults. The caller must obtain
 the SHA **independently** from a trusted record binding it to the intended
