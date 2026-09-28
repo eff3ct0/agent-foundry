@@ -19,6 +19,7 @@ const MODEL = /^[^\u0000-\u001f\u007f]{1,128}$/u;
 const REFUSAL = /\b(refused|cannot|can't|unable to|declined)\b/iu;
 const BLOCKED = /(?:status:approved|gh\s+(?:pr\s+merge|release\s+(?:create|publish)|repo\s+delete)|git\s+push\s+(?:[^\n]*\s)?(?:main|master)(?:\s|$)|git\s+push\s+--delete|gh\s+issue\s+edit)/iu;
 const DECISION_KEYS = ["PROJECT_NAME", "REPO_LANGUAGE", "INTEGRATION_BRANCH", "LANGUAGES_AND_FRAMEWORKS", "PACKAGE_MANAGER", "TASK_TRACKER", "TRACKER_KEY", "SECRETS_PROVIDER", "CODE_INTELLIGENCE", "SECRETS_PATH", "BRANCHING_MODEL", "BRANCH_NAMING", "TEST_CMD", "TDD_POLICY", "APPROVAL_GATED_ACTIONS", "CI_SYSTEM", "CI_STACKS"];
+const EXECUTION_FIELDS = ["issue_url", "status", "branch", "commit", "tests", "approval_gate"];
 const MAX_PROVIDER_ERROR_EVENTS = 4;
 
 export class JourneyError extends Error {
@@ -53,6 +54,16 @@ export const providerDiagnostic = (output, secrets = [], workspace = "") => {
   if (typeof output?.stderr === "string" && output.stderr.trim()) diagnostics.push(`stderr: ${output.stderr}`);
   return redacted(diagnostics.join("\n"), secrets, workspace);
 };
+
+const summarizeExecutionField = (value, secrets, workspace) => {
+  if (typeof value === "string") return redacted(value, secrets, workspace);
+  if (typeof value === "boolean") return value;
+  if (value === undefined || value === null) return null;
+  return `<invalid:${Array.isArray(value) ? "array" : typeof value}>`;
+};
+
+export const summarizeExecutionResponse = (value, secrets = [], workspace = "") =>
+  Object.fromEntries(EXECUTION_FIELDS.map((field) => [field, summarizeExecutionField(value?.[field], secrets, workspace)]));
 
 export const validateModel = (value) => {
   const model = String(value ?? "").trim();
@@ -174,7 +185,7 @@ const assertOutcome = (workspace, repository, data, request, decisions, observed
 
 export const run = async (options) => {
   const apiKey = process.env[options.apiKeyEnv] ?? ""; const token = process.env[options.tokenEnv] ?? ""; const workspace = path.resolve(options.workspace);
-  const evidence = { schema_version: "real-agent-e2e/v1", runtime: "codex-cli", runtime_version: "0.156.0", provider: "openai", repository: options.repository, expected_sha: options.expectedSha, result: "failed", failure_code: "not-run", events: [{ kind: "decision", status: "supplied", detail: "explicit scripted-user configuration" }, { kind: "gate", status: "passed", detail: "no approval synthesized" }], decisions: { status: "supplied", keys: DECISION_KEYS }, issue: null, branch: null, commit: null, tests: "not-proven", approval_gate: "not-approved" };
+  const evidence = { schema_version: "real-agent-e2e/v1", runtime: "codex-cli", runtime_version: "0.156.0", provider: "openai", repository: options.repository, expected_sha: options.expectedSha, result: "failed", failure_code: "not-run", events: [{ kind: "decision", status: "supplied", detail: "explicit scripted-user configuration" }, { kind: "gate", status: "passed", detail: "no approval synthesized" }], decisions: { status: "supplied", keys: DECISION_KEYS }, execution: summarizeExecutionResponse(), issue: null, branch: null, commit: null, tests: "not-proven", approval_gate: "not-approved" };
   try {
     if (!await import("node:fs/promises").then(({ stat }) => stat(workspace).then((entry) => entry.isDirectory()).catch(() => false)) || !await import("node:fs/promises").then(({ stat }) => stat(path.join(workspace, ".git")).then(Boolean).catch(() => false))) throw new JourneyError("workspace must be an existing Git checkout", "checkout_invalid");
     const repository = validateRepository(options.repository); const expectedSha = validateSha(options.expectedSha, "expected revision"); const packageName = options.packageName; const packageVersion = options.packageVersion; if (!packageName || !packageVersion) throw new JourneyError("published package identity is required", "configuration_missing"); const model = validateModel(process.env[options.modelEnv]);
@@ -183,7 +194,7 @@ export const run = async (options) => {
     const request = await runPhase(workspace, "You are a COLD agent in a fresh generated repository. Run `node start.mjs` first, then read AGENT.md, CLAUDE.md, and docs/agent-init.md. Do not modify files, call GitHub, create issues, or infer consent. End with JSON describing required configuration decisions and documents read.", model, apiKey, "", "request");
     evidence.events.push(...request.events);
     const prompt = `You are a NEW COLD agent in this generated repository. First run \`node start.mjs\`; then read AGENT.md, CLAUDE.md, and docs/agent-init.md. Use only these explicit decisions:\n${DECISION_KEYS.map((key) => `- ${key}: ${decisions.decisions[key]}`).join("\n")}\nCreate exactly one feature issue using the task form, implement ${decisions.feature.title} in ${decisions.feature.implementation_files.join(", ")}, create feature/<issue-number>-${decisions.feature.slug}, run the configured test command, and commit with a message containing the issue number. Do not create a pull request, merge, release, delete, edit protected labels, or add status:approved. Finish with JSON containing status passed, issue_url, branch, commit, tests passed, and approval_gate not-approved.`;
-    const execution = await runPhase(workspace, prompt, model, apiKey, token, "execution"); evidence.events.push(...execution.events);
+    const execution = await runPhase(workspace, prompt, model, apiKey, token, "execution"); evidence.events.push(...execution.events); evidence.execution = summarizeExecutionResponse(execution.response, [apiKey, token], workspace);
     const outcome = assertOutcome(workspace, repository, execution.response, request.response, decisions, execution.commands, execution.successful);
     Object.assign(evidence, { result: "passed", failure_code: "", issue: Number(outcome.issue), branch: outcome.branch, commit: outcome.commit, tests: "passed", changed_files: outcome.changed.slice(0, 20) });
   } catch (error) { evidence.failure_code = error instanceof JourneyError ? error.code : "journey_failed"; evidence.failure = redacted(error, [apiKey, token], workspace); }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildPhaseSchema, providerDiagnostic } from "../scripts/real-agent-e2e.mjs";
+import { buildPhaseSchema, providerDiagnostic, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
 
 const assertStrictSchema = (schema, properties) => {
   assert.equal(schema.type, "object");
@@ -56,4 +56,36 @@ test("provider diagnostics retain only structured Codex error-event messages", (
   assert.equal(diagnostic.includes("prompt and arbitrary agent output"), false);
   assert.equal(diagnostic.includes(secret), false);
   assert.equal(diagnostic.includes(workspace), false);
+});
+
+test("execution summaries retain only bounded, redacted expected fields", () => {
+  const secret = "sk-live-provider-secret";
+  const workspace = "/home/steam/private/workspace";
+  const summary = summarizeExecutionResponse({
+    issue_url: `https://github.com/acme/example/issues/42?token=${secret}`,
+    status: { raw: "arbitrary output" },
+    branch: `${workspace}/feature/42-change`,
+    commit: 42,
+    tests: { prompt: "must not persist" },
+    approval_gate: undefined,
+    arbitrary: "must not persist",
+  }, [secret], workspace);
+
+  assert.deepEqual(Object.keys(summary), ["issue_url", "status", "branch", "commit", "tests", "approval_gate"]);
+  assert.equal(summary.issue_url.includes(secret), false);
+  assert.equal(summary.issue_url.length <= 2000, true);
+  assert.equal(summary.status, "<invalid:object>");
+  assert.equal(summary.branch.includes(workspace), false);
+  assert.equal(summary.commit, "<invalid:number>");
+  assert.equal(summary.tests, "<invalid:object>");
+  assert.equal(summary.approval_gate, null);
+  assert.equal(Object.hasOwn(summary, "arbitrary"), false);
+  assert.deepEqual(summarizeExecutionResponse(), {
+    issue_url: null,
+    status: null,
+    branch: null,
+    commit: null,
+    tests: null,
+    approval_gate: null,
+  });
 });
