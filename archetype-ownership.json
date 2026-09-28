@@ -59,6 +59,7 @@
     "start.mjs",
     "odd/tasks/issue-124-opencode-startup-race.md",
     "odd/tasks/issue-177-bound-tracker.md",
+    "odd/tasks/v030-254-review-evidence.md",
     "templates/adr.md",
     "templates/agent-runbook.md",
     "templates/definition-of-done.md",
@@ -73,6 +74,7 @@
       "paths": [
         {"path": "archetype-ownership.json", "kind": "file"},
         {"path": "MAINTAINERS.md", "kind": "file"},
+        {"path": "odd/tasks/v030-254-review-evidence.md", "kind": "file"},
         {"path": "odd/tasks/issue-98-journey-reporting.md", "kind": "file"},
         {"path": "odd/tasks/issue-96-runtime-catalog.md", "kind": "file"},
         {"path": "odd/tasks/issue-97-release-trigger.md", "kind": "file"},

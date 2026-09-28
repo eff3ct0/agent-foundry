@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 13157,
-      "sha256": "47fbb120f123c190808c50db9aaef09201efa64142cd1a4362d10e47b693f36c"
+      "size": 13640,
+      "sha256": "0ef39179bc398d223d76355a410103e1516e3f6074039b29ddd72277b3468c06"
     },
     {
       "path": "CLAUDE.md",
@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 10685,
-      "sha256": "f295d7c5b5f114c6c294b6f1aa4db9b2ecb7cb7b7053741cbe1b5a33e54432f8"
+      "size": 10805,
+      "sha256": "cebe3f3543b07868f4b4d447ca8fc6f83bdcf3acbcc1d0780cd50a173572d67e"
     },
     {
       "path": "ci/_contract.md",
@@ -145,8 +145,8 @@
     {
       "path": "docs/workflow.md",
       "mode": "100644",
-      "size": 3639,
-      "sha256": "5fc0c61afd034eded9aedf4310b50dd69dd3bc165d9f7f30b97da85dad823e41"
+      "size": 5358,
+      "sha256": "cb9b2941c2ebcbbeecf4b592840782fe8f04d5fa224e800fd115815e6b096805"
     },
     {
       "path": "hooks/README.md",
@@ -385,8 +385,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 10359,
-      "sha256": "cd19a60735e54fb6770e71eb9462ee25da588bacf0c1dc894a428b78a925bd4a"
+      "size": 10760,
+      "sha256": "471073823ed485623f9aacec7d31b53cf5cca0cd5fa09d1dd41fa40884d6fee0"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -397,8 +397,8 @@
     {
       "path": "templates/handoff.md",
       "mode": "100644",
-      "size": 2712,
-      "sha256": "503526bf8f3559a8d6f4f8d7574577714fb16f997e47d34c69d090a1a0e2ed1a"
+      "size": 3711,
+      "sha256": "9009c1210589b0a3ae453007a561d9f61310b26f7f20b39e798cc85c904925b3"
     },
     {
       "path": "templates/pull-request.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:19d0e11a8379e864c11c7edbf828f32eaec65a667d4fb3e502742ed07b18a170"
+  "payload_digest": "sha256:903963572d85d183a56a89e979315e32a76325b01051fa6f3c5e7774c28f5c24"
 }

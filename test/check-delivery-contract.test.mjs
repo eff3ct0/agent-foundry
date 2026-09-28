@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { chmod, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,6 +139,79 @@ test("protected approval fixtures allow only complete target-bound evidence", ()
     if (field.length === 2) rejected[field[0]][field[1]] = value;
     else rejected[field[0]] = value;
     assert.equal(delegatedApprovalAllowed(rejected, 32), false, field.join("."));
+  }
+});
+
+test("review handoff fixture distinguishes unchanged A from changed bytes, path and mode on B", async () => {
+  await fixture(async (directory) => {
+    const repository = path.join(directory, "repository");
+    await mkdir(repository);
+    const git = async (...args) => (await execFileAsync("git", args, { cwd: repository, encoding: "buffer" })).stdout;
+    const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+    const commit = async (message) => {
+      await git("add", "-A");
+      await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", message);
+      return (await git("rev-parse", "HEAD")).toString().trim();
+    };
+    const candidate = async (base) => ({
+      base,
+      head: (await git("rev-parse", "HEAD")).toString().trim(),
+      diff: sha(await git("diff", "--raw", "--no-abbrev", "--no-renames", "-z", base, "HEAD")),
+      scope: "complete diff",
+    });
+    // This is an offline identity fixture, not a reviewer or a runtime review verdict.
+    const retained = async (locator, current) => {
+      let result;
+      try { result = JSON.parse(await readFile(locator, "utf8")); }
+      catch { return { status: "unverified", next: "Recover and read the review result, or review the current candidate." }; }
+      if (!["base", "head", "diff", "scope", "disposition"].every((key) => typeof result?.[key] === "string" && result[key].length > 0)
+          || Object.entries(current).some(([key, value]) => result[key] !== value)) {
+        return { status: "unverified", next: "Review the current candidate and retain its identity, scope and disposition." };
+      }
+      return { status: "matching", disposition: result.disposition };
+    };
+
+    await git("init", "-q");
+    const file = path.join(repository, "reviewed.txt");
+    await writeFile(file, "original\n");
+    const base = await commit("base");
+    await writeFile(file, "candidate A\n");
+    await commit("candidate A");
+    const a = await candidate(base);
+    const locator = path.join(directory, "review-result.json");
+    await writeFile(locator, JSON.stringify({ ...a, scope: "complete diff", disposition: "changes requested" }));
+    assert.deepEqual(await retained(locator, a), { status: "matching", disposition: "changes requested" });
+    assert.deepEqual(await retained(locator, await candidate(base)), { status: "matching", disposition: "changes requested" });
+
+    for (const [name, change] of [
+      ["bytes", () => writeFile(file, "candidate B\n")],
+      ["path", () => rename(file, path.join(repository, "renamed.txt"))],
+      ["mode", () => chmod(file, 0o755)],
+    ]) {
+      await git("switch", "-q", "-C", `candidate-${name}`, a.head);
+      await change();
+      await commit(`candidate B ${name}`);
+      const b = await candidate(base);
+      assert.notEqual(b.diff, a.diff, `${name} changes the complete diff identity`);
+      assert.equal((await retained(locator, b)).status, "unverified", `${name} cannot reuse A's disposition`);
+    }
+
+    assert.match((await retained(path.join(directory, "missing.json"), a)).next, /Recover and read/u);
+    assert.match((await retained(directory, a)).next, /Recover and read/u);
+    await writeFile(locator, "{invalid json");
+    assert.equal((await retained(locator, a)).status, "unverified");
+    await writeFile(locator, JSON.stringify({ ...a, scope: "one file", disposition: "changes requested" }));
+    assert.match((await retained(locator, a)).next, /Review the current candidate/u);
+  });
+});
+
+test("review contract describes candidate binding and separate PR protection", async () => {
+  for (const relative of ["AGENT.md", "docs/workflow.md", "templates/agent-runbook.md", "templates/handoff.md"]) {
+    const text = await readFile(path.join(root, relative), "utf8");
+    assert.match(text, /base.{0,80}head|head.{0,80}base/iu, relative);
+    assert.match(text, /bytes.{0,80}paths.{0,80}modes/iu, relative);
+    assert.match(text, /unverified/iu, relative);
+    assert.match(text, /GitHub.*(?:protection|settings)|PR protection/iu, relative);
   }
 });
 

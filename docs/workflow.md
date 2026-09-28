@@ -36,6 +36,10 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 - **Self-review** the complete diff before requesting review.
 - Get a second pair of eyes / **adversarial review**.
 - Check scope, meaningful tests, no secrets, no unresolved placeholders, and backward-compatible contracts.
+- Retain the reviewer's actual result with base/head commit IDs, a reproducible complete diff identity covering file bytes, paths and modes, reviewed scope, and disposition. Before citing it at delivery, compare those identities with the current candidate. A result for candidate A does not attest candidate B after any content, path, or mode change, even if the change seems small; unchanged A retains its evidence. Missing, unreadable or unmatched evidence is **unverified**: recover/read the result or review the current candidate and record its new identity and disposition before claiming review completion.
+- For a Git candidate with both commits available, one reproducible identity is SHA-256 of the raw bytes of `git diff --raw --no-abbrev --no-renames -z <base> <head>` (do not hash a human-formatted display). The full Git object IDs bind file content; raw paths and modes bind renames and permission changes. Record this command/format alongside the digest and full base/head commit IDs. If the reviewed scope is narrower than this diff, identify precisely what was reviewed and do not claim complete review. If the objects or result cannot be read or a file's content identity cannot be established, report unverified and obtain the missing evidence or re-review the current candidate.
+- Uncommitted working-tree edits are not part of the committed candidate identity: include them in a new candidate before requesting review or delivery. Do not infer a matching result from the branch name or a successful test run.
+- This retained result is not GitHub PR protection. Branch protection, required reviews, and settings require their own evidence; do not claim they were audited from a local review record.
 
 ## 7. Definition of Done
 - Closeout contract: [`templates/definition-of-done.md`](../templates/definition-of-done.md).

@@ -20,6 +20,9 @@ target identity needed to resume; do not map a non-GitHub task provider to GitHu
 - Branch: `<BRANCH>`
 - Commit: `<COMMIT_SHA_OR_WIP>`
 - Verification evidence: `<COMMANDS_AND_RESULTS_OR_NOT_YET_RUN>` (for applicable checks: runner, observed exit and result; for omitted checks: why not applicable; for unavailable required runners: diagnostic and runnable exit. Creator/static readiness is not execution.)
+- Review evidence: `<RESULT_LOCATOR_OR_UNVERIFIED>`; reviewed base commit `<FULL_SHA_OR_UNVERIFIED>`, head commit `<FULL_SHA_OR_UNVERIFIED>`, complete diff identity `<REPRODUCIBLE_DIGEST_OR_UNVERIFIED>` (file bytes, paths, modes), reviewed scope `<SCOPE_OR_UNVERIFIED>`, disposition `<DISPOSITION_OR_UNVERIFIED>`.
+- Candidate comparison: `<MATCHES_CURRENT_BASE_HEAD_AND_DIFF_OR_UNVERIFIED>`; compare the retained result with the current delivery candidate, not just its branch name. If bytes, paths or modes changed, or the result is absent, unreadable or unmatched, report `unverified` and the exact next action (recover/read the result, or review the current candidate and retain its new identity and disposition). Do not carry candidate A's disposition onto changed candidate B; unchanged A keeps its matching evidence.
+- PR protection: `<SEPARATE_EVIDENCE_OR_NOT_AUDITED>`; a retained review result does not prove GitHub branch protection, required reviews, or repository settings were audited.
 - Required evidence to resume: `<EVIDENCE_REQUIRED_FOR_NEXT_AGENT>`
 - Resume phase when blocked: `<PHASE_OR_NOT_BLOCKED>`
 - Blocker or approval needed: `<BLOCKER_OR_NOT_BLOCKED>`

@@ -55,7 +55,7 @@ evidence is recorded.
 - `IMPLEMENTATION -> TESTING/TDD` requires the in-scope change and a test/TDD approach.
 - `TESTING/TDD -> VERIFICATION` requires the applicable tests to pass. A failed test stays in this phase.
 - `VERIFICATION -> EVIDENCE/DELIVERY` requires the applicable test, build, lint, typecheck, and end-to-end gates.
-- `EVIDENCE/DELIVERY -> DONE` requires the complete Definition of Done, required review gates, and durable evidence.
+- `EVIDENCE/DELIVERY -> DONE` requires the complete Definition of Done, required review gates, and durable evidence. A retained review result counts only for its exact reviewed base/head commits and complete diff identity (file bytes, paths, and modes), reviewed scope, and disposition; recheck against the current candidate at delivery. Changed or unreadable/unmatched evidence is unverified until the current candidate is reviewed and a matching result retained. This does not certify GitHub PR protection settings.
 - Any active phase -> `BLOCKED` is allowed only for an explicit blocker, approval requirement, or retry limit.
 - `BLOCKED ->` the recorded prior phase requires the blocker to be resolved and the new evidence to be recorded.
 - No transition skips a phase, and no transition reaches `DONE` with pending or failed verification or review.
