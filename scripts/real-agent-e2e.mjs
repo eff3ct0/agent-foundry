@@ -152,9 +152,9 @@ export const buildPhaseSchema = (phase) => {
     : phase === "execution"
       ? {
           status: { type: "string", enum: ["passed"] },
-          issue_url: { type: "string" },
-          branch: { type: "string" },
-          commit: { type: "string" },
+          issue_url: { type: "string", minLength: 1 },
+          branch: { type: "string", minLength: 1 },
+          commit: { type: "string", minLength: 1 },
           tests: { anyOf: [{ type: "string" }, { type: "boolean" }] },
           approval_gate: { type: "string", enum: ["not-approved", "blocked"] },
         }
