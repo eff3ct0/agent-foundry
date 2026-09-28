@@ -66,6 +66,13 @@ test("the Node CLI emits the Python parity success output", async () => {
   assert.equal(result.stderr, "");
 });
 
+test("real-agent journey rejects invoke-agent separator drift", async () => {
+  await fixture(async (directory) => {
+    await replace(directory, "journey", 'node scripts/real-agent-journey.mjs invoke-agent --runtime "$JOURNEY_RUNTIME" --', 'node scripts/real-agent-journey.mjs invoke-agent --runtime "$JOURNEY_RUNTIME"');
+    await reject(directory, "real-agent journey invoke-agent command must preserve the adapter separator");
+  });
+});
+
 test("archetype Node 20 PR check rejects trigger, authority, pin, version, and pre-build execution drift", async () => {
   const changes = [
     ["  pull_request:", "  pull_request_target:"],
