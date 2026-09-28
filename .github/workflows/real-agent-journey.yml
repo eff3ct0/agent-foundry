@@ -263,7 +263,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: real-agent-journey-${{ github.run_id }}-agent
-          path: stage/agent.json
+          path: |
+            stage/agent.json
+            stage/codex.json
           if-no-files-found: warn
           retention-days: 7
 
