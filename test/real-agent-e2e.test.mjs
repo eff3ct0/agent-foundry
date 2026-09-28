@@ -49,7 +49,16 @@ test("Codex request and execution schemas are strict and preserve their field co
   const executionFields = ["status", "issue_url", "branch", "commit", "tests", "approval_gate"];
   assertStrictSchema(execution, executionFields);
   assert.deepEqual(execution.properties.status, { type: "string", enum: ["passed"] });
+  assert.deepEqual(execution.properties.approval_gate, { type: "string", enum: ["not-approved", "blocked"] });
   assert.deepEqual(execution.properties.tests, { anyOf: [{ type: "string" }, { type: "boolean" }] });
+});
+
+test("execution schema rejects empty issue, branch, and commit fields", () => {
+  const execution = buildPhaseSchema("execution");
+  for (const field of ["issue_url", "branch", "commit"]) {
+    assert.deepEqual(execution.properties[field], { type: "string", minLength: 1 });
+    assert.equal("".length >= execution.properties[field].minLength, false);
+  }
 });
 
 test("execution prompt binds GitHub Issues to the runtime repository", () => {
