@@ -22,14 +22,23 @@ It is not tied to any language or stack.
 - Branching strategy: `<BRANCHING_MODEL>` (e.g. trunk-based / GitHub flow) - integration branch `<INTEGRATION_BRANCH>`
 - Base commands: build `<BUILD_CMD>` - test `<TEST_CMD>` - lint `<LINT_CMD>` - typecheck `<TYPECHECK_CMD>` - run `<RUN_CMD>`
 - Environments: `<ENVIRONMENTS>` (dev / staging / prod and how each is deployed)
-- Organization baseline (Factory OS): `<FACTORY_SPEC>` - organization spec governing this repo; local content overrides it. See [`docs/org-factory.md`](docs/org-factory.md).
+- Organization baseline (Factory OS): `<FACTORY_SPEC>` - organization spec governing this repo; local content overrides it per interaction rule. See [`docs/org-factory.md`](docs/org-factory.md).
+
+### Effective interaction rules
+Before relying on a factory rule, identify the exact `FACTORY_SPEC` above and a locally available copy of
+that pinned revision. Follow the offline comparison in [`docs/org-factory.md`](docs/org-factory.md): record the
+resolved commit SHA, baseline file and rule text, and this repository's file and rule text. For the same rule,
+the local text takes precedence; nonconflicting baseline rules remain in force. Do not erase either source
+from the explanation. If the required pin or baseline cannot be verified, or local rules contradict each
+other without a clear resolution, do not assume an effective factory rule or perform the disputed action;
+follow the local recovery steps there. This procedure does not alter provider bindings or approval rules.
 
 ## Archetype documents
 - [`docs/workflow.md`](docs/workflow.md) - **end-to-end workflow**: intake -> spec -> tickets -> branches -> session/loop execution -> verification -> review -> Definition of Done -> handoff.
 - [`docs/engineering-handbook.md`](docs/engineering-handbook.md) - **engineering standards**: code, testing, security, CI/CD, architecture, documentation, observability.
 - [`docs/bootstrap.md`](docs/bootstrap.md) - **how to initialize** a new project from this template (placeholders, tooling, first commit, checklist).
 - [`docs/bindings.md`](docs/bindings.md) - **provider contract**: the task tracker and secrets manager bound to the project (composed from `providers/` during initialization). Mandatory and exclusive use.
-- [`docs/org-factory.md`](docs/org-factory.md) - **organization layer**: how projects reference the org spec (the `.github` repo and `FACTORY_SPEC` pin).
+- [`docs/org-factory.md`](docs/org-factory.md) - **organization layer**: how to inspect the pinned spec and resolve local interaction rules (without fetching it).
 - [`docs/factory-layout.md`](docs/factory-layout.md) - **layout contract**: root allowlist and `.factory/` support boundary.
 - [`docs/agent-init.md`](docs/agent-init.md) - **agent mode**: procedure for initializing a project from the template (stack detection, bindings, verification).
 - [`templates/`](templates/) - reusable task, pull request, Definition of Done, ADR, and agent runbook templates. The runbook is the project's **loop execution contract**.

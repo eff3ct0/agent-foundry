@@ -22,6 +22,12 @@ Before any consequential action, apply the pre-action execution boundary in `AGE
 **Durable task state** lives in the bound provider, never only in session memory, VCS, or a local task UI.
 Each session takes one task to a durable point, leaves state, and ends.
 
+For effective interaction rules, first read the project's `AGENT.md` pin and the offline comparison in
+[`docs/org-factory.md`](../docs/org-factory.md). Compare a locally available pinned baseline with the local
+rule text before attributing a rule to the factory; keep both sources visible even when local text overrides.
+If provenance is missing or conflicting local instructions remain unresolved, pause the affected action and
+use the local recovery steps there. Neither `start.mjs` nor this runbook fetches or synchronizes the baseline.
+
 Local files (including `odd/*.md`) and task UIs are optional, derived, non-authoritative projections of
 provider-confirmed state. Never require them or use them as fallback task stores; scratch notes are ephemeral.
 For create, update, status change, comment, checkpoint, phase handoff, or completion, require provider-native

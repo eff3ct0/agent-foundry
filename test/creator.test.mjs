@@ -824,3 +824,86 @@ test("ownership cleanup removes unchanged source inputs and preserves changed ap
   assert.notEqual(protectedResult.code, 0);
   assert.equal(await readFile(path.join(protectedTarget, "placeholders.json"), "utf8"), "application-owned\n");
 });
+
+test("cold generated project explains pinned/local interaction rules without a network dependency", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-policy-"));
+  try {
+    const target = path.join(parent, "project");
+    const config = await configFile(parent, {
+      FACTORY_REQUIRED: "true",
+      FACTORY_SPEC: "acme/factory@v1",
+    });
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, applied.stderr);
+
+    const startup = await execFileAsync(process.execPath, ["start.mjs"], { cwd: target });
+    assert.match(startup.stdout, /WORK mode/u);
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    const factory = await readFile(path.join(target, ".factory/docs/org-factory.md"), "utf8");
+    const runbook = await readFile(path.join(target, ".factory/templates/agent-runbook.md"), "utf8");
+
+    // These assertions inspect the shipped cold entrypoints, not source-only documentation.
+    assert.match(agent, /acme\/factory@v1/u);
+    assert.match(agent, /effective interaction rules[\s\S]*?org-factory\.md/iu);
+    assert.match(runbook, /effective interaction rules[\s\S]*?AGENT\.md/iu);
+    assert.match(factory, /refs\/tags\/v1\^\{commit\}/u);
+    assert.match(factory, /commit SHA/iu);
+    assert.match(factory, /AGENT\.md[\s\S]*?templates\/agent-runbook\.md/u);
+    assert.match(factory, /per rule[\s\S]*?local[\s\S]*?pinned/iu);
+    const rootAgentLink = factory.match(/\[`?AGENT\.md`?\]\(([^)]+)\)/u);
+    const factoryGuideLink = runbook.match(/\[`?docs\/org-factory\.md`?\]\(([^)]+)\)/u);
+    assert.ok(rootAgentLink && factoryGuideLink, "cold entrypoints must link to the actual generated files");
+    assert.ok((await stat(path.resolve(target, ".factory/docs", rootAgentLink[1]))).isFile());
+    assert.ok((await stat(path.resolve(target, ".factory/templates", factoryGuideLink[1]))).isFile());
+
+    // A separate local factory checkout models a pin without fetching any remote state.
+    const baseline = path.join(parent, "factory");
+    await mkdir(baseline);
+    const git = (args) => execFileAsync("git", ["-C", baseline, ...args]);
+    await git(["init", "-q"]);
+    await writeFile(path.join(baseline, "AGENT.md"), "Review cadence: weekly\n");
+    await git(["add", "AGENT.md"]);
+    await git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "pinned rules"]);
+    await git(["tag", "v1"]);
+    const { stdout: pinnedSha } = await git(["rev-parse", "--verify", "refs/tags/v1^{commit}"]);
+    assert.match(pinnedSha.trim(), /^[0-9a-f]{40}$/u);
+    const { stdout: pinnedText } = await git(["show", `${pinnedSha.trim()}:AGENT.md`]);
+    assert.match(pinnedText, /Review cadence: weekly/u);
+    await assert.rejects(git(["rev-parse", "--verify", "refs/tags/missing^{commit}"]));
+
+    const localRulePath = path.join(target, "AGENT.md");
+    await writeFile(localRulePath, `${agent}\nIncident response: daily\nReview cadence: daily\n`);
+    const localText = await readFile(localRulePath, "utf8");
+    assert.match(localText, /Review cadence: daily/u); // overrides the pinned Review rule
+    assert.match(localText, /Incident response: daily/u); // nonconflicting local rule remains
+    await writeFile(localRulePath, `${localText}Review cadence: monthly\n`);
+    assert.match(await readFile(localRulePath, "utf8"), /Review cadence: daily\nReview cadence: monthly/u);
+
+    const unpinnedTarget = path.join(parent, "unpinned");
+    const unpinnedConfig = await configFile(parent, { FACTORY_REQUIRED: "true", FACTORY_SPEC: "" });
+    const unpinned = await run(["apply", "--target", unpinnedTarget, "--config", unpinnedConfig, "--non-interactive"]);
+    assert.notEqual(unpinned.code, 0, "required membership must not silently accept a missing pin");
+    await assert.rejects(stat(unpinnedTarget));
+
+    const scenarios = [
+      { name: "nonconflict", baseline: "Review cadence: weekly", local: "Incident response: daily", effective: "both", provenance: "both" },
+      { name: "local override", baseline: "Review cadence: weekly", local: "Review cadence: daily", effective: "daily", provenance: "both" },
+      { name: "missing pin", baseline: "Review cadence: weekly", local: "FACTORY_SPEC: missing", effective: "stop", provenance: "missing" },
+      { name: "unavailable baseline", baseline: "no local checkout at pinned ref", local: "Review cadence: daily", effective: "stop", provenance: "unavailable" },
+      { name: "ambiguous provenance", baseline: "Review cadence: weekly", local: ["Review cadence: daily", "Review cadence: monthly"], effective: "stop", provenance: "ambiguous" },
+    ];
+    for (const scenario of scenarios) {
+      const row = factory.split("\n").find((line) => line.startsWith(`| ${scenario.name} |`));
+      assert.ok(row, `${scenario.name}: cold agent needs an explicit example`);
+      for (const value of [scenario.baseline, ...[scenario.local].flat(), scenario.effective, scenario.provenance]) {
+        assert.ok(row.includes(value), `${scenario.name}: expected ${value} in shipped example`);
+      }
+    }
+    assert.match(factory, /no implicit fetch/iu);
+    assert.match(factory, /local checkout[\s\S]*?offline/iu);
+    assert.match(factory, /do not execute[\s\S]*?reconcile/iu);
+    assert.match(factory, /do not change[\s\S]*?provider/iu);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
