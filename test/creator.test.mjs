@@ -387,6 +387,51 @@ test("apply, verify, and rerun are idempotent", async () => {
   assert.ok(json(rerun).operations.every((operation) => operation.action === "noop"));
 });
 
+test("generated layout checker accepts optional absence and creator enforces selected CI", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-layout-"));
+  const layout = async (target) => {
+    try {
+      const result = await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/check-factory-layout.mjs"), "--target", target], { cwd: target });
+      return { code: 0, output: result.stdout };
+    } catch (error) {
+      return { code: error.code, output: `${error.stdout ?? ""}${error.stderr ?? ""}` };
+    }
+  };
+  try {
+    const config = await configFile(parent, { TRACKER_KEY: "eff3ct0/factory", CI_STACKS: "" });
+    const target = path.join(parent, "without-ci");
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, applied.stderr);
+    await assert.rejects(stat(path.join(target, ".github/workflows/ci.yml")));
+    await assert.rejects(stat(path.join(target, ".factory/checks")));
+    assert.deepEqual(await layout(target), { code: 0, output: "factory layout OK\n" });
+
+    const required = path.join(target, ".factory/templates/agent-runbook.md");
+    const original = await readFile(required);
+    await rm(required);
+    assert.match((await layout(target)).output, /inherited support file missing.*agent-runbook\.md/u);
+    await writeFile(required, original);
+    const checks = path.join(target, ".factory/checks");
+    await writeFile(checks, "invalid reserved path\n");
+    assert.match((await layout(target)).output, /invalid .factory directory: .factory\/checks/u);
+    await rm(checks);
+
+    const selectedConfig = await configFile(parent, { TRACKER_KEY: "eff3ct0/factory", CI_SYSTEM: "GitHub Actions", CI_STACKS: "typescript" });
+    const selected = path.join(parent, "with-ci");
+    const selectedApply = await run(["apply", "--target", selected, "--config", selectedConfig, "--non-interactive"]);
+    assert.equal(selectedApply.code, 0, selectedApply.stderr);
+    assert.deepEqual(await layout(selected), { code: 0, output: "factory layout OK\n" });
+    await rm(path.join(selected, ".github/workflows/ci.yml"));
+    assert.equal((await layout(selected)).code, 0, "standalone layout has no CI-selection context");
+    const verify = await run(["verify", "--target", selected, "--config", selectedConfig, "--non-interactive"]);
+    assert.notEqual(verify.code, 0);
+    assert.equal(json(verify).status, "not-created");
+    assert.ok(json(verify).operations.some(({ path: file, action }) => file === ".github/workflows/ci.yml" && action !== "noop"));
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("unknown files and symlink escapes fail without overwriting", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-conflict-"));
   const target = path.join(parent, "project");
