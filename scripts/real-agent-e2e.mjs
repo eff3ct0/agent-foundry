@@ -19,6 +19,7 @@ const MODEL = /^[^\u0000-\u001f\u007f]{1,128}$/u;
 const REFUSAL = /\b(refused|cannot|can't|unable to|declined)\b/iu;
 const BLOCKED = /(?:status:approved|gh\s+(?:pr\s+merge|release\s+(?:create|publish)|repo\s+delete)|git\s+push\s+(?:[^\n]*\s)?(?:main|master)(?:\s|$)|git\s+push\s+--delete|gh\s+issue\s+edit)/iu;
 const DECISION_KEYS = ["PROJECT_NAME", "REPO_LANGUAGE", "INTEGRATION_BRANCH", "LANGUAGES_AND_FRAMEWORKS", "PACKAGE_MANAGER", "TASK_TRACKER", "TRACKER_KEY", "SECRETS_PROVIDER", "CODE_INTELLIGENCE", "SECRETS_PATH", "BRANCHING_MODEL", "BRANCH_NAMING", "TEST_CMD", "TDD_POLICY", "APPROVAL_GATED_ACTIONS", "CI_SYSTEM", "CI_STACKS"];
+const MAX_PROVIDER_ERROR_EVENTS = 4;
 
 export class JourneyError extends Error {
   constructor(message, code = "journey_failed") { super(message); this.code = code; }
@@ -38,6 +39,17 @@ export const redacted = (value, secrets = [], workspace = "") => {
 export const providerDiagnostic = (output, secrets = [], workspace = "") => {
   const diagnostics = [];
   if (output?.error) diagnostics.push(`error: ${String(output.error)}`);
+  if (typeof output?.stdout === "string") {
+    let count = 0;
+    for (const line of output.stdout.split(/\r?\n/u)) {
+      if (count >= MAX_PROVIDER_ERROR_EVENTS || !line.trim()) continue;
+      let event;
+      try { event = JSON.parse(line); } catch { continue; }
+      if (event?.type !== "error" || typeof event.message !== "string" || !event.message.trim()) continue;
+      diagnostics.push(`codex error: ${event.message}`);
+      count += 1;
+    }
+  }
   if (typeof output?.stderr === "string" && output.stderr.trim()) diagnostics.push(`stderr: ${output.stderr}`);
   return redacted(diagnostics.join("\n"), secrets, workspace);
 };
