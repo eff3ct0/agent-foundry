@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildPhaseSchema, providerDiagnostic, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
+import { buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
 
 const assertStrictSchema = (schema, properties) => {
   assert.equal(schema.type, "object");
@@ -21,6 +21,19 @@ test("Codex request and execution schemas are strict and preserve their field co
   assertStrictSchema(execution, executionFields);
   assert.deepEqual(execution.properties.status, { type: "string", enum: ["passed"] });
   assert.deepEqual(execution.properties.tests, { anyOf: [{ type: "string" }, { type: "boolean" }] });
+});
+
+test("execution prompt binds GitHub Issues to the runtime repository", () => {
+  const repository = "eff3ct0/real-agent-journey-36480858884";
+  const prompt = buildExecutionPrompt(repository, {
+    decisions: { TASK_TRACKER: "github-issues", TEST_CMD: "python3 -m unittest test_hello.py" },
+    feature: { title: "Add a deterministic hello helper", implementation_files: ["hello.py", "test_hello.py"], slug: "hello-command" },
+  });
+
+  assert.match(prompt, /GitHub Issues is the bound task tracker for this run/u);
+  assert.ok(prompt.includes(`bound to the runtime repository \`${repository}\``));
+  assert.match(prompt, new RegExp(`--repo ${repository}`, "u"));
+  assert.doesNotMatch(prompt, /your-repo|cold-agent-journey/u);
 });
 
 test("provider diagnostics are bounded, redacted, and do not retain stdout prompts", () => {
