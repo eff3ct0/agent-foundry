@@ -202,7 +202,7 @@ jobs:
           JOURNEY_REPOSITORY: ${{ needs.prepare.outputs.repository }}
           JOURNEY_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
         run: |
-          mkdir generated
+          mkdir generated journey-runner
           node --input-type=module <<'NODE'
           import { writeFile } from "node:fs/promises";
           import { deterministicConfiguration } from "./scripts/package-consumer-verify.mjs";
@@ -222,7 +222,7 @@ jobs:
           if (metadata.name !== name || metadata.version !== version) throw new Error("published package metadata does not match the exact journey package");
           await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: process.env.JOURNEY_PACKAGE_SPEC }, null, 2)}\n`);
           NODE
-          npx --yes --package "$JOURNEY_PACKAGE_SPEC" foundry apply --target generated --config answers.json --non-interactive --yes
+          npm exec --yes --prefix journey-runner --package "$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers.json --non-interactive --yes
           git -C generated init -b main
           git -C generated config user.name "real-agent-journey"
           git -C generated config user.email "real-agent-journey@users.noreply.github.com"

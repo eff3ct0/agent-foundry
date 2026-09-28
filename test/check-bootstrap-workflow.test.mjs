@@ -348,11 +348,12 @@ test("real-agent journey derives scheduled package versions from the checked-out
   });
 });
 
-test("real-agent journey executes its scoped package guard with exact offline metadata", async () => {
+test("real-agent journey executes its isolated scoped package guard with exact offline metadata", async () => {
   await fixture(async (directory) => {
     const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
-    const match = workflow.match(/          npm view "\$JOURNEY_PACKAGE_SPEC" --json > package-metadata\.json\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          npx --yes --package "\$JOURNEY_PACKAGE_SPEC" foundry apply/u);
+    const match = workflow.match(/          npm view "\$JOURNEY_PACKAGE_SPEC" --json > package-metadata\.json\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          npm exec --yes --prefix journey-runner --package "\$JOURNEY_PACKAGE_SPEC" -- foundry apply/u);
     assert.ok(match, "the metadata heredoc must run immediately before package apply");
+    assert.match(workflow, /          mkdir generated journey-runner\n/u, "the npm prefix must remain outside generated project content");
     const scriptText = match[1].split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
     await mkdir(path.join(directory, "generated"));
     const sourceSha = "a".repeat(40);
