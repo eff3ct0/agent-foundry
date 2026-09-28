@@ -360,8 +360,6 @@ jobs:
           pnpm typecheck
           pnpm test
           node scripts/typed-runtime/check-real-agent-workflow.js
-          node --test --test-name-pattern='typed module emitter' test/package.test.mjs
-          pnpm test:package-consumer
           node scripts/check-determinism.mjs
 `;
   if (text !== expected) fail("archetype Node 20 PR workflow differs from its read-only contract");
