@@ -31,6 +31,20 @@ test("the repository delivery contract remains structurally valid", async () => 
   assert.deepEqual(await check(), []);
 });
 
+test("CI and phase handoff distinguish executed checks from non-applicable and unavailable runners", async () => {
+  const contract = await readFile(path.join(root, "ci/_contract.md"), "utf8");
+  const handoff = await readFile(path.join(root, "templates/handoff.md"), "utf8");
+  const recipes = JSON.parse(await readFile(path.join(root, "ci/recipes.json"), "utf8"));
+  assert.match(contract, /scripts\.test.*required/u);
+  assert.match(contract, /absent optional[\s\S]*not applicable/u);
+  assert.match(contract, /runner, observed exit status, and result/u);
+  assert.match(contract, /Creator plan\/verify and static readiness do not establish execution/u);
+  assert.match(handoff, /runner, observed exit and result; for omitted checks: why not applicable/u);
+  assert.doesNotMatch(recipes.typescript, /--if-present/u);
+  assert.match(recipes.typescript, /not applicable \(no npm script; runner omitted\)/u);
+  assert.match(recipes.go, /go test \.\/\.\./u);
+});
+
 test("the required task contracts make provider readback and local projections explicit", async () => {
   for (const relative of ["AGENT.md", "templates/agent-runbook.md", "templates/handoff.md", "docs/agent-init.md", "providers/task/_contract.md"]) {
     const text = await readFile(path.join(root, relative), "utf8");

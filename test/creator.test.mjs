@@ -522,6 +522,93 @@ test("composes bindings and CI recipes, then removes creator-only inputs", async
   assert.equal(json(rerun).status, "noop");
 });
 
+test("generated CI executes applicable npm checks, omits absent lint, and preserves Go gates", async (t) => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-ci-applicability-"));
+  const target = path.join(parent, "project");
+  try {
+    const config = await configFile(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "typescript,go" });
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, applied.stderr);
+    const workflow = await readFile(path.join(target, ".github/workflows/ci.yml"), "utf8");
+    assert.doesNotMatch(workflow, /--if-present/u);
+    const install = workflow.match(/      - name: install\n        run: ([^\n]+)/u)?.[1];
+    const verifyBlock = workflow.match(/      - name: verify configured checks\n        run: \|\n((?:          .*\n)+)/u)?.[1];
+    assert.equal(install, "npm ci");
+    assert.ok(verifyBlock, "generated TypeScript verification command must be present");
+    const verifyCommand = verifyBlock.replace(/^          /gmu, "");
+    // A nested node --test must not inherit the parent test runner's recursion guard.
+    const { NODE_TEST_CONTEXT: _parentTestContext, ...fixtureEnvironment } = process.env;
+    const shell = async (command) => {
+      try {
+        const { stdout, stderr } = await execFileAsync("sh", ["-e", "-c", command], {
+          cwd: target,
+          env: { ...fixtureEnvironment, npm_config_offline: "true", npm_config_audit: "false", GOTOOLCHAIN: "local" },
+        });
+        return { code: 0, output: stdout + stderr };
+      } catch (error) {
+        return { code: error.code, output: (error.stdout ?? "") + (error.stderr ?? "") };
+      }
+    };
+    const packageFile = path.join(target, "package.json");
+    await writeFile(packageFile, JSON.stringify({ name: "ci-applicability-fixture", version: "1.0.0", scripts: {} }));
+    await writeFile(path.join(target, "package-lock.json"), JSON.stringify({
+      name: "ci-applicability-fixture", version: "1.0.0", lockfileVersion: 3,
+      packages: { "": { name: "ci-applicability-fixture", version: "1.0.0" } },
+    }));
+    await writeFile(path.join(target, "ci-pass.test.mjs"), 'import { test } from "node:test";\ntest("passes", () => {});\n');
+    assert.equal((await shell(install)).code, 0, "generated npm install must execute");
+
+    const missing = await shell(verifyCommand);
+    assert.notEqual(missing.code, 0, missing.output);
+    assert.match(missing.output, /test: unavailable \(required npm script missing or invalid\)/u);
+    t.diagnostic(`missing test: node -e verifier exit=${missing.code}; test unavailable`);
+    const continuation = missing.output.match(/npm pkg set scripts\.test="node --test" && npm test/u)?.[0];
+    assert.ok(continuation, "the missing-runner diagnostic must name a runnable exit");
+    const resumed = await shell(continuation);
+    assert.equal(resumed.code, 0, resumed.output);
+    t.diagnostic(`printed continuation: ${continuation} exit=${resumed.code}`);
+    const optional = await shell(verifyCommand);
+    assert.equal(optional.code, 0, optional.output);
+    assert.match(optional.output, /lint: not applicable \(no npm script; runner omitted\)/u);
+    assert.doesNotMatch(optional.output, /lint: runner=/u);
+    assert.match(optional.output, /test: runner=npm run test exit=0 result=passed/u);
+    t.diagnostic(`optional lint: node -e verifier exit=${optional.code}; lint not applicable; npm run test exit=0 passed`);
+
+    await writeFile(packageFile, JSON.stringify({
+      name: "ci-applicability-fixture", version: "1.0.0",
+      scripts: { lint: 'node -e "process.exit(1)"', test: "node --test ci-pass.test.mjs" },
+    }));
+    const lintFailure = await shell(verifyCommand);
+    assert.notEqual(lintFailure.code, 0, lintFailure.output);
+    assert.match(lintFailure.output, /lint: runner=npm run lint exit=1 result=failed/u);
+    assert.match(lintFailure.output, /test: runner=npm run test exit=0 result=passed/u);
+    t.diagnostic(`configured lint: node -e verifier exit=${lintFailure.code}; npm run lint exit=1 failed`);
+
+    await writeFile(path.join(target, "ci-fail.test.mjs"), 'import { test } from "node:test";\ntest("fails", () => { throw new Error("expected failure"); });\n');
+    await writeFile(packageFile, JSON.stringify({
+      name: "ci-applicability-fixture", version: "1.0.0", scripts: { test: "node --test ci-fail.test.mjs" },
+    }));
+    const failing = await shell(verifyCommand);
+    assert.notEqual(failing.code, 0, failing.output);
+    assert.match(failing.output, /test: runner=npm run test exit=[1-9][0-9]* result=failed/u);
+    t.diagnostic(`failing test: node -e verifier exit=${failing.code}; npm run test failed`);
+
+    const goJob = workflow.split("  go:\n")[1];
+    assert.ok(goJob, "selected Go recipe must be present");
+    await writeFile(path.join(target, "go.mod"), "module example.com/ci-fixture\n\ngo 1.20\n");
+    await writeFile(path.join(target, "example.go"), "package example\n\nfunc Answer() int { return 42 }\n");
+    const goCommands = [...goJob.matchAll(/^        run: (.+)$/gmu)].map((match) => match[1]);
+    assert.deepEqual(goCommands, ['test -z "$(gofmt -l .)"', "go vet ./...", "go test ./...", "go build ./..."]);
+    for (const command of goCommands) {
+      const result = await shell(command);
+      assert.equal(result.code, 0, `${command}: ${result.output}`);
+      t.diagnostic(`go: ${command} exit=${result.code} passed`);
+    }
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("all task selections generate exclusive, readable provider-native bindings", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-task-bindings-"));
   const selections = [

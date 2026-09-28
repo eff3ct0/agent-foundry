@@ -19,7 +19,7 @@ target identity needed to resume; do not map a non-GitHub task provider to GitHu
 - Exact next action: `<EXACT_NEXT_ACTION>`
 - Branch: `<BRANCH>`
 - Commit: `<COMMIT_SHA_OR_WIP>`
-- Verification evidence: `<COMMANDS_AND_RESULTS_OR_NOT_YET_RUN>`
+- Verification evidence: `<COMMANDS_AND_RESULTS_OR_NOT_YET_RUN>` (for applicable checks: runner, observed exit and result; for omitted checks: why not applicable; for unavailable required runners: diagnostic and runnable exit. Creator/static readiness is not execution.)
 - Required evidence to resume: `<EVIDENCE_REQUIRED_FOR_NEXT_AGENT>`
 - Resume phase when blocked: `<PHASE_OR_NOT_BLOCKED>`
 - Blocker or approval needed: `<BLOCKER_OR_NOT_BLOCKED>`
