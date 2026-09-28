@@ -260,6 +260,18 @@ const checkNpmRelease = (text) => {
       || /(?:^|\n)\s*(?:continue-on-error|defaults):/u.test(text) || /(?:^|\n)\s*if:\s*always\(\)/u.test(text)) {
     fail("npm release publish step must gate npm publish behind the version probe and exclusive claim without bypass");
   }
+  const readbackStep = section(text, readback, "      - name: Upload immutable release evidence\n");
+  requireText(readbackStep, [
+    "for attempt in 1 2 3 4 5; do",
+    "rm -f identity/registry-metadata.json registry-package/*.tgz",
+    'if npm view "$PACKAGE_SPEC" --json > identity/registry-metadata.json',
+    '&& npm pack "$PACKAGE_SPEC" --ignore-scripts --pack-destination registry-package; then',
+    'if [ "$attempt" -eq 5 ]; then',
+    'sleep "$((attempt * 5))"',
+  ], "npm release registry readback retry contract is missing");
+  if (readbackStep.includes("npm publish") || readbackStep.includes("claimPublishAttempt")) {
+    fail("npm release registry readback must not retry publication or the exclusive claim");
+  }
   if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
 };
 
