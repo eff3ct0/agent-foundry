@@ -125,7 +125,7 @@ const checkJourney = (text, projectRoot) => {
   requireText(text, [
      "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.mjs collect", "retention-days: 7",
       "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY", "package_version", "JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'", "--package-name '@eff3ct/agent-foundry'", "npx --yes --package", "foundry apply",
-     "release-resolve.mjs --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"",
+      "release-resolve.mjs --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"", "JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || '' }}", "package.json version must be exact",
   ], "real-agent journey is missing");
   if (text.indexOf("Resolve immutable source revision") > text.indexOf("\n  provision:\n")) fail("real-agent journey must resolve its source before provisioning");
   if (["/generate", "bootstrap-e2e.py", "python3"].some((value) => text.includes(value))) fail("real-agent journey must use the Node empty-repository boundary");
@@ -142,10 +142,11 @@ const checkJourney = (text, projectRoot) => {
     '          const metadata = JSON.parse(await readFile("package-metadata.json", "utf8"));',
     '          const name = "@eff3ct/agent-foundry";',
     '          const spec = process.env.JOURNEY_PACKAGE_SPEC ?? "";',
-    '          const version = spec.slice(`${name}@`.length);',
+    '          const packageMatch = /^(?<name>@eff3ct\\/agent-foundry)@(?<version>.+)$/u.exec(spec);',
+    '          const version = packageMatch?.groups?.version ?? "";',
     '          const identifier = "(?:0|[1-9]\\\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)";',
     '          const semver = new RegExp(`^(?:0|[1-9]\\\\d*)\\\\.(?:0|[1-9]\\\\d*)\\\\.(?:0|[1-9]\\\\d*)(?:-${identifier}(?:\\\\.${identifier})*)?(?:\\\\+[0-9A-Za-z-]+(?:\\\\.[0-9A-Za-z-]+)*)?$`);',
-    '          if (process.env.JOURNEY_PACKAGE_NAME !== name || spec !== `${name}@${version}` || !semver.test(version)) throw new Error("journey package spec must identify the exact scoped package and version");',
+    '          if (process.env.JOURNEY_PACKAGE_NAME !== name || packageMatch?.groups?.name !== name || spec !== `${name}@${version}` || !semver.test(version)) throw new Error("journey package spec must identify the exact scoped package and version");',
     '          if (metadata.name !== name || metadata.version !== version) throw new Error("published package metadata does not match the exact journey package");',
     '          await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: process.env.JOURNEY_PACKAGE_SPEC }, null, 2)}\\n`);',
     '          NODE',

@@ -30,7 +30,7 @@ env:
   JOURNEY_OWNER: ${{ vars.BOOTSTRAP_E2E_OWNER }}
   JOURNEY_RUNTIME: ${{ inputs.runtime || 'codex-cli' }}
   JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'
-  JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || vars.REAL_AGENT_PACKAGE_VERSION || '' }}
+  JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || '' }}
   JOURNEY_CONTRACT_VERSION: real-agent-journey/v1
   JOURNEY_REPOSITORY: ${{ vars.BOOTSTRAP_E2E_OWNER && format('{0}/real-agent-journey-{1}', vars.BOOTSTRAP_E2E_OWNER, github.run_id) || '' }}
 
@@ -79,7 +79,17 @@ jobs:
             source_tag=""
           fi
           package_version="$PACKAGE_VERSION"
-          if [ -n "$source_tag" ]; then package_version="${source_tag#v}"; fi
+          if [ -n "$source_tag" ]; then
+            package_version="${source_tag#v}"
+          elif [ -z "$package_version" ]; then
+            package_version="$(node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const version = JSON.parse(readFileSync("package.json", "utf8")).version;
+          if (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) throw new Error("package.json version must be exact");
+          process.stdout.write(version);
+          NODE
+            )"
+          fi
           node -e 'if (!/^[0-9a-f]{40}$/.test(process.argv[1])) throw new Error("source SHA must be a full lowercase SHA")' "$source_sha"
           node -e 'if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(process.argv[1])) throw new Error("package version must be exact")' "$package_version"
           printf 'sha=%s\ntag=%s\npackage_version=%s\n' "$source_sha" "$source_tag" "$package_version" >> "$GITHUB_OUTPUT"
@@ -204,10 +214,11 @@ jobs:
           const metadata = JSON.parse(await readFile("package-metadata.json", "utf8"));
           const name = "@eff3ct/agent-foundry";
           const spec = process.env.JOURNEY_PACKAGE_SPEC ?? "";
-          const version = spec.slice(`${name}@`.length);
+          const packageMatch = /^(?<name>@eff3ct\/agent-foundry)@(?<version>.+)$/u.exec(spec);
+          const version = packageMatch?.groups?.version ?? "";
           const identifier = "(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)";
           const semver = new RegExp(`^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-${identifier}(?:\\.${identifier})*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`);
-          if (process.env.JOURNEY_PACKAGE_NAME !== name || spec !== `${name}@${version}` || !semver.test(version)) throw new Error("journey package spec must identify the exact scoped package and version");
+          if (process.env.JOURNEY_PACKAGE_NAME !== name || packageMatch?.groups?.name !== name || spec !== `${name}@${version}` || !semver.test(version)) throw new Error("journey package spec must identify the exact scoped package and version");
           if (metadata.name !== name || metadata.version !== version) throw new Error("published package metadata does not match the exact journey package");
           await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: process.env.JOURNEY_PACKAGE_SPEC }, null, 2)}\n`);
           NODE

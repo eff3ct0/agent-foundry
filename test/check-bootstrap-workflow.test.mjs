@@ -289,8 +289,8 @@ test("real-agent journey rejects the retired source repository before hosted exe
 
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 175],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 288],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 299],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);
@@ -301,7 +301,7 @@ test("real-agent journey rejects the inherited run-block YAML indentation defect
 
 test("real-agent journey pins its executable scoped package metadata guard", async () => {
   const mutations = [
-    ['const version = spec.slice(`${name}@`.length);', 'const [name, version] = spec.split("@");'],
+    ['const packageMatch = /^(?<name>@eff3ct\\/agent-foundry)@(?<version>.+)$/u.exec(spec);', 'const [name, version] = spec.split("@");'],
     ['const name = "@eff3ct/agent-foundry";', 'const name = "agent-foundry";'],
     ['|| !semver.test(version)', '|| true'],
     ['metadata.name !== name || metadata.version !== version', 'metadata.name !== name'],
@@ -313,6 +313,39 @@ test("real-agent journey pins its executable scoped package metadata guard", asy
       await reject(directory, "real-agent journey must verify exact scoped package metadata before apply");
     });
   }
+});
+
+test("real-agent journey derives scheduled package versions from the checked-out package manifest", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
+    assert.ok(workflow.includes("JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || '' }}"));
+    assert.equal(workflow.includes("REAL_AGENT_PACKAGE_VERSION"), false);
+    const sourceStep = workflow.split("      - name: Resolve immutable source revision\n")[1]
+      ?.split("      - name: Write run plan\n")[0];
+    assert.ok(sourceStep);
+    const scriptText = sourceStep.split("        run: |\n")[1]
+      ?.split("\n          node -e 'if (!/^[0-9a-f]{40}/u")[0]
+      ?.split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    assert.ok(scriptText);
+    await writeFile(path.join(directory, "package.json"), JSON.stringify({ name: "@eff3ct/agent-foundry", version: "0.1.2" }));
+    const result = await execFileAsync("bash", ["-euo", "pipefail", "-c", scriptText], {
+      cwd: directory,
+      env: {
+        ...process.env,
+        EVENT_NAME: "schedule",
+        REPOSITORY: "eff3ct0/agent-foundry",
+        SOURCE_TAG: "",
+        SOURCE_SHA: "a".repeat(40),
+        EXPECTED_SHA: "",
+        PACKAGE_VERSION: "",
+        GITHUB_EVENT_NAME: "schedule",
+        GITHUB_TOKEN: "",
+        GITHUB_OUTPUT: path.join(directory, "github-output"),
+      },
+    });
+    assert.equal(result.stderr, "");
+    assert.match(await readFile(path.join(directory, "github-output"), "utf8"), /package_version=0\.1\.2\n/u);
+  });
 });
 
 test("real-agent journey executes its scoped package guard with exact offline metadata", async () => {
