@@ -112,7 +112,7 @@ test("generated project describes actual execution boundaries before consequenti
     const verified = await run(["verify", ...args]);
     assert.equal(verified.code, 0, verified.stderr);
     assert.equal(json(verified).status, "verified");
-    const contract = await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/check-delivery-contract.mjs"), "--self-check"], { cwd: target });
+    const contract = await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/typed-inherited-runtime/check-delivery-contract.js"), "--self-check"], { cwd: target });
     assert.match(contract.stdout, /self-check OK/u);
   } finally {
     await rm(parent, { recursive: true, force: true });
