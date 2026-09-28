@@ -111,6 +111,7 @@
         {"path": "scripts/release-prepare.mjs", "kind": "file"},
         {"path": "scripts/released-validation-runner.mjs", "kind": "file"},
         {"path": "scripts/package-consumer-verify.mjs", "kind": "file"},
+        {"path": "scripts/prepare-offline-npm-cache.mjs", "kind": "file"},
         {"path": "scripts/npm-release.mjs", "kind": "file"},
         {"path": "scripts/npm-provenance-policy.mjs", "kind": "file"},
         {"path": "scripts/npm-provenance-audit.mjs", "kind": "file"},

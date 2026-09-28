@@ -107,6 +107,8 @@ test("archetype Node 20 PR check rejects trigger, authority, pin, version, and p
     ["npm install --global pnpm@12.4.2", "npm install --global pnpm@latest"],
     ['test "$(pnpm --version)" = "12.4.2"', 'test "$(pnpm --version)" = "latest"'],
     ["pnpm test:package-consumer", "pnpm build"],
+    ["run: node scripts/prepare-offline-npm-cache.mjs", "run: npm install --online"],
+    ["      - name: Prepare npm cache for packed runtime dependencies\n        run: node scripts/prepare-offline-npm-cache.mjs\n", ""],
     ["node scripts/typed-runtime/check-real-agent-workflow.js", "node scripts/missing-checker.js"],
     ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/typed-runtime/check-real-agent-workflow.js\n          pnpm test"],
     ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/check-determinism.mjs\n          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js"],
