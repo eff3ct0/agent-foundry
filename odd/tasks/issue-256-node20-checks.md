@@ -1,0 +1,27 @@
+# ODD task: Issue #256 Node 20 check deduplication
+
+## Definition and authorization
+
+- Objective: remove redundant repetitions from the archetype-only Node 20 pull-request job without losing independent validation.
+- Scope: `.github/workflows/archetype-node20.yml`, its exact static contract in `scripts/check-bootstrap-workflow.mjs`, negative fixtures in `test/check-bootstrap-workflow.test.mjs`, this record, ownership registration, and the derived payload manifest. Do not change package scripts, permissions, pins, other workflows, or release behavior.
+- Authorization: local-only work on `feat/issue-256-node20-checks-pr` in `/home/steam/git/agent-foundry-worktrees/issue-256-node20-checks-pr`, starting at local `origin/main` `44aee784da55cfdcd1f872d531b474d59269d9e5`. Old isolated branch `feat/issue-256-node20-checks` at `4e98d5c` is read-only reference; do not cherry-pick it. No remote operations, `gh`, fetch, push, PR, SSH, network installs, creator application, or delegation. Hosted Node 20 CI and provider readback remain pending, not passed.
+- Root class: C, redundant validation in a single CI job. `pnpm test` includes the emitter and package-consumer files; focused reruns add no independent coverage. Keep `fetch-depth: 0`, pinned Node and pnpm, `pnpm typecheck`, the full suite, the real-agent workflow checker, and determinism.
+- Acceptance: remove only the two duplicate invocations from the workflow and matching read-only contract; negative mutations must reject removal of essential checks. Run the specified offline verification commands and report exact outcomes. TDD policy is unfilled in the repository, so use Node's test runner without a strict RED/GREEN requirement. Delivery strategy: one coherent conventional work-unit commit; `ask-on-risk` at the 400 authored-line advisory, without code-golf.
+
+## Historical evidence (old isolated branch, not current-main proof)
+
+- The original record at `odd/tasks/issue-256-node20-checks.md` on the read-only branch describes the prior local baseline `df73333c993be4ab14f7ec66b7b280b2daef6d55` and local-only commit `35e61a0f428d99ca4d0a1737860989d6b7652563`, with docs receipt `4e98d5c`. That branch removed the same two duplicate commands but predates the newer workflow checker and current test inventory; it was not integrated here.
+- Earlier offline results on Node v26.9.0 / pnpm 12.4.2: focused workflow tests 29/29, static checker six OK, `pnpm typecheck` exit 0, full tests 254/254, workflow-contract tests 29/29, factory-layout check exit 0, diff check exit 0. The earlier ownership registration required `node scripts/build-payload.mjs --write-lock` to refresh the derived manifest. Earlier commit counted 32 additions + 9 deletions (41 authored lines); these are historical results, NOT proof for this branch.
+
+## Current-main reproduction and implementation
+
+- [x] Definition: verified clean branch/HEAD and read governance, old ODD document, and Engram mirror topic `odd/issue-256-node20-checks/tasks` before editing. Current-main workflow and exact checker include `fetch-depth: 0` and the independent `node scripts/typed-runtime/check-real-agent-workflow.js`, both preserved here. Current Node v26.9.0 and pnpm 12.4.2.
+- [x] Before edits: `node scripts/check-bootstrap-workflow.mjs` six checks OK. A focused emitter probe first failed `ERR_MODULE_NOT_FOUND` because fresh `dist/` was absent; after `pnpm build` (offline store, downloaded 0), it passed 2/2. `pnpm test:package-consumer` rebuilt and passed 4/4. `pnpm test` built and passed 281/281, including those two emitter and four consumer cases. The two separate workflow commands demonstrably rerun the same cases (and the consumer command rebuilds).
+- [x] Implementation: removed only the two repeat invocations from workflow and exact checker, added negative mutations for missing typecheck, replacing the full suite with build, and fetch-depth drift. Existing mutations cover the independent real-agent workflow checker, determinism, ordering, pins, and authority. Package scripts and targeted test commands remain available.
+- [x] Verification: `node scripts/build-payload.mjs --write-lock` regenerated only the derived manifest from the ownership row. On local Node v26.9.0 / pnpm 12.4.2: `node --test test/check-bootstrap-workflow.test.mjs` 39/39 pass; `node scripts/check-bootstrap-workflow.mjs` six static checks OK; `pnpm build` exit 0; `pnpm typecheck` exit 0; `pnpm test` 281/281 pass; `pnpm test:workflow-contract` 39/39 pass; `node scripts/check-determinism.mjs` audit OK; `node scripts/check-factory-layout.mjs` self-check OK; pre-commit `git diff --check` exit 0. Exact committed-range `git diff --check origin/main...HEAD` remains to run after commit.
+- [ ] Evidence/delivery: inspect pre-commit status, diff, and log -10; stage only intended paths and commit as one coherent `fix(ci)` work unit. Record the commit SHA and authored additions + deletions here (a docs-only receipt commit is permitted). No provider-confirmed DONE without authorized tracker readback or hosted CI.
+
+## Rollback and gaps
+
+- Rollback boundary: revert the two removed workflow commands together with the matching checker literal, adjacent negative mutations, this source-only task record and ownership row, and its derived manifest change; do not revert unrelated Node 20 or release checks.
+- Runtime harness: N/A for a workflow-command deduplication. Full offline tests exercise the consumer behavior, but no hosted Node 20.19.0 run is authorized; record it as pending.
