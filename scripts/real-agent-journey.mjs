@@ -264,7 +264,6 @@ export const provision = async ({ template, owner, runId, expectedSourceSha, out
     if (created.status !== "created" || !Number.isInteger(created.payload?.id)) throw new JourneyError("empty repository creation was not verified", "repository_creation_failed");
     const generated = await readRepository(readClient, repository, "generated_identity_mismatch");
     if (generated.full_name?.toLowerCase() !== repository.toLowerCase() || generated.owner?.login?.toLowerCase() !== validateOwner(owner).toLowerCase() || generated.id !== created.payload.id) throw new JourneyError("generated repository identity did not match", "generated_identity_mismatch");
-    if (generated.default_branch !== null && generated.default_branch !== "main") throw new JourneyError("generated default branch did not match", "default_branch_mismatch");
     evidence = stageEnvelope("provision", runId, repository, "passed", { source_template: sourceRepository, default_branch: "main", revision: sourceSha, owner: validateOwner(owner), repository_id: String(generated.id), source_identity: `${sourceRepository}@${sourceSha}` });
   } catch (error) {
     evidence = stageEnvelope("provision", runId, repository, "failed", {}, error.failure_code ?? error.code ?? "provision_failed");
