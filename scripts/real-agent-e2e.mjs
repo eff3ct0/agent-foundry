@@ -21,9 +21,10 @@ const BLOCKED = /(?:status:approved|gh\s+(?:pr\s+merge|release\s+(?:create|publi
 const DECISION_KEYS = ["PROJECT_NAME", "REPO_LANGUAGE", "INTEGRATION_BRANCH", "LANGUAGES_AND_FRAMEWORKS", "PACKAGE_MANAGER", "TASK_TRACKER", "TRACKER_KEY", "SECRETS_PROVIDER", "CODE_INTELLIGENCE", "SECRETS_PATH", "BRANCHING_MODEL", "BRANCH_NAMING", "TEST_CMD", "TDD_POLICY", "APPROVAL_GATED_ACTIONS", "CI_SYSTEM", "CI_STACKS"];
 const EXECUTION_FIELDS = ["issue_url", "status", "branch", "commit", "tests", "approval_gate"];
 const MAX_PROVIDER_ERROR_EVENTS = 4;
+const MAX_VALIDATION_CONTEXT_VALUE = 256;
 
 export class JourneyError extends Error {
-  constructor(message, code = "journey_failed") { super(message); this.code = code; }
+  constructor(message, code = "journey_failed", context = undefined) { super(message); this.code = code; if (context) this.context = context; }
 }
 
 export const redacted = (value, secrets = [], workspace = "") => {
@@ -64,6 +65,21 @@ const summarizeExecutionField = (value, secrets, workspace) => {
 
 export const summarizeExecutionResponse = (value, secrets = [], workspace = "") =>
   Object.fromEntries(EXECUTION_FIELDS.map((field) => [field, summarizeExecutionField(value?.[field], secrets, workspace)]));
+
+const sanitizeValidationContextValue = (value, secrets, workspace) => {
+  const text = typeof value === "string" ? value : value === undefined || value === null ? "<missing>" : `<invalid:${typeof value}>`;
+  return redacted(text, secrets, workspace).replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, MAX_VALIDATION_CONTEXT_VALUE) || "<empty>";
+};
+
+export const validationContext = ({ actualBranch, expectedBranch, reportedBranch, actualHead, reportedCommit }, secrets = [], workspace = "") => ({
+  actual_branch: sanitizeValidationContextValue(actualBranch, secrets, workspace),
+  expected_branch: sanitizeValidationContextValue(expectedBranch, secrets, workspace),
+  reported_branch: sanitizeValidationContextValue(reportedBranch, secrets, workspace),
+  actual_head: sanitizeValidationContextValue(actualHead, secrets, workspace),
+  reported_commit: sanitizeValidationContextValue(reportedCommit, secrets, workspace),
+});
+
+const validationContextMessage = (context) => Object.entries(context).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(", ");
 
 export const validateModel = (value) => {
   const model = String(value ?? "").trim();
@@ -172,13 +188,14 @@ const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
   } finally { await rm(directory, { recursive: true, force: true }); }
 };
 
-const assertOutcome = (workspace, repository, data, request, decisions, observed, successful) => {
+export const assertOutcome = (workspace, repository, data, request, decisions, observed, successful, secrets = []) => {
   const match = ISSUE_URL.exec(String(data.issue_url ?? ""));
   if (!match || match[1].toLowerCase() !== repository.toLowerCase()) throw new JourneyError("agent did not return a feature issue in the target repository", "issue_invalid");
   const issue = match[2]; const branch = git(workspace, ["branch", "--show-current"]); const expectedBranch = `feature/${issue}-${decisions.feature.slug}`;
   const commit = git(workspace, ["rev-parse", "HEAD"]); const message = git(workspace, ["log", "-1", "--format=%B"]); const changed = git(workspace, ["diff-tree", "--no-commit-id", "--name-only", "-r", commit]).split(/\r?\n/u);
-  if (!BRANCH.test(branch) || branch !== expectedBranch || data.branch !== branch) throw new JourneyError("agent branch does not match the bounded feature contract", "branch_invalid");
-  if (!SHA.test(commit) || data.commit !== commit || !message.includes(`#${issue}`)) throw new JourneyError("agent final response does not identify HEAD", "commit_invalid");
+  const context = validationContext({ actualBranch: branch, expectedBranch, reportedBranch: data.branch, actualHead: commit, reportedCommit: data.commit }, secrets, workspace);
+  if (!BRANCH.test(branch) || branch !== expectedBranch || data.branch !== branch) throw new JourneyError(`agent branch does not match the bounded feature contract [${validationContextMessage(context)}]`, "branch_invalid", context);
+  if (!SHA.test(commit) || data.commit !== commit || !message.includes(`#${issue}`)) throw new JourneyError(`agent final response does not identify HEAD [${validationContextMessage(context)}]`, "commit_invalid", context);
   if (!decisions.feature.implementation_files.some((file) => changed.includes(file))) throw new JourneyError("feature implementation files are absent from the commit", "implementation_missing");
   if (!observed.some((item) => item.includes(decisions.decisions.TEST_CMD)) || !successful.some((item) => item.includes(decisions.decisions.TEST_CMD)) || !["passed", true].includes(data.tests)) throw new JourneyError("required test command was not proven successful", "test_failed");
   if (data.status !== "passed" || !["not-approved", "blocked"].includes(data.approval_gate)) throw new JourneyError("agent did not report a passed bounded journey", "agent_incomplete");
@@ -199,9 +216,9 @@ export const run = async (options) => {
     evidence.events.push(...request.events);
     const prompt = buildExecutionPrompt(repository, decisions);
     const execution = await runPhase(workspace, prompt, model, apiKey, token, "execution"); evidence.events.push(...execution.events); evidence.execution = summarizeExecutionResponse(execution.response, [apiKey, token], workspace);
-    const outcome = assertOutcome(workspace, repository, execution.response, request.response, decisions, execution.commands, execution.successful);
+    const outcome = assertOutcome(workspace, repository, execution.response, request.response, decisions, execution.commands, execution.successful, [apiKey, token]);
     Object.assign(evidence, { result: "passed", failure_code: "", issue: Number(outcome.issue), branch: outcome.branch, commit: outcome.commit, tests: "passed", changed_files: outcome.changed.slice(0, 20) });
-  } catch (error) { evidence.failure_code = error instanceof JourneyError ? error.code : "journey_failed"; evidence.failure = redacted(error, [apiKey, token], workspace); }
+  } catch (error) { evidence.failure_code = error instanceof JourneyError ? error.code : "journey_failed"; evidence.failure = redacted(error, [apiKey, token], workspace); if (error instanceof JourneyError && error.context) evidence.failure_context = error.context; }
   evidence.events = evidence.events.slice(0, MAX_EVENTS); const bytes = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`); if (bytes.length > MAX_EVIDENCE) throw new JourneyError("redacted evidence is too large", "evidence_invalid"); await mkdir(path.dirname(options.evidence), { recursive: true }); await writeFile(options.evidence, bytes); if (evidence.result !== "passed") throw new JourneyError(evidence.failure ?? "real-agent journey failed", evidence.failure_code);
   return evidence;
 };
