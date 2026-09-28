@@ -552,9 +552,18 @@ const validateFactoryWorkflows = async (git: (...args: string[]) => Promise<stri
           || !parsed.get("on").has("workflow_call")
           || !(parsed.get("on").get("workflow_call") === null || parsed.get("on").get("workflow_call") instanceof Map)
           || !(parsed.get("jobs") instanceof Map) || parsed.get("jobs").size === 0) throw new Error("workflow_call and jobs must be mappings");
+      const nonemptyString = (value: unknown): value is string => typeof value === "string" && !!value.trim();
+      const labels = (value: unknown): boolean => nonemptyString(value)
+        || (Array.isArray(value) && value.length > 0 && value.every(nonemptyString));
+      const supportedRunner = (value: unknown): boolean => labels(value)
+        || (value instanceof Map && value.size > 0
+          && [...value.keys()].every((key) => key === "group" || key === "labels")
+          && (!value.has("group") || nonemptyString(value.get("group")))
+          && (!value.has("labels") || labels(value.get("labels"))));
       for (const job of parsed.get("jobs").values()) {
         if (!(job instanceof Map) || (job.has("steps") === job.has("uses"))) throw new Error("jobs must contain steps or uses");
         if (job.has("uses") && (typeof job.get("uses") !== "string" || !job.get("uses").trim())) throw new Error("job uses must be a nonempty string");
+        if (job.has("steps") && !supportedRunner(job.get("runs-on"))) throw new Error("step jobs require a nonempty runs-on runner");
         if (job.has("steps") && (!Array.isArray(job.get("steps")) || !job.get("steps").length
             || job.get("steps").some((step: unknown) => !(step instanceof Map)
               || step.has("run") === step.has("uses")
