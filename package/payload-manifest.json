@@ -55,8 +55,8 @@
     {
       "path": ".github/workflows/sync-labels.yml",
       "mode": "100644",
-      "size": 985,
-      "sha256": "0f0d19f5c21ebce6bbfe1d949164dd05c10d3e3f4109f1e2e7302371cedb331a"
+      "size": 1002,
+      "sha256": "153bbdb1f5d8d3c1671121fe57861a100d46a68d2ffa77eb057bef594566cfb2"
     },
     {
       "path": ".gitignore",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:9ff5572841f7a898929aa7fe63eec2ffbb70907d90f56b13ace0a43aa380411d"
+  "payload_digest": "sha256:90f29f1e424b89734101e1f03a8ece2377b3e42574a30ced26f704e2ce48239b"
 }
