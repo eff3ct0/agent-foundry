@@ -101,12 +101,14 @@ test("archetype Node 20 PR check rejects trigger, authority, pin, version, and p
     ["  pull_request:", "  pull_request_target:"],
     ["  contents: read", "  contents: write"],
     ["actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", "actions/checkout@v4"],
+    ["fetch-depth: 0", "fetch-depth: 1"],
     [`actions/setup-node@${bootstrapPinnedActions["actions/setup-node"]}`, "actions/setup-node@v4"],
     ["node-version: 20.19.0", "node-version: 22"],
     ["npm install --global pnpm@12.4.2", "corepack enable\n          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2"],
     ["npm install --global pnpm@12.4.2", "npm install --global pnpm@latest"],
     ['test "$(pnpm --version)" = "12.4.2"', 'test "$(pnpm --version)" = "latest"'],
-    ["pnpm test:package-consumer", "pnpm build"],
+    ["          pnpm typecheck\n", ""],
+    ["          pnpm test\n", "          pnpm build\n"],
     ["node scripts/typed-runtime/check-real-agent-workflow.js", "node scripts/missing-checker.js"],
     ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/typed-runtime/check-real-agent-workflow.js\n          pnpm test"],
     ["          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js", "          node scripts/check-determinism.mjs\n          pnpm test\n          node scripts/typed-runtime/check-real-agent-workflow.js"],
@@ -371,7 +373,7 @@ test("real-agent journey maps JOURNEY_TOKEN to AGENT_GITHUB_TOKEN only in the co
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
     ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 303],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 305],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);

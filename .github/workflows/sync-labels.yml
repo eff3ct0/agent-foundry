@@ -10,6 +10,7 @@ on:
       - scripts/typed-inherited-runtime/package.json
 
 permissions:
+  contents: read
   issues: write
 
 jobs:

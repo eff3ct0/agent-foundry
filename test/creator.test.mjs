@@ -97,6 +97,9 @@ test("generated module inventory uses the composed creator plan, not application
     const labelScript = path.join(target, ".factory/scripts/typed-inherited-runtime/sync-github-labels.js");
     const labelsWorkflow = await readFile(path.join(target, ".github/workflows/sync-labels.yml"), "utf8");
     const governanceWorkflow = await readFile(path.join(target, ".github/workflows/governance.yml"), "utf8");
+    assert.match(labelsWorkflow, /^permissions:\n  contents: read\n  issues: write\n/mu);
+    assert.match(labelsWorkflow, /persist-credentials: false/u);
+    assert.match(labelsWorkflow, /pnpm install --frozen-lockfile --ignore-scripts\n          pnpm build[\s\S]*?run: node \.factory\/scripts\/typed-inherited-runtime\/sync-github-labels\.js/u);
     assert.match(governanceWorkflow, /node \.factory\/scripts\/typed-inherited-runtime\/check-pr-governance\.js/u);
     assert.doesNotMatch(governanceWorkflow, /pnpm build/u);
     assert.match(labelsWorkflow, /node \.factory\/scripts\/typed-inherited-runtime\/sync-github-labels\.js --repo/u);
