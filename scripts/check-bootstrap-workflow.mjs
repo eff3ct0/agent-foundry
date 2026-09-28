@@ -124,7 +124,7 @@ const checkJourney = (text, projectRoot) => {
   for (const [action, sha] of Object.entries(pinnedActions)) if (!uses.includes(`${action}@${sha}`)) fail(`real-agent journey is missing required action pin: ${action}`);
   requireText(text, [
      "release:\n    types: [published]", "schedule:", "workflow_dispatch:", "permissions: {}", "cancel-in-progress: false", "if: always()", "JOURNEY_RUNTIME", "real-agent-journey.mjs collect", "retention-days: 7",
-      "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "REAL_AGENT_JOURNEY_API_KEY", "package_version", "JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'", "--package-name '@eff3ct/agent-foundry'", "npm exec --yes --prefix journey-runner --package", "-- foundry apply",
+      "JOURNEY_CONTRACT_VERSION: real-agent-journey/v1", "Install selected runtime", "--provision stage-input/provision.json", "--agent stage-input/agent.json", "--workspace generated", "package_version", "JOURNEY_PACKAGE_NAME: '@eff3ct/agent-foundry'", "--package-name '@eff3ct/agent-foundry'", "npm exec --yes --prefix journey-runner --package", "-- foundry apply",
       "release-resolve.mjs --repository \"$REPOSITORY\" --tag \"$SOURCE_TAG\"", "--source-sha \"$SOURCE_SHA\"", "--expected-source-sha \"${{ needs.prepare.outputs.source_sha }}\"", "JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || '' }}", "package.json version must be exact",
   ], "real-agent journey is missing");
   if (text.indexOf("Resolve immutable source revision") > text.indexOf("\n  provision:\n")) fail("real-agent journey must resolve its source before provisioning");
@@ -134,6 +134,9 @@ const checkJourney = (text, projectRoot) => {
   }
   if (uses.filter((reference) => reference.startsWith("actions/create-github-app-token@")).length !== 4) fail("real-agent journey must mint one token per credential boundary");
   const agent = section(text, "\n  agent:\n", "\n  assert:\n");
+  const agentSecretBinding = "          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}";
+  if (text.includes("REAL_AGENT_JOURNEY_API_KEY")) fail("real-agent journey must not use stale REAL_AGENT_JOURNEY_API_KEY secret alias");
+  requireText(agent, [agentSecretBinding], "real-agent journey agent secret binding is missing");
   const agentToken = section(agent, "\n      - name: Mint agent token\n", "\n      - name: Create initial branch and apply the exact published creator package\n");
   const workflowPermissionLines = [...text.matchAll(/^\s+permission-workflows:\s+\S+\s*$/gmu)];
   const unrelatedStages = [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n"), section(text, "\n  report:\n")];

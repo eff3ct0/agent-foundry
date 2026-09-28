@@ -288,6 +288,30 @@ test("real-agent journey rejects the retired source repository before hosted exe
   });
 });
 
+test("real-agent journey requires the configured OpenAI secret and rejects the stale alias", async () => {
+  const binding = "          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}";
+  await fixture(async (directory) => {
+    await replace(directory, "journey", binding, "          OPENAI_API_KEY: ${{ secrets.MISSING_API_KEY }}");
+    await reject(directory, `real-agent journey agent secret binding is missing ${binding}`);
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "journey", binding, "          OPENAI_API_KEY: ${{ secrets.REAL_AGENT_JOURNEY_API_KEY }}");
+    await reject(directory, "real-agent journey must not use stale REAL_AGENT_JOURNEY_API_KEY secret alias");
+  });
+});
+
+test("real-agent journey keeps the configured OpenAI secret isolated to the agent stage", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
+    const agent = workflow.split("\n  agent:\n")[1]?.split("\n  assert:\n")[0];
+    assert.ok(agent?.includes("          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"));
+    for (const stage of ["provision", "assert", "cleanup", "report"]) {
+      const section = workflow.split(`\n  ${stage}:\n`)[1]?.split(/\n  (?:prepare|provision|agent|assert|cleanup|report):\n/u)[0] ?? "";
+      assert.equal(section.includes("OPENAI_API_KEY"), false, `${stage} must not receive OpenAI credentials`);
+    }
+  });
+});
+
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
     ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
@@ -481,7 +505,7 @@ test("real-agent journey rejects missing contract markers and source resolution"
   });
   await fixture(async (directory) => {
     await replace(directory, "journey", "OPENAI_API_KEY", "MISSING_AGENT_API_KEY");
-    await reject(directory, "agent credentials are not isolated");
+    await reject(directory, "real-agent journey agent secret binding is missing           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}");
   });
 });
 
@@ -503,8 +527,8 @@ test("real-agent journey requires its runtime, inputs, and bounded evidence", as
     await reject(directory, "real-agent journey is missing retention-days: 7");
   });
   await fixture(async (directory) => {
-    await replace(directory, "journey", "REAL_AGENT_JOURNEY_API_KEY", "MISSING_AGENT_KEY");
-    await reject(directory, "real-agent journey is missing REAL_AGENT_JOURNEY_API_KEY");
+    await replace(directory, "journey", "          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}", "          OPENAI_API_KEY: ${{ secrets.MISSING_AGENT_KEY }}");
+    await reject(directory, "real-agent journey agent secret binding is missing           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}");
   });
 });
 
