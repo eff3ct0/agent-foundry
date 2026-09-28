@@ -15,6 +15,7 @@ const script = path.join(root, "scripts", "check-bootstrap-workflow.mjs");
 const workflows = path.join(".github", "workflows");
 const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml", archetypeNode20: "archetype-node20.yml" });
 const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
+const generatedPush = '          git -c http.extraheader="AUTHORIZATION: bearer $JOURNEY_TOKEN" -C generated push origin HEAD:main';
 
 const fixture = async (callback) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bootstrap-workflow-contract-"));
@@ -290,7 +291,7 @@ test("real-agent journey rejects the retired source repository before hosted exe
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
     ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 306],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 302],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);
@@ -413,9 +414,22 @@ test("real-agent journey requires the Agent Foundry generated commit caption exa
     await reject(directory, "real-agent journey generated commit caption must name Agent Foundry");
   });
   await fixture(async (directory) => {
-    await replaceFirst(directory, "journey", "git -C generated push origin HEAD:main", 'git -C generated commit -m "chore: apply published factory template"\n          git -C generated push origin HEAD:main');
+    await replaceFirst(directory, "journey", generatedPush, `git -C generated commit -m "chore: apply published factory template"\n${generatedPush}`);
     await reject(directory, "real-agent journey generated commit caption must name Agent Foundry");
   });
+});
+
+test("real-agent journey requires command-local JOURNEY_TOKEN authentication for the generated repository push", async () => {
+  for (const replacement of [
+    "          git -C generated push origin HEAD:main",
+    "",
+    '          export GIT_CONFIG_COUNT=1\n          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader\n          export GIT_CONFIG_VALUE_0="AUTHORIZATION: bearer $JOURNEY_TOKEN"\n          git -C generated push origin HEAD:main\n          unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0',
+  ]) {
+    await fixture(async (directory) => {
+      await replace(directory, "journey", generatedPush, replacement);
+      await reject(directory, "real-agent journey generated repository push must use command-local JOURNEY_TOKEN authentication");
+    });
+  }
 });
 
 test("real-agent journey rejects a heredoc decoy followed by a wrapped retired commit", async () => {

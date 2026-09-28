@@ -236,11 +236,7 @@ jobs:
           git -C generated add -A
           git -C generated commit -m "chore: initialize with Agent Foundry"
           git -C generated remote add origin "https://github.com/$JOURNEY_REPOSITORY.git"
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
-          export GIT_CONFIG_VALUE_0="AUTHORIZATION: bearer $JOURNEY_TOKEN"
-          git -C generated push origin HEAD:main
-          unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          git -c http.extraheader="AUTHORIZATION: bearer $JOURNEY_TOKEN" -C generated push origin HEAD:main
       - name: Install selected runtime
         run: node scripts/real-agent-journey.mjs install --runtime "$JOURNEY_RUNTIME"
       - name: Run cold-agent adapter
