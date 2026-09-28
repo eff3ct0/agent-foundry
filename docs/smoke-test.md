@@ -125,36 +125,107 @@ structured-output guidance at
 https://developers.openai.com/api/docs/guides/structured-outputs.
 
 ## 1. Create a project from the package
-```
-mkdir factory-smoke-test && cd factory-smoke-test
-pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --non-interactive
+
+Ask the human to choose and confirm the project name, stack/CI ecosystems,
+task tracker and board, secrets provider, persistence language, and remaining
+configuration **before** non-interactive apply. The values below are an
+illustrative decision set, not defaults or consent. Replace them with the
+approved choices. Use an exact published version; do not run the creator on
+the Agent Foundry source checkout. Keep the answers file outside the empty
+target so it cannot conflict with creator-owned files.
+
+```sh
+FOUNDRY_VERSION='REPLACE_WITH_EXACT_PUBLISHED_VERSION'
+SMOKE_DIR=$(mktemp -d -t factory-smoke-test.XXXXXX)
+cat > "$SMOKE_DIR/answers.json" <<'JSON'
+{
+  "values": {
+    "PROJECT_NAME": "Disposable smoke project",
+    "REPO_LANGUAGE": "en",
+    "FACTORY_SPEC": "",
+    "FACTORY_REQUIRED": "false",
+    "INTEGRATION_BRANCH": "main",
+    "REPO_URLS": "",
+    "LANGUAGES_AND_FRAMEWORKS": "Python 3",
+    "PACKAGE_MANAGER": "none",
+    "TRACKER": "GitHub Issues",
+    "TRACKER_KEY": "repository issues",
+    "EPIC_ID": "",
+    "TASK_TRACKER": "github-issues",
+    "SECRETS_PROVIDER": "none",
+    "CODE_INTELLIGENCE": "none",
+    "SECRETS_PATH": "",
+    "BRANCHING_MODEL": "GitHub flow",
+    "BRANCH_NAMING": "feature/ticket-slug",
+    "BUILD_CMD": "",
+    "TEST_CMD": "python3 -m unittest",
+    "LINT_CMD": "",
+    "TYPECHECK_CMD": "",
+    "RUN_CMD": "",
+    "ENVIRONMENTS": "local only",
+    "DEPLOY_METHOD": "none",
+    "CI_SYSTEM": "GitHub Actions",
+    "CI_STACKS": "python",
+    "OPENCODE_PLUGIN": "false",
+    "FORMATTER": "",
+    "LINTER": "",
+    "TEST_FRAMEWORK": "unittest",
+    "SCA_TOOL": "",
+    "OBSERVABILITY_STACK": "",
+    "COMMIT_IDENTITY": "",
+    "REPO_CONVENTIONS_FILE": "CONTRIBUTING.md",
+    "TDD_POLICY": "tests-first for non-trivial logic",
+    "COVERAGE_TARGET": "behavior coverage; no hard threshold",
+    "APPROVAL_GATED_ACTIONS": "merge, release publication, deletion"
+  }
+}
+JSON
+pnpm dlx --package "@eff3ct/agent-foundry@$FOUNDRY_VERSION" foundry plan --target "$SMOKE_DIR/project" --config "$SMOKE_DIR/answers.json" --agent none --non-interactive
+pnpm dlx --package "@eff3ct/agent-foundry@$FOUNDRY_VERSION" foundry apply --target "$SMOKE_DIR/project" --config "$SMOKE_DIR/answers.json" --agent none --non-interactive --yes
+pnpm dlx --package "@eff3ct/agent-foundry@$FOUNDRY_VERSION" foundry verify --target "$SMOKE_DIR/project" --config "$SMOKE_DIR/answers.json" --agent none --non-interactive
+pnpm dlx --package "@eff3ct/agent-foundry@$FOUNDRY_VERSION" foundry doctor --target "$SMOKE_DIR/project" --config "$SMOKE_DIR/answers.json" --agent none --non-interactive
 ```
 
 ## 2. Minimal kickoff (NEW agent session inside the repo)
-> You are a cold agent in this newly generated project. Run `node start.mjs`,
-> read CLAUDE.md and AGENT.md, and follow docs/agent-init.md: propose the
-> configuration values, present the complete configuration, explicitly confirm
-> it, compose bindings and CI, and verify.
-> Ask me for decisions (name, stack, tracker, secrets, and persistence language)
-> rather than treating local files or defaults as consent. Do not take outward
+Start the new session in `$SMOKE_DIR/project` (record its absolute path for the
+new session). Apply has already composed bindings and CI from the approved
+answers; do not reapply or invent new consent.
+
+> You are a cold agent in this disposable generated project. Run `node start.mjs`,
+> read CLAUDE.md and AGENT.md, and check docs/bindings.md and
+> .github/workflows/ci.yml against the human-approved answers file outside
+> this target. Report the startup mode and any mismatches. Follow the loop
+> contract only if given an actual task; do not create issues or take outward
 > actions without my approval.
 
-Note: `eff3ct0/factory` (the org instance) does not exist yet, so leave
-`FACTORY_SPEC` empty and set `FACTORY_REQUIRED=false`.
+For the example, no organization baseline is selected: `FACTORY_SPEC` is
+empty and `FACTORY_REQUIRED` is `false`. Change these only on human decision.
 
 ## 3. Success criteria
 - [ ] The kickoff was sufficient; no process explanation was needed.
 - [ ] `node start.mjs` reports the expected setup/work mode.
-- [ ] `foundry apply --non-interactive` returns a successful JSON envelope.
+- [ ] The human confirmed the answers before apply; plan/apply/verify/doctor
+      used the same disposable target, with apply reporting `applied` and
+      `verification: verified`, verify reporting `verified`, and doctor `healthy`.
 - [ ] `docs/bindings.md` contains the selected task and secrets providers.
-- [ ] `.github/workflows/ci.yml` has one job per stack language.
+- [ ] `.github/workflows/ci.yml` has one job for the selected Python stack
+      (or one job per selected ecosystem if the answers were changed).
 - [ ] Generated output contains no `ci/`, `providers/`, `MAINTAINERS.md`, or maintainer-only release tooling.
-- [ ] The agent follows the loop contract (one task/session, tracker state, checkpoint, DoD).
+- [ ] If given a task, the agent follows the loop contract (one task/session,
+      tracker state, checkpoint, DoD); the smoke test alone creates no task.
 - [ ] Persisted project content uses the configured `<REPO_LANGUAGE>`.
 
 ## 4. Cleanup
-```
-rm -rf factory-smoke-test
+From the shell that created `$SMOKE_DIR`, inspect the target and record evidence
+before removing only that run's disposable directory. If the variable or
+answers file is missing, or the directory contains unexpected files, stop
+instead of deleting a guessed path. This is local cleanup, not the hosted
+proof-bound repository cleanup described above.
+
+```sh
+test -n "${SMOKE_DIR:-}" && test -f "$SMOKE_DIR/answers.json" && test -d "$SMOKE_DIR/project" && ls -la -- "$SMOKE_DIR" "$SMOKE_DIR/project"
+# After inspection, remove only this run's exact disposable directory:
+test -n "${SMOKE_DIR:-}" && test -f "$SMOKE_DIR/answers.json" && test -d "$SMOKE_DIR/project" && rm -r -- "$SMOKE_DIR"
 ```
 
 ## 5. Feedback (the improvement engine)
