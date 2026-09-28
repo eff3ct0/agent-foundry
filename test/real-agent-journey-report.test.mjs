@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildReport, reportFailure, reportInput, reportJourney } from "../scripts/real-agent-journey.mjs";
+import { aggregate, buildReport, reportFailure, reportInput, reportJourney, stageEnvelope } from "../scripts/real-agent-journey.mjs";
 
 const sourceRepository = "eff3ct0/agent-foundry";
 const revision = "a".repeat(40);
@@ -99,6 +99,27 @@ test("mismatched failure code and cleanup status fail before any GitHub request"
     /cleanup status does not match cleanup stage evidence/,
   );
   assert.equal(called, false);
+});
+
+test("missing stage evidence gets a stable code and remains reportable", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "journey-missing-stage-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(path.join(directory, "provision.json"), JSON.stringify(stageEnvelope("provision", runId, evidence.repository, "passed", {
+    source_template: sourceRepository,
+    default_branch: "main",
+    revision,
+    owner: "acme",
+    repository_id: "123",
+    source_identity: `${sourceRepository}@${revision}`,
+  })));
+  await writeFile(path.join(directory, "cleanup.json"), JSON.stringify(stageEnvelope("cleanup", runId, evidence.repository, "passed", { owner: "acme", target: evidence.repository })));
+
+  const aggregated = await aggregate(directory, runId, evidence.repository, "codex-cli", runUrl);
+  assert.equal(aggregated.failure_code, "agent_missing");
+  assert.equal(aggregated.stages.agent, undefined);
+  const report = buildReport(aggregated, runUrl);
+  assert.equal(report.stage, "agent");
+  assert.equal(report.failure_code, "agent_missing");
 });
 
 test("report content and fingerprint are deterministic", () => {

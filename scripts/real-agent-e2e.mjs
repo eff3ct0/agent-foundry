@@ -35,6 +35,13 @@ export const redacted = (value, secrets = [], workspace = "") => {
   return text.replaceAll("\u0000", "").slice(0, MAX_TEXT);
 };
 
+export const providerDiagnostic = (output, secrets = [], workspace = "") => {
+  const diagnostics = [];
+  if (output?.error) diagnostics.push(`error: ${String(output.error)}`);
+  if (typeof output?.stderr === "string" && output.stderr.trim()) diagnostics.push(`stderr: ${output.stderr}`);
+  return redacted(diagnostics.join("\n"), secrets, workspace);
+};
+
 export const validateModel = (value) => {
   const model = String(value ?? "").trim();
   if (!MODEL.test(model)) throw new JourneyError("OPENAI_MODEL is absent or malformed", "configuration_missing");
@@ -112,7 +119,10 @@ const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
     const parsed = parseEvents(output.stdout ?? "", workspace, [apiKey, token]);
     if (await import("node:fs/promises").then(({ access }) => access(blocked).then(() => true).catch(() => false)) || parsed.commands.some((command) => BLOCKED.test(command))) throw new JourneyError("approval or destructive action was attempted", "approval_boundary_violation");
     if (output.error?.code === "ETIMEDOUT") throw new JourneyError(`codex CLI timed out during ${phase} phase`, "timeout");
-    if (output.status !== 0) throw new JourneyError(`codex CLI failed during ${phase} phase`, REFUSAL.test(`${output.stdout}\n${output.stderr}`) ? "agent_refused" : "provider_failure");
+    if (output.status !== 0) {
+      const diagnostic = providerDiagnostic(output, [apiKey, token], workspace);
+      throw new JourneyError(`codex CLI failed during ${phase} phase${diagnostic ? `: ${diagnostic}` : ""}`, REFUSAL.test(`${output.stdout}\n${output.stderr}`) ? "agent_refused" : "provider_failure");
+    }
     let response; try { response = JSON.parse(await readFile(final, "utf8")); } catch { throw new JourneyError("agent final response is missing or malformed", "malformed_output"); }
     return { response, ...parsed };
   } finally { await rm(directory, { recursive: true, force: true }); }
