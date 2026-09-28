@@ -43,6 +43,18 @@ const configFile = async (directory, values = {}) => {
   return file;
 };
 
+const factoryFixture = async (directory, values) => {
+  const factory = path.join(directory, "factory");
+  await mkdir(factory);
+  const git = async (...args) => (await execFileAsync("git", ["-C", factory, ...args])).stdout.trim();
+  await git("init", "-q");
+  await writeFile(path.join(factory, "factory.defaults.json"), JSON.stringify({ schema_version: 1, values }));
+  await git("add", "factory.defaults.json");
+  await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "defaults");
+  await git("tag", "v1");
+  return { factory, sha: await git("rev-parse", "HEAD"), git };
+};
+
 const providerExecutables = async (directory, names, exitCode = 0) => {
   const bin = path.join(directory, "bin");
   await mkdir(bin);
@@ -183,6 +195,123 @@ test("plan and dry-run are deterministic and do not mutate an empty target", asy
   await assert.rejects(readdir(target));
   assert.equal(json(first).schema_version, 1);
   assert.ok(json(first).operations.every((operation) => operation.path));
+});
+
+test("pinned defaults merge per key, preserve explicit clears and verify generated no-CI layout", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-"));
+  try {
+    const { factory, sha } = await factoryFixture(parent, {
+      PROJECT_NAME: "Organization project", TASK_TRACKER: "jira", TRACKER: "Jira", TRACKER_KEY: "OLD",
+      EPIC_ID: "OLD-1", SECRETS_PROVIDER: "vault", SECRETS_PATH: "old/path",
+      FACTORY_REQUIRED: "true", REPO_URLS: "https://example.invalid/old", INTEGRATION_BRANCH: "develop",
+    });
+    const config = await configFile(parent, {
+      PROJECT_NAME: "Project answer", FACTORY_SPEC: "acme/factory@v1", REPO_URLS: "", SECRETS_PROVIDER: "none",
+      CI_SYSTEM: "none",
+    });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const first = await run(["plan", ...args]);
+    assert.equal(first.code, 0, first.stdout);
+    assert.equal(first.stdout, (await run(["plan", ...args])).stdout);
+    await assert.rejects(stat(target));
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stdout);
+    assert.equal(json(applied).verification, "verified");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    assert.match(agent, /Project answer/u);
+    assert.match(agent, /acme\/factory@v1/u);
+    assert.match(agent, /GitHub Issues/u);
+    assert.match(agent, /integration branch `develop`/u);
+    assert.doesNotMatch(agent, /old\/path|OLD-1|https:\/\/example\.invalid\/old/u);
+    assert.doesNotMatch(await readFile(path.join(target, "docs/bindings.md"), "utf8"), /old\/path|OLD-1/u);
+    assert.equal((await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/check-factory-layout.mjs"), "--target", target], { cwd: target })).stdout.trim(), "factory layout OK");
+    const state = JSON.parse(await readFile(path.join(target, ".factory-template-creator/state.json"), "utf8"));
+    assert.equal(state.config_digest, json(first).config_digest);
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Changed", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v1", SECRETS_PROVIDER: "none", CI_SYSTEM: "none" } }));
+    assert.equal(json(await run(["plan", ...args])).status, "planned");
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    assert.match(await readFile(path.join(target, "AGENT.md"), "utf8"), /Changed/u);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("invalid factory pins, checkout state and membership reject before target writes", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-invalid-"));
+  try {
+    const { factory, sha, git } = await factoryFixture(parent, { FACTORY_REQUIRED: "true", PROJECT_NAME: "Organization" });
+    const config = await configFile(parent, { FACTORY_SPEC: "acme/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const rejected = async (flags = args) => {
+      const result = await run(["apply", ...flags]);
+      assert.notEqual(result.code, 0, result.stdout);
+      assert.ok(json(result).diagnostics.some(({ code }) => code === "factory_invalid"), result.stdout);
+      await assert.rejects(stat(target));
+    };
+    await rejected(args.map((value) => value === sha ? "a".repeat(40) : value));
+    await rejected(args.filter((_, index) => index !== args.indexOf("--factory-sha") && index !== args.indexOf("--factory-sha") + 1));
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v2" } }));
+    await rejected();
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v1", FACTORY_REQUIRED: "false" } }));
+    await rejected();
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v1" } }));
+    await writeFile(path.join(factory, "factory.defaults.json"), "{}");
+    await rejected();
+    await git("checkout", "--", "factory.defaults.json");
+    for (const text of [
+      '{"schema_version":2,"values":{}}',
+      '{"schema_version":1,"values":{"FACTORY_SPEC":"acme/factory@v1"}}',
+      '{"schema_version":1,"values":{"TASK_TRACKER":"invalid"}}',
+      '{"schema_version":1,"values":{"PROJECT_NAME":"a","PROJECT_NAME":"b"}}',
+    ]) {
+      await writeFile(path.join(factory, "factory.defaults.json"), text);
+      await git("add", "factory.defaults.json");
+      await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "invalid defaults");
+      await git("tag", "-f", "v1");
+      const currentSha = await git("rev-parse", "HEAD");
+      await rejected(args.map((value) => value === sha ? currentSha : value));
+    }
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("factory Git verification ignores inherited repository and configuration overrides", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-git-env-"));
+  try {
+    const { factory, sha } = await factoryFixture(parent, { PROJECT_NAME: "Organization" });
+    const config = await configFile(parent, { FACTORY_SPEC: "acme/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = ["plan", "--target", target, "--config", config, "--factory-sha", sha, "--non-interactive"];
+    const inherited = {
+      ...process.env,
+      GIT_DIR: path.join(factory, ".git"), GIT_WORK_TREE: factory, GIT_COMMON_DIR: path.join(factory, ".git"),
+      GIT_INDEX_FILE: path.join(factory, ".git", "index"),
+      GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.worktree", GIT_CONFIG_VALUE_0: factory,
+    };
+    const bareRoot = path.join(parent, "bare-root");
+    await mkdir(bareRoot);
+    const rejected = await run([...args, "--factory-root", bareRoot], { env: inherited });
+    assert.notEqual(rejected.code, 0, rejected.stdout);
+    assert.ok(json(rejected).diagnostics.some(({ code }) => code === "factory_invalid"), rejected.stdout);
+    assert.equal(json(await run([...args, "--factory-root", factory], { env: inherited })).status, "planned");
+    const otherRoot = path.join(parent, "other-factory");
+    await execFileAsync("git", ["clone", "-q", "--no-hardlinks", factory, otherRoot]);
+    await execFileAsync("git", ["-C", otherRoot, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-qm", "different HEAD"]);
+    assert.notEqual((await execFileAsync("git", ["-C", otherRoot, "rev-parse", "HEAD"])).stdout.trim(), sha);
+    const spoofed = { ...inherited, GIT_WORK_TREE: otherRoot, GIT_CONFIG_VALUE_0: otherRoot };
+    assert.equal((await execFileAsync("git", ["-C", otherRoot, "rev-parse", "HEAD"], { env: spoofed })).stdout.trim(), sha);
+    const result = await run([...args, "--factory-root", otherRoot], { env: spoofed });
+    assert.notEqual(result.code, 0, result.stdout);
+    assert.ok(json(result).diagnostics.some(({ code }) => code === "factory_invalid"), result.stdout);
+    await assert.rejects(stat(target));
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });
 
 test("interactive configuration prompts for missing required values through the shared validator", async () => {

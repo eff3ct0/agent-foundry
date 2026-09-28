@@ -88,6 +88,13 @@ and history is required; offline checks cannot prove hosted propagation.
   closed when `FACTORY_SPEC` is empty. The creator does not infer consent or
   create organization repositories.
 
-## Evolution (not included in v1)
-- Merged provider defaults (`factory.defaults.json` in `org/factory`, org -> repo inheritance).
-- Organization-level reusable CI workflows (`uses: org/factory/.github/workflows/<lang>.yml@vX`).
+## Offline defaults extension
+
+The creator can merge a pinned, locally checked-out `org/factory` root
+`factory.defaults.json` with project answers. See [the creator's offline pin
+contract](creator.md#pinned-offline-factory-defaults-optional). This does not
+provision a factory, fetch a repository, or verify a remote organization identity:
+the expected full commit SHA must be supplied independently by the caller.
+
+Organization-level reusable CI workflows (`uses: org/factory/.github/workflows/<lang>.yml@vX`)
+remain a separate work unit; no published reusable workflow is supplied here.

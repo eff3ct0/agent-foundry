@@ -11,6 +11,49 @@ foundry verify --target ./new-project --config answers.json --non-interactive
 foundry doctor --target ./new-project --config answers.json --non-interactive
 ```
 
+## Pinned offline factory defaults (optional)
+
+With an independently obtained full commit SHA for the intended `org/factory@vX`,
+prepare a **local, clean checkout** at that commit with its `vX` tag pointing to
+the same commit. No network lookup or origin URL is trusted by the creator.
+Place `factory.defaults.json` at the checkout root:
+
+```json
+{"schema_version":1,"values":{"FACTORY_REQUIRED":"true","TASK_TRACKER":"github-issues","REPO_LANGUAGE":"en"}}
+```
+
+Supply project answers in an external `answers.json`, including `FACTORY_SPEC`:
+
+```json
+{"values":{"FACTORY_SPEC":"acme/factory@v1","PROJECT_NAME":"My project","TASK_TRACKER":"github-issues"}}
+```
+
+```sh
+foundry plan --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive
+foundry apply --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive --yes
+foundry verify --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive
+```
+
+Both flags and `--config` are required together. The creator checks the local
+Git root, clean checkout, `HEAD`, `vX` tag, tracked regular root defaults file,
+and exact caller-supplied SHA before using the defaults. The caller must obtain
+the SHA **independently** from a trusted record binding it to the intended
+organization factory; a local tag, origin URL, or JSON alone cannot establish
+that identity. No fetch or credential access occurs. The defaults file accepts
+only schema version 1 and known placeholder keys; `FACTORY_SPEC` belongs to
+project answers and cannot be set by organization defaults.
+
+Values resolve per key: packaged placeholder defaults, then organization
+defaults, then explicit project answers. An explicit empty optional project
+value clears the inherited value. `FACTORY_REQUIRED=true` in the factory cannot
+be disabled by project answers. When a project switches `TASK_TRACKER` or
+`SECRETS_PROVIDER`, inherited tracker fields (`TRACKER`, `TRACKER_KEY`, `EPIC_ID`)
+or `SECRETS_PATH` respectively do not carry across; supply project-specific
+values if needed. The effective values feed the existing configuration digest,
+ownership and apply/verify checks. Without factory flags, v1 configuration
+behavior is unchanged. To roll back this extension, omit both factory flags and
+use explicit project answers; this does not rewrite existing generated files.
+
 ## Provider-aware setup
 
 The creator has a versioned, provider-neutral catalog for the supported agent

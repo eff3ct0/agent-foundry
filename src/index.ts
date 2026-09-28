@@ -45,7 +45,7 @@ interface ParsedArgs extends Omit<CreatorOptions, "command" | "target"> {
   reducedMotion: boolean;
 }
 
-const usage = "Usage: foundry <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive] [--yes] [--no-color] [--reduced-motion] [--json]\n       foundry github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
+const usage = "Usage: foundry <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--factory-root <local-checkout> --factory-sha <trusted-full-commit-sha>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive] [--yes] [--no-color] [--reduced-motion] [--json]\n       foundry github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
 const errorStatuses = new Set(["error", "conflict", "failed", "not-created", "unhealthy", "cancelled", "verification-failed", "handoff-failed"]);
 
 const isProvisioningCommand = (value: string | undefined): boolean => value === "github-provision" || value === "provision-github";
@@ -91,6 +91,8 @@ const parseArgs = (): ParsedArgs => {
   if (!known.has(command as Command)) throw new CreatorError("invalid_arguments", `unknown command: ${command}`);
   let target = "";
   let configPath: string | undefined;
+  let factoryRoot: string | undefined;
+  let factorySha: string | undefined;
   let nonInteractive = process.env.CI === "1";
   let failAfter: number | undefined;
   let interruptAfter: number | undefined;
@@ -104,6 +106,8 @@ const parseArgs = (): ParsedArgs => {
     const arg = args[index];
     if (arg === "--target" || arg === "-t") target = args[++index] ?? "";
     else if (arg === "--config" || arg === "--answers") configPath = args[++index];
+    else if (arg === "--factory-root") factoryRoot = args[++index];
+    else if (arg === "--factory-sha") factorySha = args[++index];
     else if (arg === "--non-interactive" || arg === "--no-prompt") nonInteractive = true;
     else if (arg === "--yes") yes = true;
     else if (arg === "--no-color") noColor = true;
@@ -119,7 +123,7 @@ const parseArgs = (): ParsedArgs => {
   if (!target) throw new CreatorError("invalid_arguments", "--target is required");
   if (failAfter !== undefined && (!Number.isInteger(failAfter) || failAfter < 1)) throw new CreatorError("invalid_arguments", "--failure-after must be a positive integer");
   if (interruptAfter !== undefined && (!Number.isInteger(interruptAfter) || interruptAfter < 1)) throw new CreatorError("invalid_arguments", "--interrupt-after must be a positive integer");
-  return { command: command as Command, target, configPath, nonInteractive, failAfter, interruptAfter, agent, agents: agents.length > 0 ? agents : undefined, launchAgent, version: false, help: false, json: args.includes("--json"), yes, noColor, reducedMotion };
+  return { command: command as Command, target, configPath, factoryRoot, factorySha, nonInteractive, failAfter, interruptAfter, agent, agents: agents.length > 0 ? agents : undefined, launchAgent, version: false, help: false, json: args.includes("--json"), yes, noColor, reducedMotion };
 };
 
 interface PromptWaiter {
@@ -366,7 +370,7 @@ const main = async (): Promise<void> => {
               agent: selected.length === 1 ? selected[0] : selected.length === 0 ? "none" : undefined,
               agents: selected.length > 1 ? selected : undefined,
               launchAgent: false,
-              resolvedConfig: prepared.config,
+              resolvedConfig: parsed.factoryRoot !== undefined ? undefined : prepared.config,
             });
             const verification = await verify(verificationPlan);
             applied = {
