@@ -1,6 +1,35 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
+import { assertOutcome, buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
+
+const git = (workspace, ...args) => execFileSync("git", args, { cwd: workspace, encoding: "utf8" }).trim();
+
+const createWorkspace = async (branch) => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "real-agent-validation-"));
+  git(workspace, "init", "--quiet");
+  git(workspace, "config", "user.email", "journey@example.invalid");
+  git(workspace, "config", "user.name", "Journey Test");
+  await writeFile(path.join(workspace, "hello.py"), "print('hello')\n");
+  git(workspace, "add", "hello.py");
+  git(workspace, "commit", "--quiet", "-m", "initial #42");
+  git(workspace, "branch", "-M", branch);
+  return workspace;
+};
+
+const outcomeInput = (branch, commit) => [{
+  issue_url: "https://github.com/acme/example/issues/42",
+  branch,
+  commit,
+}, {
+  required_documents: ["AGENT.md", "CLAUDE.md", "docs/agent-init.md"],
+}, {
+  feature: { slug: "hello-command", implementation_files: ["hello.py"] },
+  decisions: { TEST_CMD: "python3 -m unittest" },
+}, ["python3 -m unittest"], ["python3 -m unittest exit_code 0"]];
 
 const assertStrictSchema = (schema, properties) => {
   assert.equal(schema.type, "object");
@@ -103,5 +132,46 @@ test("execution summaries retain only bounded, redacted expected fields", () => 
     commit: null,
     tests: null,
     approval_gate: null,
+  });
+});
+
+test("branch validation preserves bounded workspace and reported context", async (t) => {
+  const workspace = await createWorkspace("wrong-branch");
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  const [data, request, decisions, observed, successful] = outcomeInput("feature/42-hello-command token=sk-live-secret /home/steam/private", "initial-commit-placeholder");
+  const actualHead = git(workspace, "rev-parse", "HEAD");
+
+  assert.throws(() => assertOutcome(workspace, "acme/example", data, request, decisions, observed, successful, ["sk-live-secret"]), (error) => {
+    assert.equal(error.code, "branch_invalid");
+    assert.deepEqual(error.context, {
+      actual_branch: "wrong-branch",
+      expected_branch: "feature/42-hello-command",
+      reported_branch: "feature/42-hello-command token=<redacted> <private-path>",
+      actual_head: actualHead,
+      reported_commit: "initial-commit-placeholder",
+    });
+    assert.match(error.message, /actual_branch="wrong-branch"/u);
+    assert.equal(error.message.includes(workspace), false);
+    return true;
+  });
+});
+
+test("commit validation preserves the same bounded branch and commit context", async (t) => {
+  const workspace = await createWorkspace("feature/42-hello-command");
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  const [data, request, decisions, observed, successful] = outcomeInput("feature/42-hello-command", "initial-commit-placeholder");
+  const actualHead = git(workspace, "rev-parse", "HEAD");
+
+  assert.throws(() => assertOutcome(workspace, "acme/example", data, request, decisions, observed, successful), (error) => {
+    assert.equal(error.code, "commit_invalid");
+    assert.deepEqual(error.context, {
+      actual_branch: "feature/42-hello-command",
+      expected_branch: "feature/42-hello-command",
+      reported_branch: "feature/42-hello-command",
+      actual_head: actualHead,
+      reported_commit: "initial-commit-placeholder",
+    });
+    assert.match(error.message, /actual_head="[0-9a-f]{40}"/u);
+    return true;
   });
 });
