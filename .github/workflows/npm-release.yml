@@ -139,8 +139,18 @@ jobs:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
           test -n "$PACKAGE_SPEC"
-          npm view "$PACKAGE_SPEC" --json > identity/registry-metadata.json
-          npm pack "$PACKAGE_SPEC" --ignore-scripts --pack-destination registry-package
+          for attempt in 1 2 3 4 5; do
+            rm -f identity/registry-metadata.json registry-package/*.tgz
+            if npm view "$PACKAGE_SPEC" --json > identity/registry-metadata.json \
+              && npm pack "$PACKAGE_SPEC" --ignore-scripts --pack-destination registry-package; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              printf '%s\n' "registry readback did not converge after $attempt attempts" >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
           test "$(find registry-package -maxdepth 1 -name '*.tgz' -type f | wc -l)" = "1"
           REGISTRY_TARBALL="$(find registry-package -maxdepth 1 -name '*.tgz' -type f -print -quit)"
           mkdir -p registry-package/extracted

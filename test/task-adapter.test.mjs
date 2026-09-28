@@ -70,6 +70,37 @@ test("fresh fake native readback confirms content and duplicate correlation with
   } finally { await f.cleanup(); }
 });
 
+test("linear binding exposes only the injected provider-neutral read seam and never falls back", async () => {
+  const linearIdentity = { provider: "linear", tracker: "organization/project", trackerKey: "PROJECT", nativeId: "ENG-42" };
+  const snapshot = { identity: linearIdentity, status: "In Progress", entries: [
+    { operationId: "linear-read-42", kind: "comment", content: "Native checkpoint" },
+  ] };
+  let linearReads = 0;
+  let githubCalls = 0;
+  let jiraCalls = 0;
+  const f = await fixture(binding("linear", "PROJECT"), {
+    linear: {
+      read: async (identity) => {
+        linearReads++;
+        assert.deepEqual(identity, linearIdentity);
+        return snapshot;
+      },
+    },
+    "github-issues": { read: async () => { githubCalls++; throw Error("must not fall back"); } },
+    jira: { read: async () => { jiraCalls++; throw Error("must not fall back"); } },
+  });
+  try {
+    const adapter = await f.adapter();
+    assert.deepEqual(await adapter.read(linearIdentity), snapshot);
+    await assert.rejects(adapter.write(linearIdentity, {
+      kind: "comment", operationId: "linear-write-42", status: "In Progress", content: "No native write",
+    }), { code: "native_unsupported" });
+    assert.equal(linearReads, 2);
+    assert.equal(githubCalls, 0);
+    assert.equal(jiraCalls, 0);
+  } finally { await f.cleanup(); }
+});
+
 test("unknown acknowledgement, wrong target and failed readback cannot report durable success", async () => {
   for (const mode of ["throw", "ack", "wrong", "missing", "unavailable"]) {
     let reads = 0;

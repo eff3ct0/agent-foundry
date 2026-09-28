@@ -289,8 +289,8 @@ test("real-agent journey rejects the retired source repository before hosted exe
 
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 175],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 288],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 299],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);
@@ -301,7 +301,7 @@ test("real-agent journey rejects the inherited run-block YAML indentation defect
 
 test("real-agent journey pins its executable scoped package metadata guard", async () => {
   const mutations = [
-    ['const version = spec.slice(`${name}@`.length);', 'const [name, version] = spec.split("@");'],
+    ['const packageMatch = /^(?<name>@eff3ct\\/agent-foundry)@(?<version>.+)$/u.exec(spec);', 'const [name, version] = spec.split("@");'],
     ['const name = "@eff3ct/agent-foundry";', 'const name = "agent-foundry";'],
     ['|| !semver.test(version)', '|| true'],
     ['metadata.name !== name || metadata.version !== version', 'metadata.name !== name'],
@@ -313,6 +313,39 @@ test("real-agent journey pins its executable scoped package metadata guard", asy
       await reject(directory, "real-agent journey must verify exact scoped package metadata before apply");
     });
   }
+});
+
+test("real-agent journey derives scheduled package versions from the checked-out package manifest", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
+    assert.ok(workflow.includes("JOURNEY_PACKAGE_VERSION: ${{ inputs.package_version || '' }}"));
+    assert.equal(workflow.includes("REAL_AGENT_PACKAGE_VERSION"), false);
+    const sourceStep = workflow.split("      - name: Resolve immutable source revision\n")[1]
+      ?.split("      - name: Write run plan\n")[0];
+    assert.ok(sourceStep);
+    const scriptText = sourceStep.split("        run: |\n")[1]
+      ?.split("\n          node -e 'if (!/^[0-9a-f]{40}/u")[0]
+      ?.split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    assert.ok(scriptText);
+    await writeFile(path.join(directory, "package.json"), JSON.stringify({ name: "@eff3ct/agent-foundry", version: "0.1.2" }));
+    const result = await execFileAsync("bash", ["-euo", "pipefail", "-c", scriptText], {
+      cwd: directory,
+      env: {
+        ...process.env,
+        EVENT_NAME: "schedule",
+        REPOSITORY: "eff3ct0/agent-foundry",
+        SOURCE_TAG: "",
+        SOURCE_SHA: "a".repeat(40),
+        EXPECTED_SHA: "",
+        PACKAGE_VERSION: "",
+        GITHUB_EVENT_NAME: "schedule",
+        GITHUB_TOKEN: "",
+        GITHUB_OUTPUT: path.join(directory, "github-output"),
+      },
+    });
+    assert.equal(result.stderr, "");
+    assert.match(await readFile(path.join(directory, "github-output"), "utf8"), /package_version=0\.1\.2\n/u);
+  });
 });
 
 test("real-agent journey executes its scoped package guard with exact offline metadata", async () => {
@@ -539,6 +572,63 @@ test("npm release gated publish step only runs npm publish on a granted decision
       await assert.rejects(run(env));
       await assert.rejects(readFile(marker), { code: "ENOENT" });
     }
+  });
+});
+
+test("npm release retries only bounded metadata and tarball readback", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
+    const step = workflow.split("      - name: Read back npm metadata, tarball, and payload identity\n")[1]
+      ?.split("      - name: Upload immutable release evidence\n")[0];
+    assert.ok(step);
+    const scriptText = step.split("        run: |\n")[1]?.split("\n          test \"$(find registry-package")[0]
+      ?.split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    assert.ok(scriptText);
+    const bin = path.join(directory, "bin");
+    await mkdir(bin);
+    const npmCalls = path.join(directory, "npm-calls");
+    const sleeps = path.join(directory, "sleeps");
+    const fakeNpm = path.join(bin, "npm");
+    await writeFile(fakeNpm, `#!/bin/sh
+count=$(cat "$FAKE_NPM_CALLS" 2>/dev/null || printf '0')
+count=$((count + 1))
+printf '%s' "$count" > "$FAKE_NPM_CALLS"
+if [ "$1" = "view" ] && [ "$count" -lt 3 ]; then exit 1; fi
+if [ "$FAKE_ALWAYS_FAIL" = "1" ]; then exit 1; fi
+if [ "$1" = "view" ]; then printf '%s' '{"name":"@eff3ct/agent-foundry","version":"0.1.0"}'; fi
+exit 0
+`);
+    const fakeSleep = path.join(bin, "sleep");
+    await writeFile(fakeSleep, '#!/bin/sh\nprintf "%s\\n" "$1" >> "$FAKE_SLEEPS"\n');
+    await chmod(fakeNpm, 0o755);
+    await chmod(fakeSleep, 0o755);
+    await mkdir(path.join(directory, "identity"));
+    await mkdir(path.join(directory, "registry-package"));
+    await execFileAsync("bash", ["-euo", "pipefail", "-c", scriptText], {
+      cwd: directory,
+      env: {
+        PATH: `${bin}:${process.env.PATH}`,
+        PACKAGE_SPEC: "@eff3ct/agent-foundry@0.1.0",
+        FAKE_NPM_CALLS: npmCalls,
+        FAKE_SLEEPS: sleeps,
+      },
+    });
+    assert.equal(await readFile(npmCalls, "utf8"), "4");
+    assert.equal(await readFile(sleeps, "utf8"), "5\n10\n");
+    await writeFile(npmCalls, "0");
+    await rm(sleeps, { force: true });
+    await assert.rejects(execFileAsync("bash", ["-euo", "pipefail", "-c", scriptText], {
+      cwd: directory,
+      env: {
+        PATH: `${bin}:${process.env.PATH}`,
+        PACKAGE_SPEC: "@eff3ct/agent-foundry@0.1.0",
+        FAKE_NPM_CALLS: npmCalls,
+        FAKE_SLEEPS: sleeps,
+        FAKE_ALWAYS_FAIL: "1",
+      },
+    }));
+    assert.equal(await readFile(npmCalls, "utf8"), "5");
+    assert.equal(await readFile(sleeps, "utf8"), "5\n10\n15\n20\n");
   });
 });
 

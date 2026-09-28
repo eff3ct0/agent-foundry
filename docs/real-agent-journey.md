@@ -182,16 +182,18 @@ Configure these repository settings:
 - Actions variable `BOOTSTRAP_E2E_OWNER`: disposable owner for the private
   generated repository.
 - Actions variable `OPENAI_MODEL`: an available bounded model identifier.
-- Actions variable `REAL_AGENT_PACKAGE_VERSION`: exact published
-  `@eff3ct/agent-foundry` version for scheduled runs.
 - Actions secret `BOOTSTRAP_E2E_APP_ID` and
   `BOOTSTRAP_E2E_PRIVATE_KEY`: dedicated GitHub App credentials used to mint
   separate provisioning, agent, readback, and cleanup tokens.
 - Actions secret `REAL_AGENT_JOURNEY_API_KEY`: OpenAI credential passed only to
   the agent adapter.
 
-To dispatch **Real-agent user journey**, select **OpenAI Codex CLI**, provide
-the exact published package version, and press GitHub's **Run workflow** button.
+Release-triggered runs derive the package version from the published release tag.
+Scheduled runs derive it from `package.json` at the trusted checked-out revision;
+the subsequent npm metadata guard still requires that exact version to be
+published. To dispatch **Real-agent user journey**, select **OpenAI Codex CLI**,
+provide the exact published package version, and press GitHub's **Run workflow**
+button.
 The selected identifier is validated in `prepare`, then the workflow checks out
 the trusted revision, creates an empty repository, applies the published
 package, runs the cold agent on

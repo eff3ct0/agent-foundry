@@ -86,7 +86,6 @@ test("generated module inventory uses the composed creator plan, not application
 
     const baseline = await checkGeneratedModulePolicy(options);
     assert.deepEqual(baseline, [
-      ".factory/scripts/check-delivery-contract.mjs",
       ".factory/scripts/check-factory-layout.mjs",
       ".factory/scripts/task-adapter.mjs",
       ".factory/scripts/task-github-issues-read.mjs",
@@ -108,6 +107,8 @@ test("generated module inventory uses the composed creator plan, not application
     assert.equal(dryRun.stdout.trim().split("\n").length, 10);
     for (const relative of [
       ".factory/scripts/typed-inherited/check-pr-governance.mts",
+      ".factory/scripts/typed-inherited/check-delivery-contract.mts",
+      ".factory/scripts/typed-inherited-runtime/check-delivery-contract.js",
       ".factory/scripts/typed-inherited-runtime/check-pr-governance.js",
       ".factory/scripts/typed-inherited/sync-github-labels.mts",
       ".factory/scripts/typed-inherited-runtime/sync-github-labels.js",
