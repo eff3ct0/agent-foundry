@@ -291,7 +291,7 @@ test("real-agent journey rejects the retired source repository before hosted exe
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
     ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 302],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 303],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);
@@ -438,6 +438,21 @@ test("real-agent journey uses checkout-style Basic JOURNEY_TOKEN authentication 
       await reject(directory, "real-agent journey generated repository push must use command-local Basic JOURNEY_TOKEN authentication");
     });
   }
+});
+
+test("real-agent journey grants workflows write only to the agent App token", async () => {
+  await fixture(async (directory) => {
+    await replace(directory, "journey", "          permission-workflows: write\n", "");
+    await reject(directory, "real-agent journey agent App token permissions must be exactly contents, issues, and workflows write");
+  });
+  await fixture(async (directory) => {
+    await replaceFirst(directory, "journey", "          permission-contents: write\n", "          permission-contents: write\n          permission-workflows: write\n");
+    await reject(directory, "real-agent journey workflows permission must be isolated to agent App token");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "journey", "          permission-workflows: write\n", "          permission-workflows: read\n");
+    await reject(directory, "real-agent journey agent App token permissions must be exactly contents, issues, and workflows write");
+  });
 });
 
 test("real-agent journey rejects a heredoc decoy followed by a wrapped retired commit", async () => {

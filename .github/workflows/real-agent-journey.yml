@@ -195,6 +195,7 @@ jobs:
           owner: ${{ env.JOURNEY_OWNER }}
           permission-contents: write
           permission-issues: write
+          permission-workflows: write
       - name: Create initial branch and apply the exact published creator package
         env:
           JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}

@@ -134,6 +134,15 @@ const checkJourney = (text, projectRoot) => {
   }
   if (uses.filter((reference) => reference.startsWith("actions/create-github-app-token@")).length !== 4) fail("real-agent journey must mint one token per credential boundary");
   const agent = section(text, "\n  agent:\n", "\n  assert:\n");
+  const agentToken = section(agent, "\n      - name: Mint agent token\n", "\n      - name: Create initial branch and apply the exact published creator package\n");
+  const workflowPermissionLines = [...text.matchAll(/^\s+permission-workflows:\s+\S+\s*$/gmu)];
+  const unrelatedStages = [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n"), section(text, "\n  report:\n")];
+  if (unrelatedStages.some((stage) => stage.includes("permission-workflows:"))) fail("real-agent journey workflows permission must be isolated to agent App token");
+  const agentWorkflowPermissionLines = [...agentToken.matchAll(/^\s+permission-workflows:\s+\S+\s*$/gmu)];
+  if (agentWorkflowPermissionLines.length !== 1 || !agentToken.includes("permission-workflows: write")) fail("real-agent journey agent App token permissions must be exactly contents, issues, and workflows write");
+  if (workflowPermissionLines.length !== 1) fail("real-agent journey workflows permission must be isolated to agent App token");
+  const agentPermissions = [...agentToken.matchAll(/^\s+(permission-[a-z-]+:\s+(?:read|write))\s*$/gmu)].map(([, permission]) => permission).sort();
+  if (agentPermissions.join("\n") !== ["permission-contents: write", "permission-issues: write", "permission-workflows: write"].sort().join("\n")) fail("real-agent journey agent App token permissions must be exactly contents, issues, and workflows write");
   const creationStep = section(agent, "\n      - name: Create initial branch and apply the exact published creator package\n", "\n      - name: Install selected runtime\n");
   const creationRun = section(creationStep, "\n        run: |\n");
   const applyCommand = '          npm exec --yes --prefix journey-runner --package "$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers.json --non-interactive --yes';
