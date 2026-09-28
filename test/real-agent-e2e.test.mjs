@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { assertOutcome, buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
+import { assertOutcome, buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, REQUEST_PROMPT, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
 
 const git = (workspace, ...args) => execFileSync("git", args, { cwd: workspace, encoding: "utf8" }).trim();
 
@@ -25,7 +25,7 @@ const outcomeInput = (branch, commit) => [{
   branch,
   commit,
 }, {
-  required_documents: ["AGENT.md", "CLAUDE.md", "docs/agent-init.md"],
+  required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"],
 }, {
   feature: { slug: "hello-command", implementation_files: ["hello.py"] },
   decisions: { TEST_CMD: "python3 -m unittest" },
@@ -75,6 +75,39 @@ test("execution prompt binds GitHub Issues to the runtime repository", () => {
   assert.match(prompt, /Do not derive the branch from the issue title or use an alternative slug/u);
   assert.match(prompt, /branch as the exact output of `git branch --show-current`/u);
   assert.doesNotMatch(prompt, /your-repo|cold-agent-journey/u);
+  assert.match(prompt, /read AGENT\.md, CLAUDE\.md, and docs\/bindings\.md/u);
+  assert.doesNotMatch(prompt, /agent-init\.md/u);
+});
+
+test("cold-agent prompts point at contracts that ship in a generated project, not the init procedure", () => {
+  assert.match(REQUEST_PROMPT, /read AGENT\.md, CLAUDE\.md, and docs\/bindings\.md/u);
+  assert.doesNotMatch(REQUEST_PROMPT, /agent-init\.md/u);
+  const prompt = buildExecutionPrompt("acme/example", {
+    decisions: { TEST_CMD: "python3 -m unittest test_hello.py" },
+    feature: { title: "Add a deterministic hello helper", implementation_files: ["hello.py"], slug: "hello-command" },
+  });
+  assert.doesNotMatch(prompt, /agent-init\.md/u);
+});
+
+test("assertOutcome requires the cold agent to read docs/bindings.md, not the absent init procedure", async (t) => {
+  const workspace = await createWorkspace("feature/42-hello-command");
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  await writeFile(path.join(workspace, "hello.py"), "print('hello, #42')\n");
+  git(workspace, "commit", "-am", "feat: implement hello (#42)");
+  const commit = git(workspace, "rev-parse", "HEAD");
+  const data = { issue_url: "https://github.com/acme/example/issues/42", status: "passed", branch: "feature/42-hello-command", commit, tests: "passed", approval_gate: "not-approved" };
+  const decisions = { feature: { slug: "hello-command", implementation_files: ["hello.py"] }, decisions: { TEST_CMD: "python3 -m unittest" } };
+  const observed = ["python3 -m unittest"];
+  const successful = ["python3 -m unittest exit_code 0"];
+
+  assert.throws(
+    () => assertOutcome(workspace, "acme/example", data, { required_documents: ["AGENT.md", "CLAUDE.md", "docs/agent-init.md"] }, decisions, observed, successful),
+    (error) => { assert.equal(error.code, "startup_incomplete"); return true; },
+  );
+
+  const outcome = assertOutcome(workspace, "acme/example", data, { required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"] }, decisions, observed, successful);
+  assert.equal(outcome.branch, "feature/42-hello-command");
+  assert.equal(outcome.commit, commit);
 });
 
 test("provider diagnostics are bounded, redacted, and do not retain stdout prompts", () => {
