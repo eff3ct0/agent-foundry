@@ -16,6 +16,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { parseDocument, visit } from "yaml";
 import {
   inspectProviderAvailability,
   launchProvider,
@@ -102,6 +103,8 @@ interface CreatorState {
 export interface CreatorConfig {
   values: Record<string, string>;
   digest: string;
+  factoryCiRef?: string;
+  factoryIdentity?: { spec: string; sha: string; workflows: string[] };
 }
 
 export interface ProviderSummary {
@@ -443,7 +446,10 @@ const valueFromInput = (input: unknown): Record<string, unknown> => {
   return candidate;
 };
 
-const loadFactoryDefaults = async (root: string, expectedSha: string, spec: unknown, placeholders: PlaceholderManifest): Promise<Record<string, string>> => {
+const loadFactoryDefaults = async (root: string, expectedSha: string, spec: unknown, placeholders: PlaceholderManifest): Promise<{
+  values: Record<string, string>;
+  git: (...args: string[]) => Promise<string>;
+}> => {
   if (typeof spec !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]*\/factory@v[1-9][0-9]*$/u.test(spec)) {
     throw new CreatorError("factory_invalid", "FACTORY_SPEC must identify org/factory@vX when factory defaults are requested");
   }
@@ -511,7 +517,56 @@ const loadFactoryDefaults = async (root: string, expectedSha: string, spec: unkn
       throw new CreatorError("factory_invalid", (error as Error).message);
     }
   }
-  return normalized;
+  return { values: normalized, git };
+};
+
+const validateFactoryWorkflows = async (git: (...args: string[]) => Promise<string>, stacks: string[]): Promise<string[]> => {
+  const digests: string[] = [];
+  for (const stack of stacks) {
+    if (!/^[a-z][a-z0-9-]*$/u.test(stack)) throw new CreatorError("ci_invalid", `invalid CI stack: ${stack}`);
+    const workflowPath = `.github/workflows/${stack}.yml`;
+    const tree = await git("ls-tree", "HEAD", "--", workflowPath);
+    if (!/^100644 blob [0-9a-f]{40}\t\.github\/workflows\/[a-z][a-z0-9-]*\.yml\n$/u.test(tree)) {
+      throw new CreatorError("ci_invalid", `pinned factory is missing a regular tracked workflow: ${workflowPath}`);
+    }
+    const workflow = await git("show", `HEAD:${workflowPath}`);
+    if (Buffer.byteLength(workflow, "utf8") > 64 * 1024) throw new CreatorError("ci_invalid", `pinned factory workflow is too large: ${workflowPath}`);
+    try {
+      const document = parseDocument(workflow, { version: "1.2", uniqueKeys: true });
+      if (document.errors.length) throw new Error("invalid YAML");
+      visit(document, { Alias: () => { throw new Error("aliases are not accepted"); } });
+      const parsed: unknown = document.toJS({ mapAsMap: true, maxAliasCount: 10 });
+      const check = (value: unknown, depth = 0): void => {
+        if (depth > 32) throw new Error("workflow nesting is too deep");
+        if (value instanceof Map) {
+          for (const [key, child] of value) {
+            if (typeof key !== "string" || ["__proto__", "constructor", "prototype"].includes(key)) throw new Error("unsafe YAML key");
+            check(child, depth + 1);
+          }
+        } else if (Array.isArray(value)) {
+          for (const child of value) check(child, depth + 1);
+        }
+      };
+      check(parsed);
+      if (!(parsed instanceof Map) || !(parsed.get("on") instanceof Map)
+          || !parsed.get("on").has("workflow_call")
+          || !(parsed.get("on").get("workflow_call") === null || parsed.get("on").get("workflow_call") instanceof Map)
+          || !(parsed.get("jobs") instanceof Map) || parsed.get("jobs").size === 0) throw new Error("workflow_call and jobs must be mappings");
+      for (const job of parsed.get("jobs").values()) {
+        if (!(job instanceof Map) || (job.has("steps") === job.has("uses"))) throw new Error("jobs must contain steps or uses");
+        if (job.has("uses") && (typeof job.get("uses") !== "string" || !job.get("uses").trim())) throw new Error("job uses must be a nonempty string");
+        if (job.has("steps") && (!Array.isArray(job.get("steps")) || !job.get("steps").length
+            || job.get("steps").some((step: unknown) => !(step instanceof Map)
+              || !["run", "uses"].some((field) => typeof step.get(field) === "string" && step.get(field).trim())))) {
+          throw new Error("job steps must run a command or use an action");
+        }
+      }
+    } catch {
+      throw new CreatorError("ci_invalid", `pinned factory workflow must be valid callable YAML: ${workflowPath}`);
+    }
+    digests.push(sha256(Buffer.from(workflow, "utf8")));
+  }
+  return digests;
 };
 
 const validateValue = (placeholder: Placeholder, rawValue: unknown): string => {
@@ -571,7 +626,8 @@ const resolveConfig = async (
   const knownKeys = new Set(manifest.placeholders.map((placeholder) => placeholder.key));
   const unknownKeys = Object.keys(input).filter((key) => !knownKeys.has(key));
   if (unknownKeys.length > 0) throw new CreatorError("configuration_invalid", `configuration contains unknown keys: ${unknownKeys.sort().join(", ")}`);
-  const organization = factoryRoot && factorySha ? await loadFactoryDefaults(factoryRoot, factorySha, input.FACTORY_SPEC, manifest) : {};
+  const factory = factoryRoot && factorySha ? await loadFactoryDefaults(factoryRoot, factorySha, input.FACTORY_SPEC, manifest) : undefined;
+  const organization = factory?.values ?? {};
   if (organization.FACTORY_REQUIRED === "true" && Object.prototype.hasOwnProperty.call(input, "FACTORY_REQUIRED") && String(input.FACTORY_REQUIRED) !== "true") {
     throw new CreatorError("factory_invalid", "project answers cannot disable organization FACTORY_REQUIRED");
   }
@@ -618,8 +674,15 @@ const resolveConfig = async (
   }
   const trackerDisplay: Record<string, string> = { jira: "Jira", "github-issues": "GitHub Issues", "github-projects": "GitHub Projects", linear: "Linear", custom: "(custom)" };
   if (!values.TRACKER && values.TASK_TRACKER) values.TRACKER = trackerDisplay[values.TASK_TRACKER] ?? values.TASK_TRACKER;
+  let factoryCiRef: string | undefined;
+  let workflowDigests: string[] = [];
+  if (factory && values.CI_SYSTEM.toLowerCase().includes("github") && values.CI_STACKS) {
+    workflowDigests = await validateFactoryWorkflows(factory.git, parseStacks(values.CI_STACKS));
+    factoryCiRef = values.FACTORY_SPEC;
+  }
+  const factoryIdentity = factory ? { spec: values.FACTORY_SPEC, sha: factorySha!, workflows: workflowDigests } : undefined;
   const ordered = Object.fromEntries(Object.keys(values).sort().map((key) => [key, values[key]]));
-  return { values, digest: `sha256:${sha256(canonicalJson(ordered))}` };
+  return { values, digest: `sha256:${sha256(canonicalJson(factoryIdentity ? { values: ordered, factory: factoryIdentity } : ordered))}`, factoryCiRef, factoryIdentity };
 };
 
 const safeMode = (mode: string): number => {
@@ -730,7 +793,9 @@ const providerSummary = (catalog: ProviderCatalog, runtimes: ProviderRuntime[], 
 
 const providerConfigDigest = (config: CreatorConfig, selected: string[]): CreatorConfig => ({
   values: config.values,
-  digest: `sha256:${sha256(canonicalJson({ agents: selected, values: Object.fromEntries(Object.keys(config.values).sort().map((key) => [key, config.values[key]])) }))}`,
+  digest: `sha256:${sha256(canonicalJson({ agents: selected, values: Object.fromEntries(Object.keys(config.values).sort().map((key) => [key, config.values[key]])), ...(config.factoryIdentity ? { factory: config.factoryIdentity } : {}) }))}`,
+  factoryCiRef: config.factoryCiRef,
+  factoryIdentity: config.factoryIdentity,
 });
 
 const composeProviderFiles = (
@@ -855,6 +920,10 @@ const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buf
   try { catalog = JSON.parse(recipes.bytes.toString("utf8")) as Record<string, string>; } catch (error) { throw new CreatorError("ci_invalid", `CI recipe catalog is invalid: ${(error as Error).message}`); }
   const unknown = stacks.filter((stack) => !Object.prototype.hasOwnProperty.call(catalog, stack));
   if (unknown.length > 0) throw new CreatorError("ci_invalid", `CI_STACKS contains unknown selection(s): ${unknown.join(", ")}`);
+  if (config.factoryCiRef) {
+    const [repository, tag] = config.factoryCiRef.split("@");
+    return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => `  ${stack}:\n    uses: ${repository}/.github/workflows/${stack}.yml@${tag}`).join("\n")}\n`, "utf8");
+  }
   return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => catalog[stack]).join("\n")}\n`, "utf8");
 };
 

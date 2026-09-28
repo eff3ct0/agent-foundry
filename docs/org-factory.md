@@ -96,5 +96,8 @@ contract](creator.md#pinned-offline-factory-defaults-optional). This does not
 provision a factory, fetch a repository, or verify a remote organization identity:
 the expected full commit SHA must be supplied independently by the caller.
 
-Organization-level reusable CI workflows (`uses: org/factory/.github/workflows/<lang>.yml@vX`)
-remain a separate work unit; no published reusable workflow is supplied here.
+With GitHub CI stacks selected, the offline creator validates selected callable
+`.github/workflows/<lang>.yml` files in the pinned local factory snapshot and
+generates `uses: org/factory/.github/workflows/<lang>.yml@vX` callers. Runner
+validation, publication, stable tag and hosted validation remain separate work;
+no published workflow is supplied here.
