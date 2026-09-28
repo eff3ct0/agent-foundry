@@ -158,8 +158,8 @@ runs the agent helper. Its inputs are `repository`, the fresh checkout's full
 secrets-manager credential, or source checkout credential is passed to Codex.
 
 The selected runtime is Codex CLI `@openai/codex@0.156.0`, invoked with
-`codex exec --json --ephemeral --ignore-user-config --sandbox workspace-write
---ask-for-approval never`. Each run gets a new `CODEX_HOME`; discovery is a
+`codex exec --json --ephemeral --ignore-user-config --sandbox workspace-write -c
+'approval_policy="never"'`. Each run gets a new `CODEX_HOME`; discovery is a
 read-only cold turn and execution is a second cold turn. The agent must run
 `node start.mjs` first and read `AGENT.md`, `CLAUDE.md`, and
 `docs/agent-init.md`. The scripted fixture supplies every required configuration
@@ -173,7 +173,8 @@ implementation, and verification do not require invented intermediate approval.
 Evidence contains only bounded event classifications and redacted identifiers;
 raw prompts, responses, credentials, and private paths are not retained.
 The CLI contract and safety flags are based on the current official Codex
-documentation: https://learn.chatgpt.com/docs/developer-commands#codex-exec and
+documentation: https://learn.chatgpt.com/docs/developer-commands#codex-exec,
+https://learn.chatgpt.com/docs/sandboxing#configure-defaults, and
 https://learn.chatgpt.com/docs/agent-approvals-security.
 
 The workflow pins every third-party action to a verified full commit SHA:
