@@ -143,6 +143,30 @@ test("existing and created targets become a no-op on the second ensure", async (
   assert.equal(second.summary.existing, 2);
 });
 
+test("existing public health repository is untouched when private factory is missing", async () => {
+  const state = new Map([[targets.health, "public"]]);
+  const creates = [];
+  const client = {
+    preflight: async () => ({ ok: true }),
+    lookup: async (target) => result(state.has(target) ? "existing" : "missing"),
+    create: async (target, visibility) => {
+      creates.push({ target, visibility });
+      state.set(target, visibility);
+      return result("created");
+    },
+    readback: async (target) => ({ outcome: "existing", repository: { nameWithOwner: target, visibility: state.get(target) } }),
+  };
+  const first = await provisionRepositories({ org: "acme", visibility: "private", yes: true, client });
+  const second = await provisionRepositories({ org: "acme", visibility: "private", yes: true, client });
+  assert.equal(first.status, "applied");
+  assert.deepEqual(first.targets.map(({ outcome }) => outcome), ["existing", "created"]);
+  assert.deepEqual(creates, [{ target: targets.factory, visibility: "private" }]);
+  assert.equal(state.get(targets.health), "public");
+  assert.equal(second.status, "noop");
+  assert.equal(second.summary.existing, 2);
+  assert.equal(creates.length, 1);
+});
+
 test("the process adapter uses an argument array and does not forward token variables", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "github-provisioning-gh-"));
   const bin = path.join(parent, "bin");

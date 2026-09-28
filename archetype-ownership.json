@@ -78,6 +78,7 @@
         {"path": "odd/tasks/issue-97-release-trigger.md", "kind": "file"},
         {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
         {"path": "scripts/check-determinism.mjs", "kind": "file"},
+        {"path": "org-community-defaults", "kind": "directory"},
         {"path": "odd", "kind": "directory"}
       ]
     },

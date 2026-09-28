@@ -10,37 +10,76 @@ v1 uses two native, complementary mechanisms.
 > tags (`v1`, `v2`, ...), and reference it by projects through
 > `FACTORY_SPEC = <ORG>/factory@vX`.
 
-## 1. `org/.github` - native organization defaults
-Create a repository named `.github` in the organization. GitHub serves its
-community health files (`.github/ISSUE_TEMPLATE/`, `PULL_REQUEST_TEMPLATE.md`,
-`CONTRIBUTING.md`, `SECURITY.md`) as defaults for organization repositories
-that do not provide their own. Seed it by copying this template's
-`.github/ISSUE_TEMPLATE/*` and `.github/pull_request_template.md`.
+## 1. Ensure repositories (contents are separate)
 
-Only those concrete files are propagated. `AGENT.md` and `CLAUDE.md` are not;
-use the pin below for the organization factory spec.
-
-## Bootstrap tool (idempotent)
-The Node creator and the GitHub CLI are the supported automation boundary for
-organization repositories. Use the creator for local, offline planning and
-apply/verify; use an explicitly approved `gh repo create` command for the
-organization repository mutation:
+The offline `foundry github-provision --org <ORG> --factory-repo factory --plan`
+previews `<ORG>/.github` and `<ORG>/factory` without credentials. The separately
+authorized ensure checks both, creates only confirmed-missing repositories,
+and reads back newly created names and visibility. It does not seed files or
+change an existing repository's visibility:
 
 ```sh
-foundry plan --target ./factory --config answers.json --non-interactive
-foundry apply --target ./factory --config answers.json --non-interactive --yes
-gh repo create <ORG>/.github --private
+foundry github-provision --org <ORG> --factory-repo factory --visibility private --plan
+# Only after separate authorization and target review:
+foundry github-provision --org <ORG> --factory-repo factory --visibility private --yes
 ```
 
-Note: `gh` must be authenticated; lookup errors other than confirmed not-found stop before any creation;
-the command is idempotent when rerun against an unchanged target. Repository
-creation is separately consented and is not performed by the offline creator.
+Inspect existing repositories' owner, visibility, default branch, and contents
+on the target host first. Preserve an existing public `.github`; the one
+visibility option applies only to missing repositories. If `.github` must be
+public and is absent, arrange its separately approved creation before using
+this two-target private ensure. Stop on uncertain lookup/create/readback; never
+retry an uncertain create blindly. `planned` lists targets; `existing` proves
+only existence, and `created` proves only new-repository identity/visibility.
 
-The GitHub operation requires authenticated `gh`, never deletes, and requires
-explicit consent. See [`determinism.md`](determinism.md) for the complete
-repeat-run, rollback, and approval-boundary matrix.
+## 2. Initialize `<ORG>/factory` from an exact version
 
-## 2. Package + `FACTORY_SPEC` pin
+Inspect the host: the factory repository must be empty, with no existing commit
+or files to overwrite. In a fresh checkout, use an operator-selected,
+published and verified exact creator version and reviewed `answers.json` outside
+the target tree. Leave `FACTORY_REQUIRED=false` and `FACTORY_SPEC` empty until
+there is a real baseline to reference. Never apply the creator to this source
+archetype or treat its Template mode as the normal path.
+
+```sh
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./factory --config ./answers.json --non-interactive
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./factory --config ./answers.json --non-interactive --yes
+pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry verify --target ./factory --config ./answers.json --non-interactive
+```
+
+Review the generated tree, bindings, creator state, and conflicts. Do not
+commit answers or secrets. Only after approval, commit the verified tree and
+create `v1`; never move an existing tag. Repeat the same exact-version apply
+and verify against unchanged content and require a no-op.
+
+## 3. Seed `<ORG>/.github` without replacing existing content
+
+GitHub serves a **public** organization `.github` repository's community-health
+files as defaults for repositories without their own. At a reviewed, pinned
+source revision, copy only these generic source-owned files, verbatim:
+
+| Source in `org-community-defaults/` | Destination in `<ORG>/.github` |
+| --- | --- |
+| `ISSUE_TEMPLATE/bug.yml` | `.github/ISSUE_TEMPLATE/bug.yml` |
+| `ISSUE_TEMPLATE/feature.yml` | `.github/ISSUE_TEMPLATE/feature.yml` |
+| `PULL_REQUEST_TEMPLATE.md` | `.github/PULL_REQUEST_TEMPLATE.md` |
+
+For each destination, create it only if absent; if present, compare bytes and
+skip only when identical. A different file, symlink, or unreviewed destination
+is a **stop**, not permission to merge or overwrite it. Preserve `profile/`
+and every other existing file. Repository-specific forms take precedence.
+Never copy this source's project-specific `.github/` forms, labels, workflows,
+`AGENT.md`, or `CLAUDE.md` to the organization. These generic forms require
+no labels, approvals, or release gate. The inventory removes
+`org-community-defaults/` from initialized projects.
+
+No `CONTRIBUTING.md` or `SECURITY.md` policy is supplied: obtain the owner's
+actual contribution rules and security contact before adding either. Commit
+only reviewed, missing files. On a second authorized pass compare all bytes
+and require no new commit. Target-host readback of paths, bytes, visibility,
+and history is required; offline checks cannot prove hosted propagation.
+
+## 4. Package + `FACTORY_SPEC` pin
 - The **source archetype** is `eff3ct0/agent-foundry`, retained as a *Template repository* only for rollback.
 - The **instance** `<ORG>/factory` is an empty repository initialized with `@eff3ct/agent-foundry@<EXACT_VERSION>` and versioned with tags (`v1`, `v2`, ...); it is the organization's living baseline.
 - Each project applies the exact creator package and declares its governing baseline in [`AGENT.md`](../AGENT.md): `FACTORY_SPEC = <ORG>/factory@v1`.
