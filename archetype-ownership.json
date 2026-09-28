@@ -144,6 +144,14 @@
         {"path": "placeholders.json", "kind": "file"}
       ]
     },
+    "factory_source_seed": {
+      "disposition": "removed",
+      "paths": [
+        {"path": "factory.defaults.json", "kind": "file"},
+        {"path": ".github/workflows/rust.yml", "kind": "file"},
+        {"path": "factory-seed", "kind": "directory"}
+      ]
+    },
     "creator_packaging": {
       "disposition": "removed",
       "paths": [
