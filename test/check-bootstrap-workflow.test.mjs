@@ -290,7 +290,7 @@ test("real-agent journey rejects the retired source repository before hosted exe
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
     ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 299],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 306],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);
@@ -351,28 +351,40 @@ test("real-agent journey derives scheduled package versions from the checked-out
 test("real-agent journey executes its isolated scoped package guard with exact offline metadata", async () => {
   await fixture(async (directory) => {
     const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
-    const match = workflow.match(/          npm view "\$JOURNEY_PACKAGE_SPEC" --json > package-metadata\.json\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          npm exec --yes --prefix journey-runner --package "\$JOURNEY_PACKAGE_SPEC" -- foundry apply/u);
-    assert.ok(match, "the metadata heredoc must run immediately before package apply");
+    const applyCommand = '          npm exec --yes --prefix journey-runner --package "$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers.json --non-interactive --yes';
+    const validationMatch = workflow.match(/          npm view "\$JOURNEY_PACKAGE_SPEC" --json > package-metadata\.json\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          npm exec --yes --prefix journey-runner --package "\$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers\.json --non-interactive --yes/u);
+    assert.ok(validationMatch, "the metadata validation heredoc must run immediately before package apply");
+    const writerMatch = workflow.match(/          npm exec --yes --prefix journey-runner --package "\$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers\.json --non-interactive --yes\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          git -C generated init -b main/u);
+    assert.ok(writerMatch, "the source identity writer must run immediately after package apply");
+    assert.ok(workflow.indexOf('          await writeFile("generated/.journey-source.json"') > workflow.indexOf(applyCommand), "the source identity writer must be after package apply");
     assert.match(workflow, /          mkdir generated journey-runner\n/u, "the npm prefix must remain outside generated project content");
-    const scriptText = match[1].split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    const validationScriptText = validationMatch[1].split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    const writerScriptText = writerMatch[1].split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    assert.equal(validationScriptText.includes(".journey-source.json"), false, "metadata validation must not write source identity");
     await mkdir(path.join(directory, "generated"));
     const sourceSha = "a".repeat(40);
     const run = async (spec, metadata, packageName = "@eff3ct/agent-foundry") => {
       await writeFile(path.join(directory, "package-metadata.json"), JSON.stringify(metadata));
-      return execFileAsync(process.execPath, ["--input-type=module", "-e", scriptText], {
+      return execFileAsync(process.execPath, ["--input-type=module", "-e", validationScriptText], {
         cwd: directory,
         env: { JOURNEY_PACKAGE_SPEC: spec, JOURNEY_PACKAGE_NAME: packageName, JOURNEY_SOURCE_SHA: sourceSha },
       });
     };
+    const writeIdentity = async (spec) => execFileAsync(process.execPath, ["--input-type=module", "-e", writerScriptText], {
+      cwd: directory,
+      env: { JOURNEY_PACKAGE_SPEC: spec, JOURNEY_PACKAGE_NAME: "@eff3ct/agent-foundry", JOURNEY_SOURCE_SHA: sourceSha },
+    });
     const name = "@eff3ct/agent-foundry";
     for (const version of ["0.1.0", "1.2.3-rc.1+build.5"]) {
       const spec = `${name}@${version}`;
       await run(spec, { name, version });
+      await assert.rejects(readFile(path.join(directory, "generated/.journey-source.json")), { code: "ENOENT" });
+      await writeIdentity(spec);
       assert.deepEqual(JSON.parse(await readFile(path.join(directory, "generated/.journey-source.json"), "utf8")), {
         source_sha: sourceSha, package_name: name, package_version: version, package_spec: spec,
       });
+      await rm(path.join(directory, "generated/.journey-source.json"));
     }
-    await rm(path.join(directory, "generated/.journey-source.json"));
     for (const spec of ["agent-foundry@0.1.0", "@other/agent-foundry@0.1.0", `${name}@latest`, `${name}@1.2`, `${name}@1.2.3@evil`, `${name}@01.2.3`, `${name}@1.2.3-01`, `${name}@1.2.3-..`, `${name}@1.2.3+`]) {
       await assert.rejects(run(spec, { name, version: "0.1.0" }), /journey package spec must identify the exact scoped package and version/u);
       await assert.rejects(readFile(path.join(directory, "generated/.journey-source.json")), { code: "ENOENT" });
@@ -380,6 +392,18 @@ test("real-agent journey executes its isolated scoped package guard with exact o
     await assert.rejects(run(`${name}@0.1.0`, { name: "agent-foundry", version: "0.1.0" }), /published package metadata does not match/u);
     await assert.rejects(run(`${name}@0.1.0`, { name, version: "0.2.0" }), /published package metadata does not match/u);
     await assert.rejects(run(`${name}@0.1.0`, { name, version: "0.1.0" }, "@other/agent-foundry"), /journey package spec must identify/u);
+  });
+});
+
+test("real-agent journey rejects a source identity writer before package apply", async () => {
+  await fixture(async (directory) => {
+    const target = path.join(directory, workflows, files.journey);
+    const source = await readFile(target, "utf8");
+    const writerStart = '          node --input-type=module <<\'NODE\'\n          import { writeFile } from "node:fs/promises";\n          const name = "@eff3ct/agent-foundry";\n          const spec = process.env.JOURNEY_PACKAGE_SPEC ?? "";\n          const packageMatch = /^(?<name>@eff3ct\\/agent-foundry)@(?<version>.+)$/u.exec(spec);\n          const version = packageMatch?.groups?.version ?? "";\n          await writeFile("generated/.journey-source.json", `${JSON.stringify({ source_sha: process.env.JOURNEY_SOURCE_SHA, package_name: name, package_version: version, package_spec: spec }, null, 2)}\\n`);\n          NODE';
+    const applyCommand = '          npm exec --yes --prefix journey-runner --package "$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers.json --non-interactive --yes';
+    assert.ok(source.includes(`${applyCommand}\n${writerStart}`));
+    await writeFile(target, source.replace(`${applyCommand}\n${writerStart}`, `${writerStart}\n${applyCommand}`));
+    await reject(directory, "real-agent journey must write source identity only after apply");
   });
 });
 
