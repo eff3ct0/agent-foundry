@@ -57,7 +57,7 @@ jobs:
           persist-credentials: false
           path: journey
       - name: Install pinned Codex CLI
-        run: npm install --global @openai/codex@0.148.0
+        run: npm install --global @openai/codex@0.156.0
       - name: Invoke cold agent with scripted user
         env:
           OPENAI_API_KEY: ${{ secrets.AGENT_API_KEY }}
