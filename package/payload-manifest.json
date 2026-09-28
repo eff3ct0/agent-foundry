@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 10491,
-      "sha256": "519d0a75ead1b6e1565842e512213809c0c4e159d396af474cb291f80bf6950a"
+      "size": 10685,
+      "sha256": "f295d7c5b5f114c6c294b6f1aa4db9b2ecb7cb7b7053741cbe1b5a33e54432f8"
     },
     {
       "path": "ci/_contract.md",
@@ -115,8 +115,8 @@
     {
       "path": "docs/determinism.md",
       "mode": "100644",
-      "size": 2749,
-      "sha256": "f35b81a59b000ff76d517058b370b104c10c7e50f0575a62566d47157aeef34a"
+      "size": 2840,
+      "sha256": "99b7ef159aa304808a6665ea09651a7a1e109532f0722ffcbf0694a37afc932a"
     },
     {
       "path": "docs/engineering-handbook.md",
@@ -305,12 +305,6 @@
       "sha256": "9404a25e38f15401db3d27dc79dccc00485851e5b30d03458577380c2276e11e"
     },
     {
-      "path": "scripts/check-delivery-contract.mjs",
-      "mode": "100644",
-      "size": 18034,
-      "sha256": "7ff3534ef0e7124980767369efc0f88d2637f0a98ce2dbe69352a8b9a54d3a26"
-    },
-    {
       "path": "scripts/check-factory-layout.mjs",
       "mode": "100644",
       "size": 3170,
@@ -335,6 +329,12 @@
       "sha256": "e0e4c6fc7c44fababfa56c7d492162c437c4c8a5c781ccfe63eefafcccac6352"
     },
     {
+      "path": "scripts/typed-inherited-runtime/check-delivery-contract.js",
+      "mode": "100644",
+      "size": 19451,
+      "sha256": "997aa2143f8b108bc83448566e76eb56e24f5a045c21a185f5a06887e6bde5e9"
+    },
+    {
       "path": "scripts/typed-inherited-runtime/check-pr-governance.js",
       "mode": "100644",
       "size": 8296,
@@ -351,6 +351,12 @@
       "mode": "100644",
       "size": 3330,
       "sha256": "17f51332147b031c6a529abbf6283400c523e4e3d948ef951a20186f165bf14d"
+    },
+    {
+      "path": "scripts/typed-inherited/check-delivery-contract.mts",
+      "mode": "100644",
+      "size": 19005,
+      "sha256": "088081f85d826e7137a69505124eb05daefcecc9869b70dbb677667a4c8152e0"
     },
     {
       "path": "scripts/typed-inherited/check-pr-governance.mts",
@@ -413,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:057c07033ecf2cdf29eda54ca161ff93a3674c96bab025d1719678d7d3afc400"
+  "payload_digest": "sha256:166f1dcfc9e33621a9e21fe84b16bf2107da5fbf01bf80b69776548d0f61b612"
 }

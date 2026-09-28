@@ -199,7 +199,7 @@ export const checkSourceModulePolicy = async (root: string, gitExecutable: strin
         outputScope: "tracked" as const, output: `${typedRuntimeRoot}${file}` });
     }
   }
-  const inheritedNames = ["check-pr-governance", "sync-github-labels"];
+  const inheritedNames = ["check-delivery-contract", "check-pr-governance", "sync-github-labels"];
   const inheritedSources = inheritedNames.map((name) => `scripts/typed-inherited/${name}.mts`);
   const inheritedRuntime = inheritedNames.map((name) => `scripts/typed-inherited-runtime/${name}.js`);
   const inheritedFiles = [...inheritedSources, ...inheritedRuntime, "scripts/typed-inherited-runtime/package.json"];

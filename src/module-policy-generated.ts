@@ -79,7 +79,7 @@ export const checkGeneratedModulePolicy = async (
   }
   const generated = new Set(owned);
   for (const file of await scanFactory(root)) generated.add(file);
-  const inheritedNames = ["check-pr-governance", "sync-github-labels"];
+  const inheritedNames = ["check-delivery-contract", "check-pr-governance", "sync-github-labels"];
   const paths = [".factory/scripts/typed-inherited-runtime/package.json",
     ...inheritedNames.flatMap((name) => [`.factory/scripts/typed-inherited/${name}.mts`,
       `.factory/scripts/typed-inherited-runtime/${name}.js`])];

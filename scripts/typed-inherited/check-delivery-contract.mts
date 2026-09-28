@@ -7,14 +7,15 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(scriptDirectory, path.basename(path.dirname(scriptDirectory)) === ".factory" ? "../.." : "..");
+const generatedLayout = path.basename(path.dirname(path.dirname(scriptDirectory))) === ".factory";
+const root = path.resolve(scriptDirectory, generatedLayout ? "../../.." : "../..");
 
-const providerDirectories = {
+const providerDirectories: Record<string, string> = {
   task: "task",
   secrets: "secrets",
   "code-intel": "code-intel",
 };
-const documentSections = {
+const documentSections: Record<string, string[]> = {
   "AGENT.md": ["Project coordinates", "Archetype documents", "Operating rules", "Protected `status:approved` gate", "Bindings (provider contract)", "Reading order for a cold agent"],
   "agent-runbook.md": ["Why this is a contract, not a runner", "Convergence rules", "Principle: the session is disposable", "Session cycle", "Approval boundaries", "Guardrails"],
   "bindings.md": ["Protected `status:approved` gate"],
@@ -23,7 +24,9 @@ const contractInstance = /Contract\s+instance\s*:\s*\*{0,2}\s*\[[^\]]+\]\(([^)]+
 const localLink = /\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/gu;
 const codeIntelNoneMarkers = ["intentional minimal", "default", "no dependency"];
 const ciRecipeMarker = "# Instance of ci/_contract.md";
-const sectionAliases = {
+const trackerToken = ["<", "TRACKER", ">"].join("");
+const trackerKeyToken = ["<", "TRACKER_KEY", ">"].join("");
+const sectionAliases: Record<string, string[]> = {
   "how the agent interacts": ["agent interaction"],
   "how the agent resolves secrets": ["agent interaction", "agent resolution"],
   "rules and limitations": ["rules"],
@@ -33,16 +36,17 @@ const sectionAliases = {
 const approvalAction = "add status:approved";
 const allowedPrincipalRoles = ["MAINTAINER", "AUTHORIZED_APPROVER"];
 const allowedActorCapabilities = ["MAINTAIN", "ADMIN"];
+type Evidence = Record<string, any>;
 
-const display = (target, projectRoot) => {
+const display = (target: string, projectRoot: string): string => {
   const relative = path.relative(projectRoot, target);
   return relative && !relative.startsWith(`..${path.sep}`) && relative !== ".." ? relative.replaceAll(path.sep, "/") : path.basename(target);
 };
 
-const headings = (text) => [...String(text).matchAll(/^#{2,6}\s+(.+?)\s*$/gmu)].map((match) => match[1].trim().replace(/#+$/u, "").trim());
-const sectionKey = (section) => section.toLowerCase().split(" (", 1)[0].trim();
+const headings = (text: string): string[] => [...String(text).matchAll(/^#{2,6}\s+(.+?)\s*$/gmu)].map((match) => match[1].trim().replace(/#+$/u, "").trim());
+const sectionKey = (section: string): string => section.toLowerCase().split(" (", 1)[0].trim();
 
-const field = (text, name) => {
+const field = (text: string, name: string): string => {
   for (const rawLine of String(text).split("\n")) {
     const line = rawLine.replace(/^\s*[-*>]\s*/u, "").replaceAll("**", "");
     const match = line.match(/^\s*([^:*]+?)\s*:\s*(.*?)\s*$/u);
@@ -51,7 +55,7 @@ const field = (text, name) => {
   return "";
 };
 
-const sectionPresent = (text, section) => {
+const sectionPresent = (text: string, section: string): boolean => {
   const wanted = sectionKey(section);
   const sections = new Set(headings(text).map(sectionKey));
   if (sections.has(wanted)) return true;
@@ -61,7 +65,7 @@ const sectionPresent = (text, section) => {
   return (sectionAliases[wanted] ?? []).some((alias) => labels.has(alias));
 };
 
-const contractFiles = (projectRoot) => {
+const contractFiles = (projectRoot: string): string[] => {
   const factory = path.join(projectRoot, ".factory");
   const templates = fs.existsSync(factory) ? path.join(factory, "templates") : path.join(projectRoot, "templates");
   const files = [path.join(projectRoot, "AGENT.md"), path.join(templates, "agent-runbook.md"), path.join(projectRoot, "docs", "bindings.md")];
@@ -72,8 +76,8 @@ const contractFiles = (projectRoot) => {
   return files;
 };
 
-const providerFiles = async (projectRoot) => {
-  const files = [];
+const providerFiles = async (projectRoot: string): Promise<Array<[string, string]>> => {
+  const files: Array<[string, string]> = [];
   for (const [capability, directory] of Object.entries(providerDirectories)) {
     const providerDirectory = path.join(projectRoot, "providers", directory);
     for (const entry of await readdir(providerDirectory).catch(() => [])) {
@@ -83,7 +87,7 @@ const providerFiles = async (projectRoot) => {
   return files.sort((left, right) => left[1].localeCompare(right[1]));
 };
 
-const checkLinks = (target, text, projectRoot, errors) => {
+const checkLinks = (target: string, text: string, projectRoot: string, errors: string[]): void => {
   for (const match of text.matchAll(localLink)) {
     const link = match[1].replace(/^<|>$/gu, "");
     if (!link || link.startsWith("#") || /^[a-z][a-z0-9+.-]*:/iu.test(link)) continue;
@@ -91,7 +95,7 @@ const checkLinks = (target, text, projectRoot, errors) => {
   }
 };
 
-const checkDocument = (target, text, projectRoot, errors) => {
+const checkDocument = (target: string, text: string, projectRoot: string, errors: string[]): void => {
   for (const section of documentSections[path.basename(target)] ?? []) {
     if (!new Set(headings(text).map(sectionKey)).has(sectionKey(section))) errors.push(`${display(target, projectRoot)} missing section: ## ${section}`);
   }
@@ -103,7 +107,7 @@ const checkDocument = (target, text, projectRoot, errors) => {
   }
 };
 
-const checkProvider = (capability, target, contractPath, contractText, text, projectRoot, errors) => {
+const checkProvider = (capability: string, target: string, contractPath: string, contractText: string, text: string, projectRoot: string, errors: string[]): void => {
   const label = display(target, projectRoot);
   for (const section of headings(contractText)) if (!sectionPresent(text, section)) errors.push(`${label} missing contract section: ## ${section}`);
   const instance = text.match(contractInstance);
@@ -122,7 +126,7 @@ const checkProvider = (capability, target, contractPath, contractText, text, pro
     const binding = text.split("**Binding:**")[1]?.split("**Agent interaction:**", 1)[0] ?? "";
     const interaction = text.split("**Agent interaction:**")[1]?.split(provider === "custom" ? /\*\*Protected `status:approved` gate:\*\*/u : /\*\*(?:Mandatory template|Pull-request governance):\*\*/u, 1)[0] ?? "";
     for (const [requirement, pattern, source] of [
-      ["selected tracker identity", /TASK_TRACKER[\s\S]*?<TRACKER>[\s\S]*?<TRACKER_KEY>/u, binding],
+      ["selected tracker identity", new RegExp(`TASK_TRACKER[\\s\\S]*?${trackerToken}[\\s\\S]*?${trackerKeyToken}`, "u"), binding],
       ["all durable harness tasks", /Every durable harness task\/TODO/u, binding],
       ["provider-first cold resume", /cold\s+resume/u, interaction],
       ["native confirmation and intended-state readback", /confirmation and fresh readback[\s\S]*?state[\s\S]*?comment\/handoff/u, interaction],
@@ -132,16 +136,16 @@ const checkProvider = (capability, target, contractPath, contractText, text, pro
       ["malformed readback blocks success", /malformed[\s\S]*?(?:stop|blocks)/u, interaction],
       ["fail-closed operation and readback", /(?:unsupported|unavailable)[\s\S]*?fail(?:ed|s|ure)?[\s\S]*?ambiguous[\s\S]*?readback[\s\S]*?(?:stop|blocks)/u, interaction],
       ["actionable continuation", /(?:exact|missing)[\s\S]*?operation[\s\S]*?(?:identity|number|key|identifier)[\s\S]*?evidence\s+needed to\s+resume/u, interaction],
-    ]) {
+    ] as const) {
       if (!pattern.test(source)) errors.push(`${label} missing task binding requirement: ${requirement}`);
     }
   }
 };
 
-const checkCi = (target, projectRoot, errors) => {
+const checkCi = (target: string, projectRoot: string, errors: string[]): void => {
   const label = display(target, projectRoot);
-  let recipes;
-  try { recipes = JSON.parse(fs.readFileSync(target, "utf8")); } catch (error) { errors.push(`${label} invalid CI recipes: ${error.constructor.name}`); return; }
+  let recipes: unknown;
+  try { recipes = JSON.parse(fs.readFileSync(target, "utf8")); } catch (error) { errors.push(`${label} invalid CI recipes: ${(error as Error).constructor.name}`); return; }
   if (!recipes || typeof recipes !== "object" || Array.isArray(recipes) || Object.keys(recipes).length === 0) { errors.push(`${label} must contain at least one CI recipe`); return; }
   for (const [name, job] of Object.entries(recipes).sort(([left], [right]) => left.localeCompare(right))) {
     if (name === "_contract") { errors.push(`${label} must not select _contract`); continue; }
@@ -152,7 +156,7 @@ const checkCi = (target, projectRoot, errors) => {
   }
 };
 
-const inferRoot = (paths, projectRoot) => {
+const inferRoot = (paths: string[], projectRoot: string): string => {
   if (projectRoot !== root) return projectRoot;
   for (const target of paths) {
     const directory = path.dirname(target);
@@ -161,13 +165,13 @@ const inferRoot = (paths, projectRoot) => {
   return projectRoot;
 };
 
-export const check = async (paths, projectRoot = root) => {
+export const check = async (paths?: string[], projectRoot = root): Promise<string[]> => {
   let effectiveRoot = path.resolve(projectRoot);
   const defaultPaths = paths === undefined;
   if (!defaultPaths) effectiveRoot = inferRoot(paths, effectiveRoot);
   const selected = defaultPaths ? [...contractFiles(effectiveRoot), ...(await providerFiles(effectiveRoot)).map(([, target]) => target)] : paths.map((target) => path.isAbsolute(target) ? target : path.join(effectiveRoot, target));
-  const errors = [];
-  const present = [];
+  const errors: string[] = [];
+  const present: string[] = [];
   for (const target of selected) {
     if (!fs.existsSync(target)) errors.push(`required file missing: ${display(target, effectiveRoot)}`);
     else present.push(target);
@@ -178,12 +182,12 @@ export const check = async (paths, projectRoot = root) => {
     checkLinks(target, text, effectiveRoot, errors);
     checkDocument(target, text, effectiveRoot, errors);
   }
-  const contracts = new Map();
+  const contracts = new Map<string, [string, string]>();
   for (const [capability, directory] of Object.entries(providerDirectories)) {
     const target = path.join(effectiveRoot, "providers", directory, "_contract.md");
     if (fs.existsSync(target)) contracts.set(capability, [target, await readFile(target, "utf8")]);
   }
-  const providers = defaultPaths ? await providerFiles(effectiveRoot) : selected.flatMap((target) => {
+  const providers = defaultPaths ? await providerFiles(effectiveRoot) : selected.flatMap((target): Array<[string, string]> => {
     const capability = Object.entries(providerDirectories).find(([, directory]) => path.dirname(target) === path.join(effectiveRoot, "providers", directory))?.[0];
     return capability && path.basename(target) !== "_contract.md" ? [[capability, target]] : [];
   });
@@ -195,13 +199,13 @@ export const check = async (paths, projectRoot = root) => {
   return errors;
 };
 
-export const delegatedApprovalErrors = (evidence, targetIssue) => {
+export const delegatedApprovalErrors = (evidence: Evidence, targetIssue: number): string[] => {
   const instruction = evidence.instruction ?? {};
   const principal = evidence.principal ?? {};
   const actor = evidence.actor ?? {};
   const operation = evidence.operation ?? {};
   const readback = evidence.readback ?? {};
-  const errors = [];
+  const errors: string[] = [];
   if (instruction.source !== "direct-human") errors.push("instruction must be direct human input");
   if (instruction.current !== true) errors.push("instruction must be current");
   if (instruction.issue !== targetIssue) errors.push("instruction must name the exact target issue");
@@ -219,9 +223,9 @@ export const delegatedApprovalErrors = (evidence, targetIssue) => {
   return errors;
 };
 
-export const delegatedApprovalAllowed = (evidence, targetIssue) => delegatedApprovalErrors(evidence, targetIssue).length === 0;
+export const delegatedApprovalAllowed = (evidence: Evidence, targetIssue: number): boolean => delegatedApprovalErrors(evidence, targetIssue).length === 0;
 
-const approvalSelfCheck = () => {
+const approvalSelfCheck = (): void => {
   const valid = {
     instruction: { source: "direct-human", current: true, issue: 32, action: approvalAction, principal: "human-1" },
     principal: { evidence_source: "target-host", subject: "human-1", role: "MAINTAINER" },
@@ -234,8 +238,8 @@ const approvalSelfCheck = () => {
     [["instruction", "issue"], 31], [["instruction", "current"], false], [["instruction"], {}],
     [["principal", "role"], "CONTRIBUTOR"], [["actor", "capability"], "TRIAGE"],
     [["operation", "result"], "unknown"], [["readback", "labels"], []],
-  ]) {
-    const rejected = structuredClone(valid);
+  ] as const) {
+    const rejected = structuredClone(valid) as Evidence;
     if (field.length === 2) rejected[field[0]][field[1]] = value;
     else rejected[field[0]] = value;
     assert.equal(delegatedApprovalAllowed(rejected, 32), false, field.join("."));
@@ -243,7 +247,7 @@ const approvalSelfCheck = () => {
   process.stdout.write("approval self-check OK\n");
 };
 
-const selfCheck = async () => {
+const selfCheck = async (): Promise<void> => {
   assert.deepEqual(await check(), []);
   const directory = await mkdtemp(path.join(os.tmpdir(), "delivery-contract-"));
   try {
@@ -267,14 +271,14 @@ const selfCheck = async () => {
   process.stdout.write("self-check OK\n");
 };
 
-const main = async () => {
+const main = async (): Promise<void> => {
   if (process.argv.length === 3 && process.argv[2] === "--self-check") return selfCheck();
   if (process.argv.length === 3 && process.argv[2] === "--approval-self-check") return approvalSelfCheck();
   throw new Error("usage: check-delivery-contract.mjs --self-check|--approval-self-check");
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  main().catch((error) => {
+  main().catch((error: Error) => {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;
   });
