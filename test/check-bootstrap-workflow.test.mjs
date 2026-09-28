@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { test } from "node:test";
 
 import { WorkflowContractError, bootstrapPinnedActions, check, pinnedActions } from "../scripts/check-bootstrap-workflow.mjs";
+import { check as checkRealAgentWorkflow } from "../scripts/typed-runtime/check-real-agent-workflow.js";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,6 +37,13 @@ const replace = async (directory, name, from, to) => {
 
 const replaceFirst = async (directory, name, from, to) => {
   const target = path.join(directory, workflows, files[name]);
+  const source = await readFile(target, "utf8");
+  assert.ok(source.includes(from), `fixture does not contain ${from}`);
+  await writeFile(target, source.replace(from, to), "utf8");
+};
+
+const replaceScript = async (directory, relative, from, to) => {
+  const target = path.join(directory, relative);
   const source = await readFile(target, "utf8");
   assert.ok(source.includes(from), `fixture does not contain ${from}`);
   await writeFile(target, source.replace(from, to), "utf8");
@@ -71,6 +79,20 @@ test("real-agent journey rejects invoke-agent separator drift", async () => {
   await fixture(async (directory) => {
     await replace(directory, "journey", 'node scripts/real-agent-journey.mjs invoke-agent --runtime "$JOURNEY_RUNTIME" --', 'node scripts/real-agent-journey.mjs invoke-agent --runtime "$JOURNEY_RUNTIME"');
     await reject(directory, "real-agent journey invoke-agent command must preserve the adapter separator");
+  });
+});
+
+test("real-agent workflow requires the Codex approval config override", async () => {
+  await fixture(async (directory) => {
+    assert.equal(await checkRealAgentWorkflow(directory), "real-agent workflow static check OK");
+  });
+  await fixture(async (directory) => {
+    await replaceScript(directory, "scripts/real-agent-e2e.mjs", '-c", \'approval_policy="never"\'', '-c", \'approval_policy="on-request"\'');
+    await assert.rejects(checkRealAgentWorkflow(directory), /approval_policy="never"/u);
+  });
+  await fixture(async (directory) => {
+    await replaceScript(directory, "scripts/real-agent-e2e.mjs", '-c", \'approval_policy="never"\'', '"--ask-for-approval", "never"');
+    await assert.rejects(checkRealAgentWorkflow(directory), /retired or unsafe Codex command contract/u);
   });
 });
 
