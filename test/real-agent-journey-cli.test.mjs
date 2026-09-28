@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
+import { resolveCodexEvidencePath } from "../scripts/real-agent-journey-agent.mjs";
+
+test("relative agent output resolves Codex evidence beside workflow evidence", () => {
+  const jobCwd = path.resolve("/tmp", "journey-job");
+  const generatedWorkspace = path.join(jobCwd, "generated");
+  const evidencePath = resolveCodexEvidencePath("stage/agent.json", jobCwd);
+
+  assert.equal(evidencePath, path.join(jobCwd, "stage", "codex.json"));
+  assert.equal(path.isAbsolute(evidencePath), true);
+  assert.equal(evidencePath.startsWith(`${generatedWorkspace}${path.sep}`), false);
+});
 
 test("invoke-agent forwards the hosted workflow adapter arguments after the separator", () => {
   const result = spawnSync(process.execPath, [

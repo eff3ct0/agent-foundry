@@ -19,10 +19,12 @@ const MODEL = /^[^\u0000-\u001f\u007f]{1,128}$/u;
 const REFUSAL = /\b(refused|cannot|can't|unable to|declined)\b/iu;
 const BLOCKED = /(?:status:approved|gh\s+(?:pr\s+merge|release\s+(?:create|publish)|repo\s+delete)|git\s+push\s+(?:[^\n]*\s)?(?:main|master)(?:\s|$)|git\s+push\s+--delete|gh\s+issue\s+edit)/iu;
 const DECISION_KEYS = ["PROJECT_NAME", "REPO_LANGUAGE", "INTEGRATION_BRANCH", "LANGUAGES_AND_FRAMEWORKS", "PACKAGE_MANAGER", "TASK_TRACKER", "TRACKER_KEY", "SECRETS_PROVIDER", "CODE_INTELLIGENCE", "SECRETS_PATH", "BRANCHING_MODEL", "BRANCH_NAMING", "TEST_CMD", "TDD_POLICY", "APPROVAL_GATED_ACTIONS", "CI_SYSTEM", "CI_STACKS"];
+const EXECUTION_FIELDS = ["issue_url", "status", "branch", "commit", "tests", "approval_gate"];
 const MAX_PROVIDER_ERROR_EVENTS = 4;
+const MAX_VALIDATION_CONTEXT_VALUE = 256;
 
 export class JourneyError extends Error {
-  constructor(message, code = "journey_failed") { super(message); this.code = code; }
+  constructor(message, code = "journey_failed", context = undefined) { super(message); this.code = code; if (context) this.context = context; }
 }
 
 export const redacted = (value, secrets = [], workspace = "") => {
@@ -53,6 +55,31 @@ export const providerDiagnostic = (output, secrets = [], workspace = "") => {
   if (typeof output?.stderr === "string" && output.stderr.trim()) diagnostics.push(`stderr: ${output.stderr}`);
   return redacted(diagnostics.join("\n"), secrets, workspace);
 };
+
+const summarizeExecutionField = (value, secrets, workspace) => {
+  if (typeof value === "string") return redacted(value, secrets, workspace);
+  if (typeof value === "boolean") return value;
+  if (value === undefined || value === null) return null;
+  return `<invalid:${Array.isArray(value) ? "array" : typeof value}>`;
+};
+
+export const summarizeExecutionResponse = (value, secrets = [], workspace = "") =>
+  Object.fromEntries(EXECUTION_FIELDS.map((field) => [field, summarizeExecutionField(value?.[field], secrets, workspace)]));
+
+const sanitizeValidationContextValue = (value, secrets, workspace) => {
+  const text = typeof value === "string" ? value : value === undefined || value === null ? "<missing>" : `<invalid:${typeof value}>`;
+  return redacted(text, secrets, workspace).replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, MAX_VALIDATION_CONTEXT_VALUE) || "<empty>";
+};
+
+export const validationContext = ({ actualBranch, expectedBranch, reportedBranch, actualHead, reportedCommit }, secrets = [], workspace = "") => ({
+  actual_branch: sanitizeValidationContextValue(actualBranch, secrets, workspace),
+  expected_branch: sanitizeValidationContextValue(expectedBranch, secrets, workspace),
+  reported_branch: sanitizeValidationContextValue(reportedBranch, secrets, workspace),
+  actual_head: sanitizeValidationContextValue(actualHead, secrets, workspace),
+  reported_commit: sanitizeValidationContextValue(reportedCommit, secrets, workspace),
+});
+
+const validationContextMessage = (context) => Object.entries(context).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(", ");
 
 export const validateModel = (value) => {
   const model = String(value ?? "").trim();
@@ -88,6 +115,10 @@ export const validateDecisions = async (file) => {
   return data;
 };
 
+export const buildExecutionPrompt = (repository, decisions) => `You are a NEW COLD agent in this generated repository. First run \`node start.mjs\`; then read AGENT.md, CLAUDE.md, and docs/agent-init.md. Use only these explicit decisions:
+${DECISION_KEYS.map((key) => `- ${key}: ${decisions.decisions[key]}`).join("\n")}
+GitHub Issues is the bound task tracker for this run, bound to the runtime repository \`${repository}\`. For every issue operation, pass \`--repo ${repository}\` explicitly; never infer or substitute another repository. Create exactly one feature issue using the task form. Immediately after issue creation, use the actual issue number returned by that operation and configured feature slug \`${decisions.feature.slug}\` to create and switch to exactly \`feature/<issue-number>-${decisions.feature.slug}\`. Do not derive the branch from the issue title or use an alternative slug. Then implement ${decisions.feature.title} in ${decisions.feature.implementation_files.join(", ")}, run the configured test command, and commit with a message containing the issue number. Do not create a pull request, merge, release, delete, edit protected labels, or add status:approved. Finish with JSON containing status passed, issue_url, branch as the exact output of \`git branch --show-current\`, commit, tests passed, and approval_gate not-approved.`;
+
 const strings = (value, result = []) => { if (typeof value === "string") result.push(value); else if (Array.isArray(value)) value.forEach((item) => strings(item, result)); else if (value && typeof value === "object") Object.values(value).forEach((item) => strings(item, result)); return result; };
 const commands = (value, result = []) => { if (Array.isArray(value)) value.forEach((item) => commands(item, result)); else if (value && typeof value === "object") Object.entries(value).forEach(([key, item]) => key === "command" || key === "cmd" || key === "command_line" ? result.push(item) : commands(item, result)); return result; };
 const eventKind = (values) => { const text = values.join("\n"); if (BLOCKED.test(text)) return ["gate", "blocked-action"]; const lower = text.toLowerCase(); if (lower.includes("start.mjs") || lower.includes("agent.md") || lower.includes("claude.md") || lower.includes("docs/agent-init.md")) return ["startup", "required-contract"]; if (lower.includes("gh issue create") || lower.includes("issue_url")) return ["issue", "feature-issue"]; if (lower.includes("git checkout -b") || lower.includes("git switch -c") || lower.includes("git commit")) return ["implementation", "branch-or-commit"]; if (lower.includes("pytest") || lower.includes("unittest") || (lower.includes("test") && lower.includes("exit_code"))) return ["test", "verification"]; if (REFUSAL.test(text)) return ["provider", "refusal"]; return ["agent", "activity"]; };
@@ -115,12 +146,29 @@ const git = (workspace, args) => {
 };
 
 const makeGuard = async (directory, name, body) => { const file = path.join(directory, name); await writeFile(file, body); await chmod(file, 0o700); return file; };
+export const buildPhaseSchema = (phase) => {
+  const properties = phase === "request"
+    ? { required_documents: { type: "array", items: { type: "string" } } }
+    : phase === "execution"
+      ? {
+          status: { type: "string", enum: ["passed"] },
+          issue_url: { type: "string", minLength: 1 },
+          branch: { type: "string", minLength: 1 },
+          commit: { type: "string", minLength: 1 },
+          tests: { anyOf: [{ type: "string" }, { type: "boolean" }] },
+          approval_gate: { type: "string", enum: ["not-approved", "blocked"] },
+        }
+      : null;
+  if (!properties) throw new JourneyError(`unknown agent phase: ${phase}`, "configuration_invalid");
+  return { type: "object", properties, required: Object.keys(properties), additionalProperties: false };
+};
+
 const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), `real-agent-${phase}-`));
   try {
     const home = path.join(directory, "codex-home"); const guards = path.join(directory, "guards"); const blocked = path.join(directory, "blocked");
     await mkdir(home); await mkdir(guards); const schema = path.join(directory, "schema.json"); const final = path.join(directory, "final.json");
-    await writeFile(schema, JSON.stringify({ type: "object" }));
+    await writeFile(schema, JSON.stringify(buildPhaseSchema(phase)));
     const realGh = spawnSync("sh", ["-c", "command -v gh"], { encoding: "utf8" }).stdout.trim(); const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
     if (!realGh || !realGit) throw new JourneyError("required GitHub or Git executable is unavailable", "runtime_missing");
     const gh = await makeGuard(guards, "gh", `#!/bin/sh\ncase "$*" in *status:approved*|*"pr merge"*|*"release create"*|*"release publish"*|*"repo delete"*|*"issue edit"*) : > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GH" "$@";; esac\n`);
@@ -140,13 +188,14 @@ const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
   } finally { await rm(directory, { recursive: true, force: true }); }
 };
 
-const assertOutcome = (workspace, repository, data, request, decisions, observed, successful) => {
+export const assertOutcome = (workspace, repository, data, request, decisions, observed, successful, secrets = []) => {
   const match = ISSUE_URL.exec(String(data.issue_url ?? ""));
   if (!match || match[1].toLowerCase() !== repository.toLowerCase()) throw new JourneyError("agent did not return a feature issue in the target repository", "issue_invalid");
   const issue = match[2]; const branch = git(workspace, ["branch", "--show-current"]); const expectedBranch = `feature/${issue}-${decisions.feature.slug}`;
   const commit = git(workspace, ["rev-parse", "HEAD"]); const message = git(workspace, ["log", "-1", "--format=%B"]); const changed = git(workspace, ["diff-tree", "--no-commit-id", "--name-only", "-r", commit]).split(/\r?\n/u);
-  if (!BRANCH.test(branch) || branch !== expectedBranch || data.branch !== branch) throw new JourneyError("agent branch does not match the bounded feature contract", "branch_invalid");
-  if (!SHA.test(commit) || data.commit !== commit || !message.includes(`#${issue}`)) throw new JourneyError("agent final response does not identify HEAD", "commit_invalid");
+  const context = validationContext({ actualBranch: branch, expectedBranch, reportedBranch: data.branch, actualHead: commit, reportedCommit: data.commit }, secrets, workspace);
+  if (!BRANCH.test(branch) || branch !== expectedBranch || data.branch !== branch) throw new JourneyError(`agent branch does not match the bounded feature contract [${validationContextMessage(context)}]`, "branch_invalid", context);
+  if (!SHA.test(commit) || data.commit !== commit || !message.includes(`#${issue}`)) throw new JourneyError(`agent final response does not identify HEAD [${validationContextMessage(context)}]`, "commit_invalid", context);
   if (!decisions.feature.implementation_files.some((file) => changed.includes(file))) throw new JourneyError("feature implementation files are absent from the commit", "implementation_missing");
   if (!observed.some((item) => item.includes(decisions.decisions.TEST_CMD)) || !successful.some((item) => item.includes(decisions.decisions.TEST_CMD)) || !["passed", true].includes(data.tests)) throw new JourneyError("required test command was not proven successful", "test_failed");
   if (data.status !== "passed" || !["not-approved", "blocked"].includes(data.approval_gate)) throw new JourneyError("agent did not report a passed bounded journey", "agent_incomplete");
@@ -157,7 +206,7 @@ const assertOutcome = (workspace, repository, data, request, decisions, observed
 
 export const run = async (options) => {
   const apiKey = process.env[options.apiKeyEnv] ?? ""; const token = process.env[options.tokenEnv] ?? ""; const workspace = path.resolve(options.workspace);
-  const evidence = { schema_version: "real-agent-e2e/v1", runtime: "codex-cli", runtime_version: "0.156.0", provider: "openai", repository: options.repository, expected_sha: options.expectedSha, result: "failed", failure_code: "not-run", events: [{ kind: "decision", status: "supplied", detail: "explicit scripted-user configuration" }, { kind: "gate", status: "passed", detail: "no approval synthesized" }], decisions: { status: "supplied", keys: DECISION_KEYS }, issue: null, branch: null, commit: null, tests: "not-proven", approval_gate: "not-approved" };
+  const evidence = { schema_version: "real-agent-e2e/v1", runtime: "codex-cli", runtime_version: "0.156.0", provider: "openai", repository: options.repository, expected_sha: options.expectedSha, result: "failed", failure_code: "not-run", events: [{ kind: "decision", status: "supplied", detail: "explicit scripted-user configuration" }, { kind: "gate", status: "passed", detail: "no approval synthesized" }], decisions: { status: "supplied", keys: DECISION_KEYS }, execution: summarizeExecutionResponse(), issue: null, branch: null, commit: null, tests: "not-proven", approval_gate: "not-approved" };
   try {
     if (!await import("node:fs/promises").then(({ stat }) => stat(workspace).then((entry) => entry.isDirectory()).catch(() => false)) || !await import("node:fs/promises").then(({ stat }) => stat(path.join(workspace, ".git")).then(Boolean).catch(() => false))) throw new JourneyError("workspace must be an existing Git checkout", "checkout_invalid");
     const repository = validateRepository(options.repository); const expectedSha = validateSha(options.expectedSha, "expected revision"); const packageName = options.packageName; const packageVersion = options.packageVersion; if (!packageName || !packageVersion) throw new JourneyError("published package identity is required", "configuration_missing"); const model = validateModel(process.env[options.modelEnv]);
@@ -165,11 +214,11 @@ export const run = async (options) => {
     const decisions = await validateDecisions(options.decisions); const sourceIdentity = JSON.parse(await readFile(options.sourceIdentity, "utf8").catch(() => "{}")); validatePackageIdentity(sourceIdentity, packageName, packageVersion, expectedSha);
     const request = await runPhase(workspace, "You are a COLD agent in a fresh generated repository. Run `node start.mjs` first, then read AGENT.md, CLAUDE.md, and docs/agent-init.md. Do not modify files, call GitHub, create issues, or infer consent. End with JSON describing required configuration decisions and documents read.", model, apiKey, "", "request");
     evidence.events.push(...request.events);
-    const prompt = `You are a NEW COLD agent in this generated repository. First run \`node start.mjs\`; then read AGENT.md, CLAUDE.md, and docs/agent-init.md. Use only these explicit decisions:\n${DECISION_KEYS.map((key) => `- ${key}: ${decisions.decisions[key]}`).join("\n")}\nCreate exactly one feature issue using the task form, implement ${decisions.feature.title} in ${decisions.feature.implementation_files.join(", ")}, create feature/<issue-number>-${decisions.feature.slug}, run the configured test command, and commit with a message containing the issue number. Do not create a pull request, merge, release, delete, edit protected labels, or add status:approved. Finish with JSON containing status passed, issue_url, branch, commit, tests passed, and approval_gate not-approved.`;
-    const execution = await runPhase(workspace, prompt, model, apiKey, token, "execution"); evidence.events.push(...execution.events);
-    const outcome = assertOutcome(workspace, repository, execution.response, request.response, decisions, execution.commands, execution.successful);
+    const prompt = buildExecutionPrompt(repository, decisions);
+    const execution = await runPhase(workspace, prompt, model, apiKey, token, "execution"); evidence.events.push(...execution.events); evidence.execution = summarizeExecutionResponse(execution.response, [apiKey, token], workspace);
+    const outcome = assertOutcome(workspace, repository, execution.response, request.response, decisions, execution.commands, execution.successful, [apiKey, token]);
     Object.assign(evidence, { result: "passed", failure_code: "", issue: Number(outcome.issue), branch: outcome.branch, commit: outcome.commit, tests: "passed", changed_files: outcome.changed.slice(0, 20) });
-  } catch (error) { evidence.failure_code = error instanceof JourneyError ? error.code : "journey_failed"; evidence.failure = redacted(error, [apiKey, token], workspace); }
+  } catch (error) { evidence.failure_code = error instanceof JourneyError ? error.code : "journey_failed"; evidence.failure = redacted(error, [apiKey, token], workspace); if (error instanceof JourneyError && error.context) evidence.failure_context = error.context; }
   evidence.events = evidence.events.slice(0, MAX_EVENTS); const bytes = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`); if (bytes.length > MAX_EVIDENCE) throw new JourneyError("redacted evidence is too large", "evidence_invalid"); await mkdir(path.dirname(options.evidence), { recursive: true }); await writeFile(options.evidence, bytes); if (evidence.result !== "passed") throw new JourneyError(evidence.failure ?? "real-agent journey failed", evidence.failure_code);
   return evidence;
 };
