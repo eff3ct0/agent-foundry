@@ -250,7 +250,7 @@ jobs:
           mkdir -p stage
           env -i "PATH=$PATH" "HOME=$HOME" "LANG=$LANG" \
             JOURNEY_RUN_ID="$JOURNEY_RUN_ID" JOURNEY_REPOSITORY="${{ needs.prepare.outputs.repository }}" \
-            JOURNEY_RUNTIME="$JOURNEY_RUNTIME" JOURNEY_TOKEN="$JOURNEY_TOKEN" \
+            JOURNEY_RUNTIME="$JOURNEY_RUNTIME" JOURNEY_TOKEN="$JOURNEY_TOKEN" AGENT_GITHUB_TOKEN="$JOURNEY_TOKEN" \
             OPENAI_API_KEY="$OPENAI_API_KEY" OPENAI_MODEL="$OPENAI_MODEL" \
              node scripts/real-agent-journey.mjs invoke-agent --runtime "$JOURNEY_RUNTIME" -- \
               --repository "${{ needs.prepare.outputs.repository }}" --run-id "$JOURNEY_RUN_ID" \
