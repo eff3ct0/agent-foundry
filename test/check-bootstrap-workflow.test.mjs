@@ -16,6 +16,7 @@ const workflows = path.join(".github", "workflows");
 const files = Object.freeze({ bootstrap: "bootstrap-e2e.yml", template: "template-bootstrap-e2e.yml", journey: "real-agent-journey.yml", assertions: "real-agent-journey-assertions.yml", npmRelease: "npm-release.yml", archetypeNode20: "archetype-node20.yml" });
 const success = ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
 const generatedPush = '          git -c http.extraheader="AUTHORIZATION: basic $(printf \'x-access-token:%s\' "$JOURNEY_TOKEN" | base64 -w0)" -C generated push origin HEAD:main';
+const agentTokenBinding = 'AGENT_GITHUB_TOKEN="$JOURNEY_TOKEN"';
 
 const fixture = async (callback) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bootstrap-workflow-contract-"));
@@ -316,6 +317,32 @@ test("real-agent journey keeps the configured OpenAI secret isolated to the agen
       const section = workflow.split(`\n  ${stage}:\n`)[1]?.split(/\n  (?:prepare|provision|agent|assert|cleanup|report):\n/u)[0] ?? "";
       assert.equal(section.includes("OPENAI_API_KEY"), false, `${stage} must not receive OpenAI credentials`);
     }
+  });
+});
+
+test("real-agent journey maps JOURNEY_TOKEN to AGENT_GITHUB_TOKEN only in the cold-agent process", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
+    const agent = workflow.split("\n  agent:\n")[1]?.split("\n  assert:\n")[0] ?? "";
+    const agentRun = agent.split("\n      - name: Run cold-agent adapter\n")[1]?.split("\n      - name: Upload agent evidence\n")[0] ?? "";
+    const processEnvironment = agentRun.split("          env -i ")[1]?.split("\n              node scripts/real-agent-journey.mjs invoke-agent --runtime")[0] ?? "";
+    assert.ok(processEnvironment.includes(agentTokenBinding));
+    for (const stage of ["provision", "assert", "cleanup", "report"]) {
+      const section = workflow.split(`\n  ${stage}:\n`)[1]?.split(/\n  (?:prepare|provision|agent|assert|cleanup|report):\n/u)[0] ?? "";
+      assert.equal(section.includes("AGENT_GITHUB_TOKEN"), false, `${stage} must not receive the agent adapter credential alias`);
+    }
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "journey", agentTokenBinding, 'AGENT_GITHUB_TOKEN="$MISSING_TOKEN"');
+    await reject(directory, "real-agent journey agent process must map JOURNEY_TOKEN to AGENT_GITHUB_TOKEN");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "journey", agentTokenBinding, "");
+    await reject(directory, "real-agent journey agent process must map JOURNEY_TOKEN to AGENT_GITHUB_TOKEN");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "journey", agentTokenBinding, "AGENT_GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN }}");
+    await reject(directory, "real-agent journey agent process must map JOURNEY_TOKEN to AGENT_GITHUB_TOKEN");
   });
 });
 

@@ -138,9 +138,13 @@ const checkJourney = (text, projectRoot) => {
   if (text.includes("REAL_AGENT_JOURNEY_API_KEY")) fail("real-agent journey must not use stale REAL_AGENT_JOURNEY_API_KEY secret alias");
   requireText(agent, [agentSecretBinding], "real-agent journey agent secret binding is missing");
   if (!agent.includes('node scripts/real-agent-journey.mjs invoke-agent --runtime "$JOURNEY_RUNTIME" --')) fail("real-agent journey invoke-agent command must preserve the adapter separator");
+  const agentRun = section(agent, "\n      - name: Run cold-agent adapter\n", "\n      - name: Upload agent evidence\n");
+  const agentProcessEnvironment = section(agentRun, "          env -i ", "\n              node scripts/real-agent-journey.mjs invoke-agent --runtime");
+  if (!agentProcessEnvironment.includes('AGENT_GITHUB_TOKEN="$JOURNEY_TOKEN"')) fail("real-agent journey agent process must map JOURNEY_TOKEN to AGENT_GITHUB_TOKEN");
   const agentToken = section(agent, "\n      - name: Mint agent token\n", "\n      - name: Create initial branch and apply the exact published creator package\n");
   const workflowPermissionLines = [...text.matchAll(/^\s+permission-workflows:\s+\S+\s*$/gmu)];
   const unrelatedStages = [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n"), section(text, "\n  report:\n")];
+  if (unrelatedStages.some((stage) => stage.includes("AGENT_GITHUB_TOKEN"))) fail("real-agent journey repository credential binding must be isolated to the agent process");
   if (unrelatedStages.some((stage) => stage.includes("permission-workflows:"))) fail("real-agent journey workflows permission must be isolated to agent App token");
   const agentWorkflowPermissionLines = [...agentToken.matchAll(/^\s+permission-workflows:\s+\S+\s*$/gmu)];
   if (agentWorkflowPermissionLines.length !== 1 || !agentToken.includes("permission-workflows: write")) fail("real-agent journey agent App token permissions must be exactly contents, issues, and workflows write");
