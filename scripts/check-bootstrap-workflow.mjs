@@ -300,6 +300,7 @@ jobs:
     steps:
       - uses: actions/checkout@${pinnedActions["actions/checkout"]} # v4.2.2
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@${bootstrapPinnedActions["actions/setup-node"]} # v4.4.0
         with:
