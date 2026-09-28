@@ -243,7 +243,7 @@ jobs:
       - name: Run cold-agent adapter
         env:
           JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
-          OPENAI_API_KEY: ${{ secrets.REAL_AGENT_JOURNEY_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           JOURNEY_OUTPUT: stage/agent.json
         run: |
