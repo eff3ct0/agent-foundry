@@ -16,6 +16,8 @@ verification, not in the agent.
 5. **Persistence language.** Conversation language is independent. All persisted work (specs, docs, tickets, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
 6. **Delegated delivery.** A delegated task authorizes routine delivery without intermediate confirmation: update the tracker, implement, verify, commit, push, open the pull request, and leave evidence in the tracker. Approval gates remain explicit.
 
+Before any consequential action, apply the pre-action execution boundary in `AGENT.md`: name the selected workspace, actual tool execution location or uncertainty, relevant path/network/credential reach, and user authorization for the destination and action. A mounted host path or outer-server custom tool is not made safe by a sandbox label. Do not probe or disclose credentials. On missing facts, missing authorization, or a read-only request, defer only the affected remote/write/destructive action, record the missing fact and next step in the existing handoff, and continue unrelated authorized reads. This contract guides the agent; it does not enforce tool isolation.
+
 ## Principle: the session is disposable
 **Durable task state** lives in the bound provider, never only in session memory, VCS, or a local task UI.
 Each session takes one task to a durable point, leaves state, and ends.
@@ -82,6 +84,7 @@ session memory or an alternate tracker.
 
 ### Approval boundaries
 - Routine delivery includes issue/project updates, implementation, verification, commit, push, and PR creation.
+- Delegated routine delivery is not blanket authority across execution boundaries; check the actual destination and action before using a remote or host-reaching tool, even if it appears sandboxed. Keep authorized read-only work moving when an outward action is blocked.
 - Human decisions remain gated: approving review, merge, production deployment, destructive operations, and release publication. Applying `status:approved` is also gated, but the bound task provider may define a fail-closed delegated-approval protocol.
 - Under that protocol, the agent may add `status:approved` only when a current direct human instruction names the exact issue and `add status:approved`, target-host evidence binds the principal to maintainer/authorized-approver authority, the authenticated actor has `MAINTAIN` or `ADMIN`, and exactly one scoped add attempt is followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation.
 - Without that evidence, mark the task `BLOCKED: requires approval`, tell the human to apply the label directly, leave the exact next step in the tracker, and stop. This contract change does not grant approval for existing work.

@@ -64,6 +64,61 @@ const walkFiles = async (directory, result = []) => {
   return result.sort();
 };
 
+test("generated project describes actual execution boundaries before consequential actions", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-action-boundary-"));
+  const target = path.join(parent, "project");
+  try {
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stderr);
+    const docs = Object.fromEntries(await Promise.all([
+      "AGENT.md", ".factory/templates/agent-runbook.md", ".factory/docs/workflow.md", ".factory/templates/handoff.md",
+    ].map(async (name) => [name, await readFile(path.join(target, name), "utf8")])));
+    const agent = docs["AGENT.md"];
+    const runbook = docs[".factory/templates/agent-runbook.md"];
+    assert.match(agent, /Before a consequential action.*selected repository\/workspace.*tool actually executes.*relevant path\/network\/credential reach.*authorized this destination and action/u);
+    assert.match(agent, /sandbox label does not establish isolation/u);
+    assert.match(agent, /Do not probe or disclose credentials/u);
+    assert.match(agent, /defer the affected remote, write, or destructive action.*read-only request permits only authorized reads/u);
+    assert.match(agent, /Name the missing fact and next step.*continue unrelated authorized reads/u);
+    assert.match(agent, /not a runtime permission guard/u);
+    assert.match(runbook, /pre-action execution boundary in `AGENT\.md`/u);
+    assert.match(runbook, /does not enforce tool isolation/u);
+    assert.match(docs[".factory/docs/workflow.md"], /Before planning a consequential tool action/u);
+    assert.match(docs[".factory/templates/handoff.md"], /Record only the affected action as blocked; unrelated authorized reads continue/u);
+
+    // Documentary scenario fixture: no sandbox or permission enforcement is implemented here.
+    const scenarios = [
+      { boundary: "direct local", evidence: /selected repository\/workspace/u, authorized: true, readOnly: false },
+      { boundary: "remote", evidence: /Local work does not authorize remote execution or transfer/u, authorized: false, readOnly: false },
+      { boundary: "mounted host", evidence: /mounted host path reaches the host/u, authorized: false, readOnly: false },
+      { boundary: "outer-server custom tool", evidence: /custom tool may execute on an outer server/u, authorized: false, readOnly: false },
+      { boundary: "unknown", evidence: /execution is unknown or authorization is missing/u, authorized: false, readOnly: false },
+      { boundary: "read-only local", evidence: /read-only request permits only authorized reads.*continue unrelated authorized reads/u, authorized: true, readOnly: true },
+    ];
+    const observed = { directLocal: 0, authorizedReads: 0, blocked: [] };
+    for (const scenario of scenarios) {
+      assert.match(agent, scenario.evidence, scenario.boundary);
+      if (scenario.authorized && !scenario.readOnly) observed.directLocal += 1;
+      else if (scenario.authorized && scenario.readOnly) observed.authorizedReads += 1;
+      else observed.blocked.push(scenario.boundary); // No outward tool is invoked.
+    }
+    assert.deepEqual(observed, {
+      directLocal: 1,
+      authorizedReads: 1,
+      blocked: ["remote", "mounted host", "outer-server custom tool", "unknown"],
+    });
+    const verified = await run(["verify", ...args]);
+    assert.equal(verified.code, 0, verified.stderr);
+    assert.equal(json(verified).status, "verified");
+    const contract = await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/check-delivery-contract.mjs"), "--self-check"], { cwd: target });
+    assert.match(contract.stdout, /self-check OK/u);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("generated module inventory uses the composed creator plan, not application paths or state declarations", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-module-policy-"));
   const target = path.join(parent, "project");

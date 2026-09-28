@@ -24,6 +24,8 @@ target identity needed to resume; do not map a non-GitHub task provider to GitHu
 - Resume phase when blocked: `<PHASE_OR_NOT_BLOCKED>`
 - Blocker or approval needed: `<BLOCKER_OR_NOT_BLOCKED>`
 
+For a deferred action, use the existing fields above to name the selected workspace, actual execution location or uncertainty (including mounted host paths or outer-server tools), relevant path/network/credential reach without probing credentials, the destination/action authorization missing, and the exact next step. Record only the affected action as blocked; unrelated authorized reads continue. Do not include tokens or credentials in a handoff.
+
 ## Tracker update
 - Bound-provider task identity: `<PROVIDER_TASK_ID>`
 - Provider-confirmed task state: `<TRACKER_STATE>`

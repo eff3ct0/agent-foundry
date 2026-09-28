@@ -8,6 +8,7 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 - Define verifiable **acceptance criteria**.
 - Set the **scope**: what is in and what is out.
 - Record assumptions and dependencies.
+- Before planning a consequential tool action, identify the selected workspace, actual execution boundary or uncertainty, relevant path/network/credential reach, and authorization for its destination and action (see [`AGENT.md`](../AGENT.md)). Do not infer isolation from a sandbox label or probe credentials; defer an unauthorized action without stopping unrelated authorized reads.
 
 ## 2. Ticket decomposition
 - Decompose work into tickets in `<TRACKER>`, the **bound** tracker in [`bindings.md`](bindings.md) (compliance is mandatory; do not choose another).

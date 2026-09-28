@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 11432,
-      "sha256": "874ec9a859a5aa36458ecc35318f041dc1c3ab6c6241f74b009ede13d9d6c964"
+      "size": 12341,
+      "sha256": "b77545459c36e6a2d116dfd69308a015c963a662f2a86042cd47a9d72d3e9a08"
     },
     {
       "path": "CLAUDE.md",
@@ -145,8 +145,8 @@
     {
       "path": "docs/workflow.md",
       "mode": "100644",
-      "size": 3255,
-      "sha256": "7f15a68cc77bae682674e8ac0911535cf477a1832c24e933a4681f5e4fc38098"
+      "size": 3639,
+      "sha256": "5fc0c61afd034eded9aedf4310b50dd69dd3bc165d9f7f30b97da85dad823e41"
     },
     {
       "path": "hooks/README.md",
@@ -385,8 +385,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 8870,
-      "sha256": "0c0f19db261736350a6e45ab9c8b84d4e092c0d554becab74689aaaf305b635c"
+      "size": 9818,
+      "sha256": "6bfc21ad5e2530b9adf06d6d1d6ae9e030d93fec46ef95827ac7304a3914ddd0"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -397,8 +397,8 @@
     {
       "path": "templates/handoff.md",
       "mode": "100644",
-      "size": 2260,
-      "sha256": "e1ec628bba3c8aed6b47be4928451f5c828cf290ffe23c74416e6fd42aa57a81"
+      "size": 2712,
+      "sha256": "503526bf8f3559a8d6f4f8d7574577714fb16f997e47d34c69d090a1a0e2ed1a"
     },
     {
       "path": "templates/pull-request.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:40b98fd44b79875ef08b5d3ecf66e9b344bfd4978ada939a7eea1c8ef1e1d636"
+  "payload_digest": "sha256:0f782e30e07b0a8ddb55b13b9fcc22fec0042dc84d197a1b9c75b2bb4a269ba7"
 }

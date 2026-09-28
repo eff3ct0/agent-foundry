@@ -51,6 +51,9 @@ It is not tied to any language or stack.
 13. **Persistence language:** the agent's conversational language is independent from the repository's persistence language. ALL persisted work (specs, docs, issues, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
 14. **Delegated delivery:** when a human delegates a specific task, that delegation authorizes the routine delivery flow for that task: tracker updates, implementation, verification, commit, push, pull request, and evidence updates. Do not ask for intermediate confirmation. It does not authorize merge, production deployment, destructive operations, release publication, or other human approval decisions.
 
+### Pre-action execution boundary
+Before a consequential action, identify the selected repository/workspace, where the tool actually executes (or that this is unknown), relevant path/network/credential reach, and whether the user authorized this destination and action. A sandbox label does not establish isolation: a mounted host path reaches the host, and a custom tool may execute on an outer server. Local work does not authorize remote execution or transfer. Do not probe or disclose credentials to resolve uncertainty. If execution is unknown or authorization is missing, defer the affected remote, write, or destructive action; a read-only request permits only authorized reads. Name the missing fact and next step in the existing plan or handoff; continue unrelated authorized reads. Apply the existing approval rules to actions that require them; this instruction is not a runtime permission guard.
+
 ## Ordered phase model
 Every work unit follows this ordered model. `BLOCKED` is an explicit state, not a hidden session condition.
 
