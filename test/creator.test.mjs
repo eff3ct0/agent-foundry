@@ -408,6 +408,46 @@ test("pinned factory CI accepts run-only and uses-only steps and reusable jobs",
   } finally { await rm(parent, { recursive: true, force: true }); }
 });
 
+test("pinned factory CI requires supported runners on step jobs but not reusable jobs", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-runners-"));
+  try {
+    const fixture = await factoryFixture(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust" }, { rust: callableWorkflow });
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1" });
+    const target = path.join(parent, "project");
+    const workflowPath = path.join(fixture.factory, ".github/workflows/rust.yml");
+    const args = (sha) => ["--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", sha, "--non-interactive"];
+    const workflow = (runner) => `on:\n  workflow_call:\njobs:\n  check:\n${runner}    steps:\n      - run: echo ok\n  delegate:\n    uses: example/factory/.github/workflows/check.yml@v1\n`;
+    const commitWorkflow = async (text) => {
+      await writeFile(workflowPath, text);
+      await fixture.git("add", ".github/workflows/rust.yml");
+      await fixture.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "runner fixture");
+      await fixture.git("tag", "-f", "v1");
+      return fixture.git("rev-parse", "HEAD");
+    };
+    for (const runner of ["", "    runs-on: ''\n", "    runs-on: []\n", "    runs-on: [ubuntu-latest, '']\n", "    runs-on: {}\n", "    runs-on:\n      group: ''\n", "    runs-on:\n      labels: []\n", "    runs-on: 42\n", "    runs-on:\n      unsupported: ubuntu-latest\n"]) {
+      const sha = await commitWorkflow(workflow(runner));
+      for (const command of ["plan", "apply"]) {
+        const result = await run([command, ...args(sha)]);
+        assert.notEqual(result.code, 0, `${runner || "missing runs-on"}: ${result.stdout}`);
+        assert.ok(json(result).diagnostics.some(({ code }) => code === "ci_invalid"), result.stdout);
+        await assert.rejects(stat(target));
+      }
+    }
+    for (const runner of ["    runs-on: ubuntu-latest\n", "    runs-on: [self-hosted, linux]\n", "    runs-on:\n      group: ci\n      labels: [linux]\n"]) {
+      const sha = await commitWorkflow(workflow(runner));
+      const plan = await run(["plan", ...args(sha)]);
+      assert.equal(plan.code, 0, plan.stdout);
+      assert.equal(json(plan).status, "planned");
+      await assert.rejects(stat(target));
+    }
+    const reuseOnly = await commitWorkflow("on:\n  workflow_call:\njobs:\n  delegate:\n    uses: example/factory/.github/workflows/check.yml@v1\n");
+    const plan = await run(["plan", ...args(reuseOnly)]);
+    assert.equal(plan.code, 0, plan.stdout);
+    assert.equal(json(plan).status, "planned");
+    await assert.rejects(stat(target));
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
 test("pinned factory CI rejects missing, symlinked and invalid YAML before writes", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-invalid-"));
   try {
