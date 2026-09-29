@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { assertOutcome, buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, REQUEST_PROMPT, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
+import { assertOutcome, buildExecutionPrompt, buildPhaseSchema, GH_GUARD_SCRIPT, GIT_GUARD_SCRIPT, providerDiagnostic, REQUEST_PROMPT, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
 
 const git = (workspace, ...args) => execFileSync("git", args, { cwd: workspace, encoding: "utf8" }).trim();
 
@@ -249,4 +250,34 @@ test("commit validation preserves the same bounded branch and commit context", a
     assert.match(error.message, /actual_head="[0-9a-f]{40}"/u);
     return true;
   });
+});
+
+test("guard scripts record the attempted blocked command and exec safe ones", async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "real-agent-guard-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const flag = path.join(dir, "blocked");
+  const trueBin = execFileSync("sh", ["-c", "command -v true"], { encoding: "utf8" }).trim();
+  const write = async (name, body) => { const p = path.join(dir, name); await writeFile(p, body); await chmod(p, 0o700); return p; };
+  const ghPath = await write("gh", GH_GUARD_SCRIPT);
+  const gitPath = await write("git", GIT_GUARD_SCRIPT);
+  const runGuard = (guardPath, args) => spawnSync("sh", [guardPath, ...args], { env: { ...process.env, REAL_AGENT_BLOCKED: flag, REAL_GH: trueBin, REAL_GIT: trueBin }, encoding: "utf8" });
+
+  const editBlocked = runGuard(ghPath, ["issue", "edit", "5", "--add-label", "status:in-progress"]);
+  assert.equal(editBlocked.status, 126);
+  assert.equal(readFileSync(flag, "utf8"), "gh issue edit 5 --add-label status:in-progress");
+
+  await rm(flag, { force: true });
+  const createAllowed = runGuard(ghPath, ["issue", "create", "--repo", "acme/x", "--title", "t"]);
+  assert.equal(createAllowed.status, 0);
+  assert.equal(existsSync(flag), false);
+
+  await rm(flag, { force: true });
+  const pushBlocked = runGuard(gitPath, ["push", "origin", "main"]);
+  assert.equal(pushBlocked.status, 126);
+  assert.equal(readFileSync(flag, "utf8"), "git push origin main");
+
+  await rm(flag, { force: true });
+  const checkoutAllowed = runGuard(gitPath, ["checkout", "-b", "feature/1-hello-command"]);
+  assert.equal(checkoutAllowed.status, 0);
+  assert.equal(existsSync(flag), false);
 });
