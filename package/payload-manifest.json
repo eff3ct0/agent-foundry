@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 11432,
-      "sha256": "874ec9a859a5aa36458ecc35318f041dc1c3ab6c6241f74b009ede13d9d6c964"
+      "size": 11933,
+      "sha256": "bb05a00bb2d9278887d7fddd17eb99d7c34ae2c7daedbe433c4723dd2b73bf7c"
     },
     {
       "path": "CLAUDE.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:bbaa7eab4e5eb4be283d97e4f34ad0c65ee6c693e77f1489a1cf7f17f7437f56"
+  "payload_digest": "sha256:3ab7b3a34460b161aad9e51bd2089accd99a2d4d17afe675b8f6657b1b599a87"
 }

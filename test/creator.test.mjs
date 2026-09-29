@@ -963,6 +963,17 @@ test("composes bindings and CI recipes, then removes creator-only inputs", async
   assert.equal(applied.code, 0, applied.stderr);
   const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
   const workflow = await readFile(path.join(target, ".github", "workflows", "ci.yml"), "utf8");
+  const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+  assert.match(agent, /documentation authority map/u);
+  for (const family of ["Architecture", "Constraints", "Business", "Technical"]) {
+    assert.match(bindings, new RegExp(`\\| ${family} \\|`, "u"));
+  }
+  assert.match(bindings, /local Git-only default, not evidence that an external service is configured/u);
+  assert.match(bindings, /exact canonical URL or stable identifier and the access/u);
+  assert.match(bindings, /Derived - not authoritative/u);
+  assert.match(bindings, /report the exact unavailable[\s\S]*?do not invent current context/u);
+  assert.match(bindings, /verify the replacement and access first/u);
+  assert.match(bindings, /does not change task-provider confirmation\/readback/u);
   assert.match(bindings, /## Jira/);
   assert.match(bindings, /## Vault/);
   assert.match(bindings, /## CodeGraph/);
@@ -995,6 +1006,31 @@ test("composes bindings and CI recipes, then removes creator-only inputs", async
   const rerun = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
   assert.equal(rerun.code, 0, rerun.stderr);
   assert.equal(json(rerun).status, "noop");
+});
+
+test("Git-only documentation authority is self-contained in a fresh project", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-doc-authority-"));
+  const target = path.join(parent, "project");
+  const config = await configFile(parent);
+  const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(applied.code, 0, applied.stderr);
+  const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+  const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+  assert.match(agent, /family map in `docs\/bindings\.md`/u);
+  assert.match(bindings, /\| Business \|[^\n]*No detailed business source is assumed/u);
+  assert.match(bindings, /external destination is not selected by this/u);
+  assert.doesNotMatch(bindings, /confluence\.example|<DOCUMENTATION_/iu);
+  for (const relative of ["AGENT.md", ".factory/docs/engineering-handbook.md", ".factory/docs/workflow.md"]) {
+    await stat(path.join(target, relative));
+  }
+  const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(verified.code, 0, verified.stderr);
+  const rerun = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+  assert.equal(json(rerun).status, "noop");
+  const sourceAgent = await readFile(path.join(root, "AGENT.md"), "utf8");
+  const sourceBindings = await readFile(path.join(root, "docs", "bindings.md"), "utf8");
+  assert.match(sourceAgent, /Documentation authority is separate/u);
+  assert.match(sourceBindings, /source-template guide/u);
 });
 
 test("all task selections generate exclusive, readable provider-native bindings", async () => {
