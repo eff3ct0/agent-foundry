@@ -220,8 +220,8 @@ export const assertOutcome = (workspace, repository, data, request, decisions, o
   if (!decisions.feature.implementation_files.some((file) => changed.includes(file))) throw new JourneyError("feature implementation files are absent from the commit", "implementation_missing");
   if (!observed.some((item) => item.includes(decisions.decisions.TEST_CMD)) || !successful.some((item) => item.includes(decisions.decisions.TEST_CMD)) || !["passed", true].includes(data.tests)) throw new JourneyError("required test command was not proven successful", "test_failed");
   if (data.status !== "passed" || !["not-approved", "blocked"].includes(data.approval_gate)) throw new JourneyError("agent did not report a passed bounded journey", "agent_incomplete");
-  const requested = new Set(Array.isArray(request?.required_documents) ? request.required_documents : []);
-  if (requested.size && !["AGENT.md", "CLAUDE.md", "docs/bindings.md"].every((file) => requested.has(file))) throw new JourneyError("cold agent did not request all required contracts", "startup_incomplete");
+  const requested = (Array.isArray(request?.required_documents) ? request.required_documents : []).map((doc) => String(doc).toLowerCase());
+  if (requested.length && !["agent.md", "claude.md", "bindings.md"].every((name) => requested.some((doc) => doc.includes(name)))) throw new JourneyError("cold agent did not request all required contracts", "startup_incomplete");
   return { issue, branch: expectedBranch, commit: featureCommit, changed };
 };
 
