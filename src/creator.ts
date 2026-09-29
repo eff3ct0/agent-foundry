@@ -865,10 +865,10 @@ documents are not required merely because a family is listed.
 
 | Family | Canonical local-default entrypoint |
 | --- | --- |
-| Architecture | [AGENT.md](../AGENT.md) project coordinates and [engineering handbook](../.factory/docs/engineering-handbook.md) architecture standards; project-specific decisions only where recorded. |
-| Constraints | [AGENT.md](../AGENT.md) operating/approval rules and [workflow](../.factory/docs/workflow.md); [engineering handbook](../.factory/docs/engineering-handbook.md) security and migration standards. |
+| Architecture | [AGENT.md](../AGENT.md) project coordinates and [engineering handbook](engineering-handbook.md) architecture standards; project-specific decisions only where recorded. |
+| Constraints | [AGENT.md](../AGENT.md) operating/approval rules and [workflow](workflow.md); [engineering handbook](engineering-handbook.md) security and migration standards. |
 | Business | [AGENT.md](../AGENT.md) project coordinates; add a repository link to actual product requirements when present. No detailed business source is assumed. |
-| Technical | [AGENT.md](../AGENT.md) stack/commands and [engineering handbook](../.factory/docs/engineering-handbook.md) code, testing, and CI standards. |
+| Technical | [AGENT.md](../AGENT.md) stack/commands and [engineering handbook](engineering-handbook.md) code, testing, and CI standards. |
 
 For mixed or external documentation, the project owner must replace each
 affected row with the exact canonical URL or stable identifier and the access

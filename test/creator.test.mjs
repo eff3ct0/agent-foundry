@@ -1020,8 +1020,13 @@ test("Git-only documentation authority is self-contained in a fresh project", as
   assert.match(bindings, /\| Business \|[^\n]*No detailed business source is assumed/u);
   assert.match(bindings, /external destination is not selected by this/u);
   assert.doesNotMatch(bindings, /confluence\.example|<DOCUMENTATION_/iu);
-  for (const relative of ["AGENT.md", ".factory/docs/engineering-handbook.md", ".factory/docs/workflow.md"]) {
-    await stat(path.join(target, relative));
+  for (const [label, href] of [
+    ["AGENT.md", "../AGENT.md"],
+    ["engineering handbook", "../.factory/docs/engineering-handbook.md"],
+    ["workflow", "../.factory/docs/workflow.md"],
+  ]) {
+    assert.ok(bindings.includes(`[${label}](${href})`), `${label} must retain a navigable link`);
+    await stat(path.resolve(target, "docs", href));
   }
   const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
   assert.equal(verified.code, 0, verified.stderr);
