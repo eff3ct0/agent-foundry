@@ -375,7 +375,7 @@ test("real-agent journey maps JOURNEY_TOKEN to AGENT_GITHUB_TOKEN only in the co
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
     ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 314],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 325],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);
@@ -506,7 +506,7 @@ test("real-agent journey requires the Agent Foundry generated commit caption exa
 test("real-agent journey uses checkout-style Basic JOURNEY_TOKEN authentication for the generated repository push", async () => {
   await fixture(async (directory) => {
     const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
-    assert.equal((workflow.match(/AUTHORIZATION: basic /gu) ?? []).length, 1);
+    assert.equal((workflow.match(/AUTHORIZATION: basic /gu) ?? []).length, 2);
     assert.ok(workflow.includes(generatedPush));
     assert.equal(workflow.includes("AUTHORIZATION: bearer"), false);
     assert.equal(workflow.includes("GIT_CONFIG_COUNT"), false);
