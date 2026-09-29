@@ -103,6 +103,7 @@ test("execution prompt binds GitHub Issues to the runtime repository", () => {
   assert.ok(prompt.includes("Immediately after issue creation, use the actual issue number returned by that operation and configured feature slug `hello-command` to create and switch to exactly `feature/<issue-number>-hello-command`."));
   assert.match(prompt, /Do not derive the branch from the issue title or use an alternative slug/u);
   assert.match(prompt, /branch as the exact output of `git branch --show-current`/u);
+  assert.match(prompt, /commit as the exact full output of `git rev-parse HEAD`/u);
   assert.doesNotMatch(prompt, /your-repo|cold-agent-journey/u);
   assert.match(prompt, /read AGENT\.md, CLAUDE\.md, and docs\/bindings\.md/u);
   assert.doesNotMatch(prompt, /agent-init\.md/u);
