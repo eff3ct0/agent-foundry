@@ -14,11 +14,11 @@ const executeDefault = promisify(execFile);
 const locked = await readFile(path.join(root, "pnpm-lock.yaml"), "utf8");
 const manifest = { name: "@eff3ct/agent-foundry", version: "0.1.0", dependencies: { yaml: "2.9.1" } };
 const yaml = expectedDependencies(manifest, locked).get("yaml");
-const installed = (name = "yaml", entry = yaml) => ({
+const installed = (name = "yaml", entry = yaml, packageVersion = manifest.version) => ({
   lockfileVersion: 3,
   packages: {
     "": {},
-    [`node_modules/${manifest.name}`]: { version: manifest.version },
+    [`node_modules/${manifest.name}`]: { version: packageVersion },
     [`node_modules/${name}`]: {
       version: entry.version,
       integrity: entry.integrity,
@@ -66,7 +66,8 @@ test("real offline npm pack exposes the candidate manifest with isolated npm con
       installCalled = true;
       const prefix = args[args.indexOf("--prefix") + 1];
       await mkdir(prefix);
-      await writeFile(path.join(prefix, "package-lock.json"), JSON.stringify(installed()));
+      const candidate = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+      await writeFile(path.join(prefix, "package-lock.json"), JSON.stringify(installed("yaml", yaml, candidate.version)));
       return { stdout: "" };
     }
     return executeDefault(command, args, options);

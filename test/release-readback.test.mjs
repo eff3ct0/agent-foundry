@@ -80,6 +80,27 @@ test("publish guard rejects either event when its commit differs from the resolv
   }
 });
 
+test("published non-main prerelease requires the exact event SHA for either supported event", async () => {
+  const prereleaseTag = "v0.2.0-rc.0";
+  for (const eventName of ["release", "workflow_dispatch"]) {
+    const responses = () => [
+      response(release({ tag_name: prereleaseTag, prerelease: true, target_commitish: "feat/factory-v020-rust-cache-replacement" })),
+      response(tagReference("commit", sha)),
+    ];
+    const accepted = injectedClient(responses());
+    assert.deepEqual(await resolveReleaseForPublish({ client: accepted.client, repository, tag: prereleaseTag, eventName, eventSha: sha }),
+      { status: "ok", tag: prereleaseTag, sha });
+    assert.deepEqual(accepted.calls.map((url) => new URL(url).pathname), [
+      `/repos/${repository}/releases/tags/${prereleaseTag}`,
+      `/repos/${repository}/git/ref/tags/${prereleaseTag}`,
+    ]);
+    const mismatched = injectedClient(responses());
+    assert.deepEqual(await resolveReleaseForPublish({ client: mismatched.client, repository, tag: prereleaseTag, eventName, eventSha: annotatedSha }),
+      { status: "rejected", code: "release_sha_mismatch" });
+    assert.equal(mismatched.calls.length, 2);
+  }
+});
+
 test("publish guard rejects missing or malformed event SHA before any read", async () => {
   for (const eventName of ["release", "workflow_dispatch"]) {
     for (const eventSha of [undefined, "", "short", "C".repeat(40)]) {
