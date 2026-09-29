@@ -267,6 +267,17 @@ jobs:
                --workspace generated --decisions scripts/real-agent-decisions.json --output "$JOURNEY_OUTPUT" \
                --source-identity generated/.journey-source.json --package-name "$JOURNEY_PACKAGE_NAME" \
                --package-version "${{ needs.prepare.outputs.package_version }}"
+      - name: Publish the agent's feature branch for independent assertion
+        env:
+          JOURNEY_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_REPOSITORY: ${{ needs.prepare.outputs.repository }}
+        run: |
+          branch=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("stage/agent.json", "utf8")).metadata.implementation_branch)')
+          case "$branch" in
+            feature/[0-9]*-[a-z0-9-]*) : ;;
+            *) printf 'agent branch is invalid: %s\n' "$branch" >&2; exit 1 ;;
+          esac
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$JOURNEY_TOKEN" | base64 -w0)" -C generated push origin "refs/heads/$branch:refs/heads/$branch"
       - name: Upload agent evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -322,7 +333,6 @@ jobs:
           app-id: ${{ secrets.BOOTSTRAP_E2E_APP_ID }}
           private-key: ${{ secrets.BOOTSTRAP_E2E_PRIVATE_KEY }}
           owner: ${{ env.JOURNEY_OWNER }}
-          permission-actions: read
           permission-contents: read
           permission-issues: read
       - name: Check out generated implementation

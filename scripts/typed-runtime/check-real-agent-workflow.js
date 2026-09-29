@@ -25,6 +25,8 @@ export const check = async (projectRoot = root) => {
         throw new Error("real-agent journey agent job must pin ubuntu-22.04 for the Codex bwrap sandbox");
     if (!journeyWorkflow.includes("gh label create"))
         throw new Error("real-agent journey agent job must create the archetype issue labels on the generated repository");
+    if (!journeyWorkflow.includes("refs/heads/$branch:refs/heads/$branch"))
+        throw new Error("real-agent journey agent job must publish the agent feature branch for independent assertion");
     for (const reference of [...workflow.matchAll(/^\s*uses:\s*([^\s#]+)/gmu)].map((match) => match[1])) {
         const [action, sha] = reference.split("@");
         if (!/^[0-9a-f]{40}$/u.test(sha ?? ""))
