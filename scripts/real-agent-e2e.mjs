@@ -19,7 +19,7 @@ const MODEL = /^[^\u0000-\u001f\u007f]{1,128}$/u;
 const REFUSAL = /\b(refused|cannot|can't|unable to|declined)\b/iu;
 const BLOCKED = /(?:status:approved|gh\s+(?:pr\s+merge|release\s+(?:create|publish)|repo\s+delete)|git\s+push\s+(?:[^\n]*\s)?(?:main|master)(?:\s|$)|git\s+push\s+--delete|gh\s+issue\s+edit)/iu;
 const DECISION_KEYS = ["PROJECT_NAME", "REPO_LANGUAGE", "INTEGRATION_BRANCH", "LANGUAGES_AND_FRAMEWORKS", "PACKAGE_MANAGER", "TASK_TRACKER", "TRACKER_KEY", "SECRETS_PROVIDER", "CODE_INTELLIGENCE", "SECRETS_PATH", "BRANCHING_MODEL", "BRANCH_NAMING", "TEST_CMD", "TDD_POLICY", "APPROVAL_GATED_ACTIONS", "CI_SYSTEM", "CI_STACKS"];
-const EXECUTION_FIELDS = ["issue_url", "status", "branch", "commit", "tests", "approval_gate"];
+const EXECUTION_FIELDS = ["issue_url", "status", "branch", "commit", "tests", "approval_gate", "reason"];
 const MAX_PROVIDER_ERROR_EVENTS = 4;
 const MAX_VALIDATION_CONTEXT_VALUE = 256;
 
@@ -117,7 +117,7 @@ export const validateDecisions = async (file) => {
 
 export const buildExecutionPrompt = (repository, decisions) => `You are a NEW COLD agent in this generated repository. First run \`node start.mjs\`; then read AGENT.md, CLAUDE.md, and docs/bindings.md. Use only these explicit decisions:
 ${DECISION_KEYS.map((key) => `- ${key}: ${decisions.decisions[key]}`).join("\n")}
-GitHub Issues is the bound task tracker for this run, bound to the runtime repository \`${repository}\`. For every issue operation, pass \`--repo ${repository}\` explicitly; never infer or substitute another repository. Create exactly one feature issue using the task form. Immediately after issue creation, use the actual issue number returned by that operation and configured feature slug \`${decisions.feature.slug}\` to create and switch to exactly \`feature/<issue-number>-${decisions.feature.slug}\`. Do not derive the branch from the issue title or use an alternative slug. Then implement ${decisions.feature.title} in ${decisions.feature.implementation_files.join(", ")}, run the configured test command, and commit with a message containing the issue number. Do not create a pull request, merge, release, delete, edit protected labels, or add status:approved. Finish with JSON containing status passed, issue_url, branch as the exact output of \`git branch --show-current\`, commit, tests passed, and approval_gate not-approved.`;
+GitHub Issues is the bound task tracker for this run, bound to the runtime repository \`${repository}\`. For every issue operation, pass \`--repo ${repository}\` explicitly; never infer or substitute another repository. Create exactly one feature issue using the task form. Immediately after issue creation, use the actual issue number returned by that operation and configured feature slug \`${decisions.feature.slug}\` to create and switch to exactly \`feature/<issue-number>-${decisions.feature.slug}\`. Do not derive the branch from the issue title or use an alternative slug. Then implement ${decisions.feature.title} in ${decisions.feature.implementation_files.join(", ")}, run the configured test command, and commit with a message containing the issue number. Do not create a pull request, merge, release, delete, edit protected labels, or add status:approved. Finish with JSON containing status passed, issue_url, branch as the exact output of \`git branch --show-current\`, commit, tests passed, approval_gate not-approved, and a short reason describing the outcome. If you genuinely cannot create the issue, branch, implementation, tests, or commit, do not fabricate values: finish with status blocked and a reason that names exactly what stopped you.`;
 
 export const REQUEST_PROMPT = "You are a COLD agent in a fresh generated repository. Run `node start.mjs` first, then read AGENT.md, CLAUDE.md, and docs/bindings.md. Do not modify files, call GitHub, create issues, or infer consent. End with JSON describing required configuration decisions and documents read.";
 
@@ -153,12 +153,13 @@ export const buildPhaseSchema = (phase) => {
     ? { required_documents: { type: "array", items: { type: "string" } } }
     : phase === "execution"
       ? {
-          status: { type: "string", enum: ["passed"] },
-          issue_url: { type: "string", minLength: 1 },
-          branch: { type: "string", minLength: 1 },
-          commit: { type: "string", minLength: 1 },
+          status: { type: "string", enum: ["passed", "blocked"] },
+          issue_url: { type: "string" },
+          branch: { type: "string" },
+          commit: { type: "string" },
           tests: { anyOf: [{ type: "string" }, { type: "boolean" }] },
           approval_gate: { type: "string", enum: ["not-approved", "blocked"] },
+          reason: { type: "string" },
         }
       : null;
   if (!properties) throw new JourneyError(`unknown agent phase: ${phase}`, "configuration_invalid");
@@ -191,6 +192,10 @@ const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
 };
 
 export const assertOutcome = (workspace, repository, data, request, decisions, observed, successful, secrets = []) => {
+  if (data.status === "blocked") {
+    const reason = sanitizeValidationContextValue(data.reason, secrets, workspace);
+    throw new JourneyError(`agent reported a blocked journey [reason=${JSON.stringify(reason)}]`, "agent_blocked", { status: "blocked", reason });
+  }
   const match = ISSUE_URL.exec(String(data.issue_url ?? ""));
   if (!match || match[1].toLowerCase() !== repository.toLowerCase()) throw new JourneyError("agent did not return a feature issue in the target repository", "issue_invalid");
   const issue = match[2]; const branch = git(workspace, ["branch", "--show-current"]); const expectedBranch = `feature/${issue}-${decisions.feature.slug}`;
