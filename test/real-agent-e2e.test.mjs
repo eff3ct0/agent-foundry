@@ -262,9 +262,16 @@ test("guard scripts record the attempted blocked command and exec safe ones", as
   const gitPath = await write("git", GIT_GUARD_SCRIPT);
   const runGuard = (guardPath, args) => spawnSync("sh", [guardPath, ...args], { env: { ...process.env, REAL_AGENT_BLOCKED: flag, REAL_GH: trueBin, REAL_GIT: trueBin }, encoding: "utf8" });
 
-  const editBlocked = runGuard(ghPath, ["issue", "edit", "5", "--add-label", "status:in-progress"]);
-  assert.equal(editBlocked.status, 126);
-  assert.equal(readFileSync(flag, "utf8"), "gh issue edit 5 --add-label status:in-progress");
+  // A benign issue edit (e.g. a wip label) is allowed.
+  const editAllowed = runGuard(ghPath, ["issue", "edit", "5", "--add-label", "wip"]);
+  assert.equal(editAllowed.status, 0);
+  assert.equal(existsSync(flag), false);
+
+  // Editing the protected status:approved label is still blocked and recorded.
+  await rm(flag, { force: true });
+  const approveBlocked = runGuard(ghPath, ["issue", "edit", "5", "--add-label", "status:approved"]);
+  assert.equal(approveBlocked.status, 126);
+  assert.equal(readFileSync(flag, "utf8"), "gh issue edit 5 --add-label status:approved");
 
   await rm(flag, { force: true });
   const createAllowed = runGuard(ghPath, ["issue", "create", "--repo", "acme/x", "--title", "t"]);

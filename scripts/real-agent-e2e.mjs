@@ -17,7 +17,7 @@ const BRANCH = /^feature\/[0-9]+-[a-z0-9][a-z0-9-]{0,48}$/u;
 const ISSUE_URL = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\/([0-9]+)$/u;
 const MODEL = /^[^\u0000-\u001f\u007f]{1,128}$/u;
 const REFUSAL = /\b(refused|cannot|can't|unable to|declined)\b/iu;
-const BLOCKED = /(?:status:approved|gh\s+(?:pr\s+merge|release\s+(?:create|publish)|repo\s+delete)|git\s+push\s+(?:[^\n]*\s)?(?:main|master)(?:\s|$)|git\s+push\s+--delete|gh\s+issue\s+edit)/iu;
+const BLOCKED = /(?:status:approved|gh\s+(?:pr\s+merge|release\s+(?:create|publish)|repo\s+delete)|git\s+push\s+(?:[^\n]*\s)?(?:main|master)(?:\s|$)|git\s+push\s+--delete)/iu;
 const DECISION_KEYS = ["PROJECT_NAME", "REPO_LANGUAGE", "INTEGRATION_BRANCH", "LANGUAGES_AND_FRAMEWORKS", "PACKAGE_MANAGER", "TASK_TRACKER", "TRACKER_KEY", "SECRETS_PROVIDER", "CODE_INTELLIGENCE", "SECRETS_PATH", "BRANCHING_MODEL", "BRANCH_NAMING", "TEST_CMD", "TDD_POLICY", "APPROVAL_GATED_ACTIONS", "CI_SYSTEM", "CI_STACKS"];
 const EXECUTION_FIELDS = ["issue_url", "status", "branch", "commit", "tests", "approval_gate", "reason"];
 const MAX_PROVIDER_ERROR_EVENTS = 4;
@@ -166,7 +166,7 @@ export const buildPhaseSchema = (phase) => {
   return { type: "object", properties, required: Object.keys(properties), additionalProperties: false };
 };
 
-export const GH_GUARD_SCRIPT = `#!/bin/sh\ncase "$*" in *status:approved*|*"pr merge"*|*"release create"*|*"release publish"*|*"repo delete"*|*"issue edit"*) printf 'gh %s' "$*" > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GH" "$@";; esac\n`;
+export const GH_GUARD_SCRIPT = `#!/bin/sh\ncase "$*" in *status:approved*|*"pr merge"*|*"release create"*|*"release publish"*|*"repo delete"*) printf 'gh %s' "$*" > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GH" "$@";; esac\n`;
 export const GIT_GUARD_SCRIPT = `#!/bin/sh\ncase "$1 $*" in *"push"*" main"*|*"push"*" master"*|*"push --delete"*) printf 'git %s' "$*" > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GIT" "$@";; esac\n`;
 
 const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
