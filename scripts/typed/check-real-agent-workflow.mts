@@ -17,6 +17,7 @@ export const check = async (projectRoot = root): Promise<string> => {
   for (const value of required) if (!contract.includes(value)) throw new Error(`real-agent workflow is missing ${value}`);
   if (workflow.includes("python") || workflow.includes("--dangerously-bypass-approvals-and-sandbox") || workflow.includes("BOOTSTRAP_E2E_TOKEN") || workflow.includes("status:approved")) throw new Error("real-agent workflow contains a retired or unsafe contract");
   if (!journeyWorkflow.includes("node scripts/real-agent-journey.mjs report") || !journeyWorkflow.includes("--input evidence/journey.json") || !journeyWorkflow.includes('--artifact-url "$WORKFLOW_URL"') || !journeyReporter.includes('command === "report"') || !journeyReporter.includes("canonicalIssue")) throw new Error("real-agent journey report command is missing or incomplete");
+  if (!journeyWorkflow.includes("  agent:\n    needs: [prepare, provision]\n    if: needs.provision.result == 'success'\n    runs-on: ubuntu-22.04")) throw new Error("real-agent journey agent job must pin ubuntu-22.04 for the Codex bwrap sandbox");
   for (const reference of [...workflow.matchAll(/^\s*uses:\s*([^\s#]+)/gmu)].map((match) => match[1])) { const [action, sha] = reference.split("@"); if (!/^[0-9a-f]{40}$/u.test(sha ?? "")) throw new Error(`action is not pinned: ${reference}`); if (pins[action] && pins[action] !== sha) throw new Error(`action pin is not verified: ${reference}`); }
   return "real-agent workflow static check OK";
 };

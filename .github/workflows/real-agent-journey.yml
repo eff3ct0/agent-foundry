@@ -162,7 +162,7 @@ jobs:
   agent:
     needs: [prepare, provision]
     if: needs.provision.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Codex bwrap sandbox needs unrestricted user namespaces; ubuntu-24.04 blocks loopback (RTM_NEWADDR)
     timeout-minutes: 45
     permissions:
       contents: read
