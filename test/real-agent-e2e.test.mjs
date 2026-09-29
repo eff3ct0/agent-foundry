@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { assertOutcome, buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
+import { assertOutcome, buildExecutionPrompt, buildPhaseSchema, providerDiagnostic, REQUEST_PROMPT, summarizeExecutionResponse } from "../scripts/real-agent-e2e.mjs";
 
 const git = (workspace, ...args) => execFileSync("git", args, { cwd: workspace, encoding: "utf8" }).trim();
 
@@ -25,7 +25,7 @@ const outcomeInput = (branch, commit) => [{
   branch,
   commit,
 }, {
-  required_documents: ["AGENT.md", "CLAUDE.md", "docs/agent-init.md"],
+  required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"],
 }, {
   feature: { slug: "hello-command", implementation_files: ["hello.py"] },
   decisions: { TEST_CMD: "python3 -m unittest" },
@@ -46,19 +46,47 @@ test("Codex request and execution schemas are strict and preserve their field co
   assertStrictSchema(request, ["required_documents"]);
   assert.deepEqual(request.properties.required_documents, { type: "array", items: { type: "string" } });
 
-  const executionFields = ["status", "issue_url", "branch", "commit", "tests", "approval_gate"];
+  const executionFields = ["status", "issue_url", "branch", "commit", "tests", "approval_gate", "reason"];
   assertStrictSchema(execution, executionFields);
-  assert.deepEqual(execution.properties.status, { type: "string", enum: ["passed"] });
+  assert.deepEqual(execution.properties.status, { type: "string", enum: ["passed", "blocked"] });
   assert.deepEqual(execution.properties.approval_gate, { type: "string", enum: ["not-approved", "blocked"] });
   assert.deepEqual(execution.properties.tests, { anyOf: [{ type: "string" }, { type: "boolean" }] });
+  assert.deepEqual(execution.properties.reason, { type: "string" });
 });
 
-test("execution schema rejects empty issue, branch, and commit fields", () => {
-  const execution = buildPhaseSchema("execution");
-  for (const field of ["issue_url", "branch", "commit"]) {
-    assert.deepEqual(execution.properties[field], { type: "string", minLength: 1 });
-    assert.equal("".length >= execution.properties[field].minLength, false);
+test("assertOutcome rejects a passed response with empty issue, branch, or commit fields", async (t) => {
+  const workspace = await createWorkspace("feature/42-hello-command");
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  const decisions = { feature: { slug: "hello-command", implementation_files: ["hello.py"] }, decisions: { TEST_CMD: "python3 -m unittest" } };
+  const request = { required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"] };
+  const observed = ["python3 -m unittest"];
+  const successful = ["python3 -m unittest exit_code 0"];
+  const base = { status: "passed", issue_url: "https://github.com/acme/example/issues/42", branch: "feature/42-hello-command", commit: git(workspace, "rev-parse", "HEAD"), tests: "passed", approval_gate: "not-approved", reason: "done" };
+
+  for (const [field, code] of [["issue_url", "issue_invalid"], ["branch", "branch_invalid"], ["commit", "commit_invalid"]]) {
+    assert.throws(
+      () => assertOutcome(workspace, "acme/example", { ...base, [field]: "" }, request, decisions, observed, successful),
+      (error) => { assert.equal(error.code, code); return true; },
+    );
   }
+});
+
+test("assertOutcome surfaces a blocked agent outcome with a bounded, redacted reason", () => {
+  const decisions = { feature: { slug: "hello-command", implementation_files: ["hello.py"] }, decisions: { TEST_CMD: "python3 -m unittest" } };
+  const data = { status: "blocked", issue_url: "", branch: "", commit: "", tests: false, approval_gate: "blocked", reason: "could not run python3 -m unittest; secret sk-live-secret at /home/steam/private" };
+
+  assert.throws(
+    () => assertOutcome("/workspace", "acme/example", data, {}, decisions, [], [], ["sk-live-secret"]),
+    (error) => {
+      assert.equal(error.code, "agent_blocked");
+      assert.equal(error.context.status, "blocked");
+      assert.match(error.context.reason, /could not run python3 -m unittest/u);
+      assert.equal(error.context.reason.includes("sk-live-secret"), false);
+      assert.equal(error.context.reason.includes("/home/steam/private"), false);
+      assert.ok(error.context.reason.length <= 256);
+      return true;
+    },
+  );
 });
 
 test("execution prompt binds GitHub Issues to the runtime repository", () => {
@@ -75,6 +103,40 @@ test("execution prompt binds GitHub Issues to the runtime repository", () => {
   assert.match(prompt, /Do not derive the branch from the issue title or use an alternative slug/u);
   assert.match(prompt, /branch as the exact output of `git branch --show-current`/u);
   assert.doesNotMatch(prompt, /your-repo|cold-agent-journey/u);
+  assert.match(prompt, /read AGENT\.md, CLAUDE\.md, and docs\/bindings\.md/u);
+  assert.doesNotMatch(prompt, /agent-init\.md/u);
+  assert.match(prompt, /finish with status blocked and a reason that names exactly what stopped you/u);
+});
+
+test("cold-agent prompts point at contracts that ship in a generated project, not the init procedure", () => {
+  assert.match(REQUEST_PROMPT, /read AGENT\.md, CLAUDE\.md, and docs\/bindings\.md/u);
+  assert.doesNotMatch(REQUEST_PROMPT, /agent-init\.md/u);
+  const prompt = buildExecutionPrompt("acme/example", {
+    decisions: { TEST_CMD: "python3 -m unittest test_hello.py" },
+    feature: { title: "Add a deterministic hello helper", implementation_files: ["hello.py"], slug: "hello-command" },
+  });
+  assert.doesNotMatch(prompt, /agent-init\.md/u);
+});
+
+test("assertOutcome requires the cold agent to read docs/bindings.md, not the absent init procedure", async (t) => {
+  const workspace = await createWorkspace("feature/42-hello-command");
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  await writeFile(path.join(workspace, "hello.py"), "print('hello, #42')\n");
+  git(workspace, "commit", "-am", "feat: implement hello (#42)");
+  const commit = git(workspace, "rev-parse", "HEAD");
+  const data = { issue_url: "https://github.com/acme/example/issues/42", status: "passed", branch: "feature/42-hello-command", commit, tests: "passed", approval_gate: "not-approved" };
+  const decisions = { feature: { slug: "hello-command", implementation_files: ["hello.py"] }, decisions: { TEST_CMD: "python3 -m unittest" } };
+  const observed = ["python3 -m unittest"];
+  const successful = ["python3 -m unittest exit_code 0"];
+
+  assert.throws(
+    () => assertOutcome(workspace, "acme/example", data, { required_documents: ["AGENT.md", "CLAUDE.md", "docs/agent-init.md"] }, decisions, observed, successful),
+    (error) => { assert.equal(error.code, "startup_incomplete"); return true; },
+  );
+
+  const outcome = assertOutcome(workspace, "acme/example", data, { required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"] }, decisions, observed, successful);
+  assert.equal(outcome.branch, "feature/42-hello-command");
+  assert.equal(outcome.commit, commit);
 });
 
 test("provider diagnostics are bounded, redacted, and do not retain stdout prompts", () => {
@@ -122,10 +184,11 @@ test("execution summaries retain only bounded, redacted expected fields", () => 
     commit: 42,
     tests: { prompt: "must not persist" },
     approval_gate: undefined,
+    reason: `blocked near ${workspace} with ${secret}`,
     arbitrary: "must not persist",
   }, [secret], workspace);
 
-  assert.deepEqual(Object.keys(summary), ["issue_url", "status", "branch", "commit", "tests", "approval_gate"]);
+  assert.deepEqual(Object.keys(summary), ["issue_url", "status", "branch", "commit", "tests", "approval_gate", "reason"]);
   assert.equal(summary.issue_url.includes(secret), false);
   assert.equal(summary.issue_url.length <= 2000, true);
   assert.equal(summary.status, "<invalid:object>");
@@ -133,6 +196,8 @@ test("execution summaries retain only bounded, redacted expected fields", () => 
   assert.equal(summary.commit, "<invalid:number>");
   assert.equal(summary.tests, "<invalid:object>");
   assert.equal(summary.approval_gate, null);
+  assert.equal(summary.reason.includes(secret), false);
+  assert.equal(summary.reason.includes(workspace), false);
   assert.equal(Object.hasOwn(summary, "arbitrary"), false);
   assert.deepEqual(summarizeExecutionResponse(), {
     issue_url: null,
@@ -141,6 +206,7 @@ test("execution summaries retain only bounded, redacted expected fields", () => 
     commit: null,
     tests: null,
     approval_gate: null,
+    reason: null,
   });
 });
 
