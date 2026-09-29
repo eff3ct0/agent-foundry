@@ -144,6 +144,10 @@ test("assertOutcome requires the cold agent to read docs/bindings.md, not the ab
   // The contract match tolerates path prefixes, case, and trailing description text.
   const tolerant = assertOutcome(workspace, "acme/example", data, { required_documents: ["repo/AGENT.md", "CLAUDE.md — harness entrypoint", "./docs/bindings.md (providers)"] }, decisions, observed, successful);
   assert.equal(tolerant.branch, "feature/42-hello-command");
+
+  // A descriptive "passed: <cmd>" tests self-report is accepted (the observed/successful proof is unchanged).
+  const descriptiveTests = assertOutcome(workspace, "acme/example", { ...data, tests: "passed: python3 -m unittest test_hello.py" }, { required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"] }, decisions, observed, successful);
+  assert.equal(descriptiveTests.commit, commit);
 });
 
 test("provider diagnostics are bounded, redacted, and do not retain stdout prompts", () => {
