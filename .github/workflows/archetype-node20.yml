@@ -24,6 +24,8 @@ jobs:
           npm install --global pnpm@12.4.2
           test "$(pnpm --version)" = "12.4.2"
           pnpm install --frozen-lockfile
+      - name: Prepare npm cache for packed runtime dependencies
+        run: node scripts/prepare-offline-npm-cache.mjs
       - name: Verify typed emitter and package consumers
         run: |
           pnpm typecheck

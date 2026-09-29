@@ -46,11 +46,12 @@ The immutable npm release contract is `.github/workflows/npm-release.yml`. It
 has only the published-release and explicit tag-dispatch paths. The workflow
 resolves the tag to one full commit SHA, requires `v<package-version>`, builds
 and packs that checkout with Node 20.19.0 and npm-installed pnpm 12.4.2.
-On the #184 feature branch, an unconditional stop in the shared publish step
-prevents npm publication before the token check or `npm publish`. This stop
-does not protect `main` until separately integrated. The planned publication
-and registry readback remain blocked pending an exclusive publish/skip gate;
-the workflow never changes GitHub repository settings or Template mode.
+The shared publish step has no unconditional stop: when the exact version is
+absent from npm, an exclusive GitHub release asset claim can permit the token
+check and `npm publish`. A local prerelease candidate does not authorize a
+GitHub Release, tag, dispatch, npm publication, or registry transfer. Keep
+those outward steps blocked pending separate maintainer approval; this workflow
+never changes GitHub repository settings or Template mode.
 
 Before a maintainer authorizes a release, retain the workflow evidence artifact
 with the release tag, source SHA, package/version, payload digest, tarball

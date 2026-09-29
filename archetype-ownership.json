@@ -80,6 +80,7 @@
         {"path": "odd/tasks/issue-256-node20-checks.md", "kind": "file"},
         {"path": "openspec/changes/fix-initializer-ci-bugs", "kind": "directory"},
         {"path": "scripts/check-determinism.mjs", "kind": "file"},
+        {"path": "org-community-defaults", "kind": "directory"},
         {"path": "odd", "kind": "directory"}
       ]
     },
@@ -112,6 +113,7 @@
         {"path": "scripts/release-prepare.mjs", "kind": "file"},
         {"path": "scripts/released-validation-runner.mjs", "kind": "file"},
         {"path": "scripts/package-consumer-verify.mjs", "kind": "file"},
+        {"path": "scripts/prepare-offline-npm-cache.mjs", "kind": "file"},
         {"path": "scripts/npm-release.mjs", "kind": "file"},
         {"path": "scripts/npm-provenance-policy.mjs", "kind": "file"},
         {"path": "scripts/npm-provenance-audit.mjs", "kind": "file"},
@@ -142,6 +144,14 @@
       "disposition": "removed",
       "paths": [
         {"path": "placeholders.json", "kind": "file"}
+      ]
+    },
+    "factory_source_seed": {
+      "disposition": "removed",
+      "paths": [
+        {"path": "factory.defaults.json", "kind": "file"},
+        {"path": ".github/workflows/rust.yml", "kind": "file"},
+        {"path": "factory-seed", "kind": "directory"}
       ]
     },
     "creator_packaging": {

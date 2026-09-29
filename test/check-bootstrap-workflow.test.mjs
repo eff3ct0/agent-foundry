@@ -107,6 +107,8 @@ test("archetype Node 20 PR check rejects trigger, authority, pin, version, and p
     ["npm install --global pnpm@12.4.2", "corepack enable\n          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2"],
     ["npm install --global pnpm@12.4.2", "npm install --global pnpm@latest"],
     ['test "$(pnpm --version)" = "12.4.2"', 'test "$(pnpm --version)" = "latest"'],
+    ["run: node scripts/prepare-offline-npm-cache.mjs", "run: npm install --online"],
+    ["      - name: Prepare npm cache for packed runtime dependencies\n        run: node scripts/prepare-offline-npm-cache.mjs\n", ""],
     ["          pnpm typecheck\n", ""],
     ["          pnpm test\n", "          pnpm build\n"],
     ["node scripts/typed-runtime/check-real-agent-workflow.js", "node scripts/missing-checker.js"],

@@ -75,13 +75,13 @@ test("local and registry identities require matching package, payload, and tarba
     await cp(path.join(root, "dist"), path.join(directory, "dist"), { recursive: true });
     const tarball = path.join(directory, "package.tgz");
     await writeFile(tarball, "exact-package-bytes\n");
-    const expected = await readPackageIdentity({ packageRoot: directory, tarballPath: tarball, tag: "v0.1.0", sourceSha });
+    const expected = await readPackageIdentity({ packageRoot: directory, tarballPath: tarball, tag: "v0.2.0-rc.0", sourceSha });
     const registry = structuredClone(expected);
-    const verified = validateRegistryReadback({ metadata: { name: "@eff3ct/agent-foundry", version: "0.1.0" }, registryIdentity: registry, expected });
+    const verified = validateRegistryReadback({ metadata: expected.package, registryIdentity: registry, expected });
     assert.equal(verified.status, "verified");
-    assert.throws(() => validateRegistryReadback({ metadata: { name: "@eff3ct/agent-foundry", version: "0.1.0" }, registryIdentity: { ...registry, release: { ...registry.release, sha: "b".repeat(40) } }, expected }), /registry release SHA/u);
-    assert.throws(() => validateRegistryReadback({ metadata: { name: "@eff3ct/agent-foundry", version: "0.1.0" }, registryIdentity: { ...registry, release: undefined }, expected }), /registry release SHA/u);
-    assert.throws(() => validateRegistryReadback({ metadata: { name: "@eff3ct/agent-foundry", version: "0.1.0" }, registryIdentity: { ...registry, tarball_digest: "sha256:" + "0".repeat(64) }, expected }), /tarball identity/u);
+    assert.throws(() => validateRegistryReadback({ metadata: expected.package, registryIdentity: { ...registry, release: { ...registry.release, sha: "b".repeat(40) } }, expected }), /registry release SHA/u);
+    assert.throws(() => validateRegistryReadback({ metadata: expected.package, registryIdentity: { ...registry, release: undefined }, expected }), /registry release SHA/u);
+    assert.throws(() => validateRegistryReadback({ metadata: expected.package, registryIdentity: { ...registry, tarball_digest: "sha256:" + "0".repeat(64) }, expected }), /tarball identity/u);
     assert.deepEqual(JSON.parse(await readFile(path.join(directory, "package.json"), "utf8")).name, "@eff3ct/agent-foundry");
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -11,6 +11,78 @@ foundry verify --target ./new-project --config answers.json --non-interactive
 foundry doctor --target ./new-project --config answers.json --non-interactive
 ```
 
+## Pinned offline factory defaults (optional)
+
+With an independently obtained full commit SHA for the intended `org/factory@vX`,
+prepare a **local, clean checkout** at that commit with its `vX` tag pointing to
+the same commit. No network lookup or origin URL is trusted by the creator.
+Place `factory.defaults.json` at the checkout root:
+
+```json
+{"schema_version":1,"values":{"FACTORY_REQUIRED":"true","TASK_TRACKER":"github-issues","REPO_LANGUAGE":"en"}}
+```
+
+Supply project answers in an external `answers.json`, including `FACTORY_SPEC`:
+
+```json
+{"values":{"FACTORY_SPEC":"acme/factory@v1","PROJECT_NAME":"My project","TASK_TRACKER":"github-issues"}}
+```
+
+```sh
+foundry plan --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive
+foundry apply --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive --yes
+foundry verify --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive
+```
+
+Both flags and `--config` are required together. Project answers must be outside
+the factory checkout: paths inside it and outside symlinks resolving into it
+are rejected before any target write. A project config elsewhere is allowed.
+The creator checks the local
+Git root, clean checkout, `HEAD`, `vX` tag, tracked regular root defaults file,
+and exact caller-supplied SHA before using the defaults. The caller must obtain
+the SHA **independently** from a trusted record binding it to the intended
+organization factory; a local tag, origin URL, or JSON alone cannot establish
+that identity. No fetch or credential access occurs. The defaults file accepts
+only schema version 1 and known placeholder keys; `FACTORY_SPEC` belongs to
+project answers and cannot be set by organization defaults.
+
+Values resolve per key: packaged placeholder defaults, then organization
+defaults, then explicit project answers. An explicit empty optional project
+value clears the inherited value. `FACTORY_REQUIRED=true` in the factory cannot
+be disabled by project answers. When a project switches `TASK_TRACKER` or
+`SECRETS_PROVIDER`, inherited tracker fields (`TRACKER`, `TRACKER_KEY`, `EPIC_ID`)
+or `SECRETS_PATH` respectively do not carry across; supply project-specific
+values if needed. Effective values and the verified factory revision feed the
+configuration digest, ownership and apply/verify checks. Without factory flags,
+v1 configuration and inline CI behavior are unchanged. To roll back this extension,
+omit both factory flags and use explicit project answers; applying that change
+updates creator-owned files, subject to the usual conflict checks.
+
+### Reusable GitHub CI from the same pin
+
+When the pinned project selects GitHub CI and `CI_STACKS`, the creator requires
+a tracked regular `.github/workflows/<stack>.yml` for **each selected stack** in
+the same clean, tagged checkout. Each must be one bounded YAML 1.2 document
+with `on.workflow_call` and callable `jobs`. For a factory tagged `v1`:
+
+```yaml
+jobs:
+  rust:
+    uses: eff3ct0/factory/.github/workflows/rust.yml@v1
+```
+
+Only packaged CI recipe names can be selected. Callers use the `FACTORY_SPEC`
+version tag, not the trusted SHA; the SHA verifies the local snapshot, not
+remote publication. Malformed YAML, duplicates, aliases, invalid jobs, and
+oversized workflows fail before target writes. The digest includes the verified
+factory revision and selected workflow contents: an owned inline CI file can
+migrate with unchanged answers, and a changed pinned revision updates state.
+Without a pin, existing inline CI remains unchanged. Unknown or drifted owned
+`ci.yml` files remain conflicts, never overwritten. Offline validation cannot
+prove GitHub accepts the workflow or that its tag is published. Runner validation
+for step jobs (`runs-on`) is a separate follow-up; do not treat this check as
+complete hosted-callable proof.
+
 ## Provider-aware setup
 
 The creator has a versioned, provider-neutral catalog for the supported agent

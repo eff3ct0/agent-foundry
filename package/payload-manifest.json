@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "package_name": "@eff3ct/agent-foundry",
-  "package_version": "0.1.0",
+  "package_version": "0.2.0-rc.0",
   "payload_version": "1.0.0",
   "files": [
     {
@@ -85,8 +85,8 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 10803,
-      "sha256": "2fb4a333d6eea4255aa8c91faeecbe944ad36ef34b50ccf2c34d382f8b734b98"
+      "size": 11213,
+      "sha256": "591318219c54d3faba781291ef3af7687770d3ebb84962d860a1470d12e704e7"
     },
     {
       "path": "ci/_contract.md",
@@ -127,8 +127,8 @@
     {
       "path": "docs/factory-layout.md",
       "mode": "100644",
-      "size": 9160,
-      "sha256": "05fbb448de8e667bfdeecfd1eb4143612c53aadf8b13a1da78b721326b745396"
+      "size": 9685,
+      "sha256": "e116ab166cbafd869d3dd3f889524784bdfa7b77dbef9758ac53e7db70e24f30"
     },
     {
       "path": "docs/github-governance.md",
@@ -139,8 +139,8 @@
     {
       "path": "docs/org-factory.md",
       "mode": "100644",
-      "size": 3167,
-      "sha256": "748b4b45ab41768bdfe9eb012fbe50d97ecf39b669f2543dffad34af74da3e8e"
+      "size": 6140,
+      "sha256": "9951502535e9dd5e37df8fac5dcdaccdf6d978b67f4a2ebf018f40e23621fd5c"
     },
     {
       "path": "docs/workflow.md",
@@ -307,8 +307,8 @@
     {
       "path": "scripts/check-factory-layout.mjs",
       "mode": "100644",
-      "size": 3170,
-      "sha256": "eebb06f13cf54efb3b5ca6cb18fa550b855cb85e7c1e32a6842a33f58523aa6b"
+      "size": 4820,
+      "sha256": "5e7753acd5954ec38ea199853d75ccdad83433724e52f70ad1101c6d1139439c"
     },
     {
       "path": "scripts/task-adapter.mjs",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:21dfde38f87b0286660a9756da3d3a5482f7789ef32d0ffb810d5695db040079"
+  "payload_digest": "sha256:bbaa7eab4e5eb4be283d97e4f34ad0c65ee6c693e77f1489a1cf7f17f7437f56"
 }

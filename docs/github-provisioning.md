@@ -48,3 +48,13 @@ Standard output is stable, versioned JSON. Each target has one of:
 The process exits non-zero for `missing`, `skipped`, `rejected`, or
 `indeterminate`. For an indeterminate result, inspect GitHub manually before
 running the command again; do not assume that a create did not happen.
+
+`existing` proves only that a repository lookup succeeded; it does not verify
+visibility, default branch, or contents. `created` proves only identity and
+visibility at create readback, not that the creator was applied or community
+files copied. Use only the generic, source-only `org-community-defaults/`
+templates for an authorized organization seed; this command never uploads
+them. Compare destination bytes and stop on differing files or symlinks.
+An existing public `.github` is not made private by `--visibility private` for
+a missing factory repository. See [`org-factory.md`](org-factory.md) for the
+non-destructive seed and version-pin procedure.

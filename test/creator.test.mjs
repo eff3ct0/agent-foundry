@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { parseDocument } from "yaml";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -42,6 +43,25 @@ const configFile = async (directory, values = {}) => {
   }}));
   return file;
 };
+
+const factoryFixture = async (directory, values, workflows = {}) => {
+  const factory = path.join(directory, "factory");
+  await mkdir(factory);
+  const git = async (...args) => (await execFileAsync("git", ["-C", factory, ...args])).stdout.trim();
+  await git("init", "-q");
+  await writeFile(path.join(factory, "factory.defaults.json"), JSON.stringify({ schema_version: 1, values }));
+  for (const [stack, content] of Object.entries(workflows)) {
+    const workflowPath = path.join(factory, ".github", "workflows", `${stack}.yml`);
+    await mkdir(path.dirname(workflowPath), { recursive: true });
+    await writeFile(workflowPath, content);
+  }
+  await git("add", ".");
+  await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "defaults");
+  await git("tag", "v1");
+  return { factory, sha: await git("rev-parse", "HEAD"), git };
+};
+
+const callableWorkflow = "name: Reusable CI\non:\n  workflow_call:\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n";
 
 const providerExecutables = async (directory, names, exitCode = 0) => {
   const bin = path.join(directory, "bin");
@@ -183,6 +203,413 @@ test("plan and dry-run are deterministic and do not mutate an empty target", asy
   await assert.rejects(readdir(target));
   assert.equal(json(first).schema_version, 1);
   assert.ok(json(first).operations.every((operation) => operation.path));
+});
+
+test("pinned defaults merge per key, preserve explicit clears and verify generated no-CI layout", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-"));
+  try {
+    const { factory, sha } = await factoryFixture(parent, {
+      PROJECT_NAME: "Organization project", TASK_TRACKER: "jira", TRACKER: "Jira", TRACKER_KEY: "OLD",
+      EPIC_ID: "OLD-1", SECRETS_PROVIDER: "vault", SECRETS_PATH: "old/path",
+      FACTORY_REQUIRED: "true", REPO_URLS: "https://example.invalid/old", INTEGRATION_BRANCH: "develop",
+    });
+    const config = await configFile(parent, {
+      PROJECT_NAME: "Project answer", FACTORY_SPEC: "acme/factory@v1", REPO_URLS: "", SECRETS_PROVIDER: "none",
+      CI_SYSTEM: "none",
+    });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const first = await run(["plan", ...args]);
+    assert.equal(first.code, 0, first.stdout);
+    assert.equal(first.stdout, (await run(["plan", ...args])).stdout);
+    await assert.rejects(stat(target));
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stdout);
+    assert.equal(json(applied).verification, "verified");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    assert.match(agent, /Project answer/u);
+    assert.match(agent, /acme\/factory@v1/u);
+    assert.match(agent, /GitHub Issues/u);
+    assert.match(agent, /integration branch `develop`/u);
+    assert.doesNotMatch(agent, /old\/path|OLD-1|https:\/\/example\.invalid\/old/u);
+    assert.doesNotMatch(await readFile(path.join(target, "docs/bindings.md"), "utf8"), /old\/path|OLD-1/u);
+    assert.equal((await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/check-factory-layout.mjs"), "--target", target], { cwd: target })).stdout.trim(), "factory layout OK");
+    const state = JSON.parse(await readFile(path.join(target, ".factory-template-creator/state.json"), "utf8"));
+    assert.equal(state.config_digest, json(first).config_digest);
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Changed", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v1", SECRETS_PROVIDER: "none", CI_SYSTEM: "none" } }));
+    assert.equal(json(await run(["plan", ...args])).status, "planned");
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    assert.match(await readFile(path.join(target, "AGENT.md"), "utf8"), /Changed/u);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("pinned defaults refuse committed or symlinked factory answers before creating a target", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-answers-"));
+  try {
+    const { factory, git } = await factoryFixture(parent, { PROJECT_NAME: "Organization" });
+    const inside = await configFile(factory, { FACTORY_SPEC: "acme/factory@v1" });
+    await git("add", "answers.json");
+    await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "committed answers");
+    await git("tag", "-f", "v1");
+    const sha = await git("rev-parse", "HEAD");
+    const target = path.join(parent, "project");
+    const flags = ["--target", target, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const linked = path.join(parent, "linked-answers.json");
+    await symlink(inside, linked);
+    for (const config of [inside, `${factory}/../factory/answers.json`, linked]) {
+      for (const command of ["plan", "apply", "verify"]) {
+        const result = await run([command, ...flags, "--config", config]);
+        assert.notEqual(result.code, 0, result.stdout);
+        assert.ok(json(result).diagnostics.some(({ code }) => code === "factory_invalid"), result.stdout);
+        await assert.rejects(stat(target));
+      }
+    }
+    assert.equal(json(await run(["plan", "--target", target, "--config", inside, "--non-interactive"])).status, "planned");
+    const external = await configFile(parent, { FACTORY_SPEC: "acme/factory@v1" });
+    const args = [...flags, "--config", external];
+    assert.equal(json(await run(["plan", ...args])).status, "planned");
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("invalid factory pins, checkout state and membership reject before target writes", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-invalid-"));
+  try {
+    const { factory, sha, git } = await factoryFixture(parent, { FACTORY_REQUIRED: "true", PROJECT_NAME: "Organization" });
+    const config = await configFile(parent, { FACTORY_SPEC: "acme/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const rejected = async (flags = args) => {
+      const result = await run(["apply", ...flags]);
+      assert.notEqual(result.code, 0, result.stdout);
+      assert.ok(json(result).diagnostics.some(({ code }) => code === "factory_invalid"), result.stdout);
+      await assert.rejects(stat(target));
+    };
+    await rejected(args.map((value) => value === sha ? "a".repeat(40) : value));
+    await rejected(args.filter((_, index) => index !== args.indexOf("--factory-sha") && index !== args.indexOf("--factory-sha") + 1));
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v2" } }));
+    await rejected();
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v1", FACTORY_REQUIRED: "false" } }));
+    await rejected();
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v1" } }));
+    await writeFile(path.join(factory, "factory.defaults.json"), "{}");
+    await rejected();
+    await git("checkout", "--", "factory.defaults.json");
+    for (const text of [
+      '{"schema_version":2,"values":{}}',
+      '{"schema_version":1,"values":{"FACTORY_SPEC":"acme/factory@v1"}}',
+      '{"schema_version":1,"values":{"TASK_TRACKER":"invalid"}}',
+      '{"schema_version":1,"values":{"PROJECT_NAME":"a","PROJECT_NAME":"b"}}',
+    ]) {
+      await writeFile(path.join(factory, "factory.defaults.json"), text);
+      await git("add", "factory.defaults.json");
+      await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "invalid defaults");
+      await git("tag", "-f", "v1");
+      const currentSha = await git("rev-parse", "HEAD");
+      await rejected(args.map((value) => value === sha ? currentSha : value));
+    }
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("factory Git verification ignores inherited repository and configuration overrides", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-git-env-"));
+  try {
+    const { factory, sha } = await factoryFixture(parent, { PROJECT_NAME: "Organization" });
+    const config = await configFile(parent, { FACTORY_SPEC: "acme/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = ["plan", "--target", target, "--config", config, "--factory-sha", sha, "--non-interactive"];
+    const inherited = {
+      ...process.env,
+      GIT_DIR: path.join(factory, ".git"), GIT_WORK_TREE: factory, GIT_COMMON_DIR: path.join(factory, ".git"),
+      GIT_INDEX_FILE: path.join(factory, ".git", "index"),
+      GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.worktree", GIT_CONFIG_VALUE_0: factory,
+    };
+    const bareRoot = path.join(parent, "bare-root");
+    await mkdir(bareRoot);
+    const rejected = await run([...args, "--factory-root", bareRoot], { env: inherited });
+    assert.notEqual(rejected.code, 0, rejected.stdout);
+    assert.ok(json(rejected).diagnostics.some(({ code }) => code === "factory_invalid"), rejected.stdout);
+    assert.equal(json(await run([...args, "--factory-root", factory], { env: inherited })).status, "planned");
+    const otherRoot = path.join(parent, "other-factory");
+    await execFileAsync("git", ["clone", "-q", "--no-hardlinks", factory, otherRoot]);
+    await execFileAsync("git", ["-C", otherRoot, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-qm", "different HEAD"]);
+    assert.notEqual((await execFileAsync("git", ["-C", otherRoot, "rev-parse", "HEAD"])).stdout.trim(), sha);
+    const spoofed = { ...inherited, GIT_WORK_TREE: otherRoot, GIT_CONFIG_VALUE_0: otherRoot };
+    assert.equal((await execFileAsync("git", ["-C", otherRoot, "rev-parse", "HEAD"], { env: spoofed })).stdout.trim(), sha);
+    const result = await run([...args, "--factory-root", otherRoot], { env: spoofed });
+    assert.notEqual(result.code, 0, result.stdout);
+    assert.ok(json(result).diagnostics.some(({ code }) => code === "factory_invalid"), result.stdout);
+    await assert.rejects(stat(target));
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("source Rust seed generates one pinned caller without leaking into projects", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-rust-seed-"));
+  try {
+    const ownership = JSON.parse(await readFile(path.join(root, "archetype-ownership.json"), "utf8"));
+    assert.equal(ownership.categories.factory_source_seed.disposition, "removed");
+    assert.deepEqual(ownership.categories.factory_source_seed.paths.map(({ path: entry }) => entry),
+      ["factory.defaults.json", ".github/workflows/rust.yml", "factory-seed"]);
+    const defaults = JSON.parse(await readFile(path.join(root, "factory.defaults.json"), "utf8"));
+    assert.deepEqual(defaults, { schema_version: 1, values: {
+      FACTORY_REQUIRED: "true", TASK_TRACKER: "github-issues", CI_SYSTEM: "GitHub Actions",
+      REPO_LANGUAGE: "en", SECRETS_PROVIDER: "none",
+    }});
+    const workflow = await readFile(path.join(root, ".github/workflows/rust.yml"), "utf8");
+    const document = parseDocument(workflow, { version: "1.2", uniqueKeys: true });
+    assert.deepEqual(document.errors, []);
+    const parsed = document.toJS();
+    assert.ok(Object.hasOwn(parsed.on, "workflow_call"));
+    assert.equal(parsed.jobs.rust["runs-on"], "ubuntu-latest");
+    assert.equal(parsed.jobs.rust.steps[0].uses, "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683");
+    const recipe = JSON.parse(await readFile(path.join(root, "ci/recipes.json"), "utf8")).rust;
+    assert.deepEqual(parsed.jobs.rust.steps.slice(1).map(({ run: command }) => command),
+      [...recipe.matchAll(/run: (.+)/gu)].map(([, command]) => command));
+
+    const factory = path.join(parent, "factory");
+    await mkdir(path.join(factory, ".github/workflows"), { recursive: true });
+    await execFileAsync("git", ["init", "-q", factory]);
+    await copyFile(path.join(root, "factory.defaults.json"), path.join(factory, "factory.defaults.json"));
+    await copyFile(path.join(root, ".github/workflows/rust.yml"), path.join(factory, ".github/workflows/rust.yml"));
+    const git = async (...args) => (await execFileAsync("git", ["-C", factory, ...args])).stdout.trim();
+    await git("add", "factory.defaults.json", ".github/workflows/rust.yml");
+    await git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "local fixture");
+    await git("tag", "v1");
+    const sha = await git("rev-parse", "HEAD");
+    assert.match(sha, /^[0-9a-f]{40}$/u);
+    assert.equal(await git("rev-parse", "refs/tags/v1^{commit}"), sha);
+    assert.equal(await git("status", "--porcelain", "--untracked-files=all"), "");
+
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1", CI_STACKS: "rust" });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+    const first = await run(["plan", ...args]);
+    assert.equal(first.code, 0, first.stdout);
+    assert.equal((await run(["plan", ...args])).stdout, first.stdout);
+    await assert.rejects(stat(target));
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stdout);
+    assert.equal(json(applied).verification, "verified");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    assert.equal(await readFile(path.join(target, ".github/workflows/ci.yml"), "utf8"),
+      "name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n  rust:\n    uses: eff3ct0/factory/.github/workflows/rust.yml@v1\n");
+    assert.match(await readFile(path.join(target, "AGENT.md"), "utf8"), /eff3ct0\/factory@v1/u);
+    assert.equal((await execFileAsync(process.execPath,
+      [path.join(target, ".factory/scripts/check-factory-layout.mjs"), "--target", target], { cwd: target })).stdout.trim(), "factory layout OK");
+    for (const entry of ["factory.defaults.json", ".github/workflows/rust.yml", "factory-seed"]) {
+      await assert.rejects(stat(path.join(root, "dist/payload", entry)));
+      await assert.rejects(stat(path.join(target, entry)));
+    }
+
+    const sample = path.join(root, "factory-seed/rust-sample");
+    await mkdir(path.join(target, "src"));
+    await copyFile(path.join(sample, "Cargo.toml"), path.join(target, "Cargo.toml"));
+    await copyFile(path.join(sample, "src/lib.rs"), path.join(target, "src/lib.rs"));
+    const env = { ...process.env, CARGO_NET_OFFLINE: "true", CARGO_TARGET_DIR: path.join(parent, "cargo-target") };
+    for (const command of [
+      ["fmt", "--all", "--", "--check"],
+      ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+      ["test", "--all"],
+      ["build", "--release"],
+    ]) await execFileAsync("cargo", command, { cwd: target, env });
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("pinned factory CI emits selected versioned callers and protects creator ownership", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-"));
+  try {
+    const fixture = await factoryFixture(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust,typescript" }, { rust: callableWorkflow, typescript: callableWorkflow });
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", fixture.sha, "--non-interactive"];
+    const first = await run(["plan", ...args]);
+    assert.equal(first.code, 0, first.stdout);
+    assert.equal((await run(["plan", ...args])).stdout, first.stdout);
+    await assert.rejects(stat(target));
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stdout);
+    assert.equal(json(applied).verification, "verified");
+    const ciPath = path.join(target, ".github/workflows/ci.yml");
+    assert.equal(await readFile(ciPath, "utf8"), "name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n  rust:\n    uses: eff3ct0/factory/.github/workflows/rust.yml@v1\n  typescript:\n    uses: eff3ct0/factory/.github/workflows/typescript.yml@v1\n");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    const state = JSON.parse(await readFile(path.join(target, ".factory-template-creator/state.json"), "utf8"));
+    assert.ok(state.owned_files.some(({ path: entry }) => entry === ".github/workflows/ci.yml"));
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Example project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "eff3ct0/factory@v1", CI_STACKS: "typescript" } }));
+    assert.ok(json(await run(["plan", ...args])).operations.some(({ path: entry, action }) => entry === ".github/workflows/ci.yml" && action === "update"));
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    assert.doesNotMatch(await readFile(ciPath, "utf8"), /rust\.yml/u);
+    await writeFile(ciPath, "user-managed\n");
+    const drift = await run(["apply", ...args]);
+    assert.notEqual(drift.code, 0);
+    assert.ok(json(drift).diagnostics.some(({ code }) => code === "owned_file_drift"));
+    assert.equal(await readFile(ciPath, "utf8"), "user-managed\n");
+    const unknown = path.join(parent, "unknown");
+    await mkdir(path.join(unknown, ".github/workflows"), { recursive: true });
+    await writeFile(path.join(unknown, ".github/workflows/ci.yml"), "user-managed\n");
+    const conflict = await run(["apply", ...args.map((part) => part === target ? unknown : part)]);
+    assert.notEqual(conflict.code, 0);
+    assert.ok(json(conflict).diagnostics.some(({ code }) => code === "unknown_file_conflict"));
+    assert.equal(await readFile(path.join(unknown, ".github/workflows/ci.yml"), "utf8"), "user-managed\n");
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("pinned factory CI accepts run-only and uses-only steps and reusable jobs", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-steps-"));
+  try {
+    const workflow = `${callableWorkflow}      - uses: actions/checkout@v4\n  delegate:\n    uses: example/factory/.github/workflows/check.yml@v1\n`;
+    const fixture = await factoryFixture(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust" }, { rust: workflow });
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = ["--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", fixture.sha, "--non-interactive"];
+    const plan = await run(["plan", ...args]);
+    assert.equal(plan.code, 0, plan.stdout);
+    assert.equal(json(plan).status, "planned");
+    await assert.rejects(stat(target));
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("pinned factory CI requires supported runners on step jobs but not reusable jobs", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-runners-"));
+  try {
+    const fixture = await factoryFixture(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust" }, { rust: callableWorkflow });
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1" });
+    const target = path.join(parent, "project");
+    const workflowPath = path.join(fixture.factory, ".github/workflows/rust.yml");
+    const args = (sha) => ["--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", sha, "--non-interactive"];
+    const workflow = (runner) => `on:\n  workflow_call:\njobs:\n  check:\n${runner}    steps:\n      - run: echo ok\n  delegate:\n    uses: example/factory/.github/workflows/check.yml@v1\n`;
+    const commitWorkflow = async (text) => {
+      await writeFile(workflowPath, text);
+      await fixture.git("add", ".github/workflows/rust.yml");
+      await fixture.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "runner fixture");
+      await fixture.git("tag", "-f", "v1");
+      return fixture.git("rev-parse", "HEAD");
+    };
+    for (const runner of ["", "    runs-on: ''\n", "    runs-on: []\n", "    runs-on: [ubuntu-latest, '']\n", "    runs-on: {}\n", "    runs-on:\n      group: ''\n", "    runs-on:\n      labels: []\n", "    runs-on: 42\n", "    runs-on:\n      unsupported: ubuntu-latest\n"]) {
+      const sha = await commitWorkflow(workflow(runner));
+      for (const command of ["plan", "apply"]) {
+        const result = await run([command, ...args(sha)]);
+        assert.notEqual(result.code, 0, `${runner || "missing runs-on"}: ${result.stdout}`);
+        assert.ok(json(result).diagnostics.some(({ code }) => code === "ci_invalid"), result.stdout);
+        await assert.rejects(stat(target));
+      }
+    }
+    for (const runner of ["    runs-on: ubuntu-latest\n", "    runs-on: [self-hosted, linux]\n", "    runs-on:\n      group: ci\n      labels: [linux]\n"]) {
+      const sha = await commitWorkflow(workflow(runner));
+      const plan = await run(["plan", ...args(sha)]);
+      assert.equal(plan.code, 0, plan.stdout);
+      assert.equal(json(plan).status, "planned");
+      await assert.rejects(stat(target));
+    }
+    const reuseOnly = await commitWorkflow("on:\n  workflow_call:\njobs:\n  delegate:\n    uses: example/factory/.github/workflows/check.yml@v1\n");
+    const plan = await run(["plan", ...args(reuseOnly)]);
+    assert.equal(plan.code, 0, plan.stdout);
+    assert.equal(json(plan).status, "planned");
+    await assert.rejects(stat(target));
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("pinned factory CI rejects missing, symlinked and invalid YAML before writes", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-invalid-"));
+  try {
+    const fixture = await factoryFixture(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust" });
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1" });
+    const target = path.join(parent, "project");
+    const args = (command, sha) => [command, "--target", target, "--config", config, "--factory-root", fixture.factory, "--factory-sha", sha, "--non-interactive"];
+    const rejected = async (sha) => {
+      for (const command of ["plan", "apply"]) {
+        const result = await run(args(command, sha));
+        assert.notEqual(result.code, 0, result.stdout);
+        assert.ok(json(result).diagnostics.some(({ code }) => code === "ci_invalid"), result.stdout);
+        await assert.rejects(stat(target));
+      }
+    };
+    await rejected(fixture.sha);
+    const workflowPath = path.join(fixture.factory, ".github/workflows/rust.yml");
+    await mkdir(path.dirname(workflowPath), { recursive: true });
+    await symlink("../../../factory.defaults.json", workflowPath);
+    await fixture.git("add", ".github/workflows/rust.yml");
+    await fixture.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "symlink workflow");
+    await fixture.git("tag", "-f", "v1");
+    await rejected(await fixture.git("rev-parse", "HEAD"));
+    await rm(workflowPath);
+    for (const workflow of [
+      "on:\n  workflow_call:\njobs:\n  check: [\n",
+      `${callableWorkflow}---\non:\n  workflow_call:\n`,
+      `${callableWorkflow}jobs: {}\n`,
+      "on:\n  workflow_call: true\njobs:\n  check:\n    steps:\n      - run: echo ok\n",
+      "on:\n  workflow_call:\njobs: []\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps: []\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    uses: example/action@v1\n    steps:\n      - run: echo ok\n",
+      "on:\n  push:\njobs:\n  check:\n    steps:\n      - run: echo ok\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: true\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: echo ok\n        uses: actions/checkout@v4\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: ''\n        uses: actions/checkout@v4\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - name: missing command\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - {}\n",
+      "on:\n  workflow_call:\njobs:\n  __proto__:\n    steps:\n      - run: echo ok\n",
+      "on:\n  workflow_call:\njobs:\n  check:\n    steps:\n      - run: &cmd echo ok\n      - run: *cmd\n",
+      `${callableWorkflow}${"#".repeat(65 * 1024)}\n`,
+    ]) {
+      await writeFile(workflowPath, workflow);
+      await fixture.git("add", ".github/workflows/rust.yml");
+      await fixture.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "invalid YAML");
+      await fixture.git("tag", "-f", "v1");
+      await rejected(await fixture.git("rev-parse", "HEAD"));
+    }
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("owned inline CI migrates with unchanged answers and follows pinned workflow revisions", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-ci-migration-"));
+  try {
+    const fixture = await factoryFixture(parent, {}, { rust: callableWorkflow });
+    const config = await configFile(parent, { FACTORY_SPEC: "eff3ct0/factory@v1", CI_SYSTEM: "GitHub Actions", CI_STACKS: "rust" });
+    const target = path.join(parent, "project");
+    const legacy = ["--target", target, "--config", config, "--non-interactive"];
+    const pinned = (sha) => [...legacy, "--factory-root", fixture.factory, "--factory-sha", sha];
+    const applied = await run(["apply", ...legacy]);
+    assert.equal(applied.code, 0, applied.stdout);
+    const legacyDigest = json(applied).config_digest;
+    const ciPath = path.join(target, ".github/workflows/ci.yml");
+    assert.match(await readFile(ciPath, "utf8"), /runs-on: ubuntu-latest/u);
+    const plan = await run(["plan", ...pinned(fixture.sha)]);
+    assert.equal(plan.code, 0, plan.stdout);
+    assert.notEqual(json(plan).config_digest, legacyDigest);
+    assert.ok(json(plan).operations.some(({ path: entry, action }) => entry === ".github/workflows/ci.yml" && action === "update"));
+    assert.equal(json(await run(["apply", ...pinned(fixture.sha)])).verification, "verified");
+    assert.match(await readFile(ciPath, "utf8"), /uses: eff3ct0\/factory\/\.github\/workflows\/rust\.yml@v1/u);
+    assert.equal(json(await run(["verify", ...pinned(fixture.sha)])).status, "verified");
+    assert.equal(json(await run(["apply", ...pinned(fixture.sha)])).status, "noop");
+    await writeFile(path.join(fixture.factory, ".github/workflows/rust.yml"), callableWorkflow.replace("echo ok", "echo revised"));
+    await fixture.git("add", ".github/workflows/rust.yml");
+    await fixture.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "new workflow");
+    await fixture.git("tag", "-f", "v1");
+    const next = await fixture.git("rev-parse", "HEAD");
+    const revision = await run(["plan", ...pinned(next)]);
+    assert.equal(revision.code, 0, revision.stdout);
+    assert.notEqual(json(revision).config_digest, json(plan).config_digest);
+    assert.ok(json(revision).operations.some(({ path: entry, action }) => entry === ".factory-template-creator/state.json" && action === "update"));
+    assert.equal(json(await run(["apply", ...pinned(next)])).verification, "verified");
+    assert.equal(json(await run(["apply", ...pinned(next)])).status, "noop");
+    await writeFile(ciPath, "user-managed\n");
+    const drift = await run(["apply", ...pinned(next)]);
+    assert.notEqual(drift.code, 0);
+    assert.ok(json(drift).diagnostics.some(({ code }) => code === "owned_file_drift"));
+  } finally { await rm(parent, { recursive: true, force: true }); }
 });
 
 test("interactive configuration prompts for missing required values through the shared validator", async () => {
@@ -385,6 +812,51 @@ test("apply, verify, and rerun are idempotent", async () => {
   assert.equal(rerun.code, 0, rerun.stderr);
   assert.equal(json(rerun).status, "noop");
   assert.ok(json(rerun).operations.every((operation) => operation.action === "noop"));
+});
+
+test("generated layout checker accepts optional absence and creator enforces selected CI", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-layout-"));
+  const layout = async (target) => {
+    try {
+      const result = await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/check-factory-layout.mjs"), "--target", target], { cwd: target });
+      return { code: 0, output: result.stdout };
+    } catch (error) {
+      return { code: error.code, output: `${error.stdout ?? ""}${error.stderr ?? ""}` };
+    }
+  };
+  try {
+    const config = await configFile(parent, { TRACKER_KEY: "eff3ct0/factory", CI_STACKS: "" });
+    const target = path.join(parent, "without-ci");
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, applied.stderr);
+    await assert.rejects(stat(path.join(target, ".github/workflows/ci.yml")));
+    await assert.rejects(stat(path.join(target, ".factory/checks")));
+    assert.deepEqual(await layout(target), { code: 0, output: "factory layout OK\n" });
+
+    const required = path.join(target, ".factory/templates/agent-runbook.md");
+    const original = await readFile(required);
+    await rm(required);
+    assert.match((await layout(target)).output, /inherited support file missing.*agent-runbook\.md/u);
+    await writeFile(required, original);
+    const checks = path.join(target, ".factory/checks");
+    await writeFile(checks, "invalid reserved path\n");
+    assert.match((await layout(target)).output, /invalid .factory directory: .factory\/checks/u);
+    await rm(checks);
+
+    const selectedConfig = await configFile(parent, { TRACKER_KEY: "eff3ct0/factory", CI_SYSTEM: "GitHub Actions", CI_STACKS: "typescript" });
+    const selected = path.join(parent, "with-ci");
+    const selectedApply = await run(["apply", "--target", selected, "--config", selectedConfig, "--non-interactive"]);
+    assert.equal(selectedApply.code, 0, selectedApply.stderr);
+    assert.deepEqual(await layout(selected), { code: 0, output: "factory layout OK\n" });
+    await rm(path.join(selected, ".github/workflows/ci.yml"));
+    assert.equal((await layout(selected)).code, 0, "standalone layout has no CI-selection context");
+    const verify = await run(["verify", "--target", selected, "--config", selectedConfig, "--non-interactive"]);
+    assert.notEqual(verify.code, 0);
+    assert.equal(json(verify).status, "not-created");
+    assert.ok(json(verify).operations.some(({ path: file, action }) => file === ".github/workflows/ci.yml" && action !== "noop"));
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });
 
 test("unknown files and symlink escapes fail without overwriting", async () => {

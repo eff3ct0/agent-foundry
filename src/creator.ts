@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import {
   chmod,
   copyFile,
@@ -14,6 +15,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
+import { parseDocument, visit } from "yaml";
 import {
   inspectProviderAvailability,
   launchProvider,
@@ -100,6 +103,8 @@ interface CreatorState {
 export interface CreatorConfig {
   values: Record<string, string>;
   digest: string;
+  factoryCiRef?: string;
+  factoryIdentity?: { spec: string; sha: string; workflows: string[] };
 }
 
 export interface ProviderSummary {
@@ -169,6 +174,8 @@ export interface CreatorOptions {
   command: Command;
   target: string;
   configPath?: string;
+  factoryRoot?: string;
+  factorySha?: string;
   nonInteractive?: boolean;
   prompt?: (placeholder: Placeholder) => Promise<string>;
   failAfter?: number;
@@ -234,6 +241,7 @@ const sortDiagnostics = (items: Diagnostic[]): Diagnostic[] => [...items].sort((
 const sortOperations = (items: Operation[]): Operation[] => [...items].sort((left, right) => compareStrings(left.path, right.path));
 
 const isObject = (value: unknown): value is JsonObject => typeof value === "object" && value !== null && !Array.isArray(value);
+const runFile = promisify(execFile);
 
 const assertNoDuplicateJsonKeys = (text: string, label: string): void => {
   let index = 0;
@@ -438,6 +446,139 @@ const valueFromInput = (input: unknown): Record<string, unknown> => {
   return candidate;
 };
 
+const loadFactoryDefaults = async (root: string, expectedSha: string, spec: unknown, placeholders: PlaceholderManifest): Promise<{
+  values: Record<string, string>;
+  git: (...args: string[]) => Promise<string>;
+}> => {
+  if (typeof spec !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]*\/factory@v[1-9][0-9]*$/u.test(spec)) {
+    throw new CreatorError("factory_invalid", "FACTORY_SPEC must identify org/factory@vX when factory defaults are requested");
+  }
+  if (!/^[0-9a-f]{40}$/u.test(expectedSha)) throw new CreatorError("factory_invalid", "--factory-sha must be an independently trusted full lowercase commit SHA");
+  const absolute = path.resolve(root);
+  const entry = await lstat(absolute).catch(() => undefined);
+  if (!entry?.isDirectory() || entry.isSymbolicLink() || await realpath(absolute) !== absolute) {
+    throw new CreatorError("factory_invalid", "--factory-root must be a real local checkout directory");
+  }
+  const gitEntry = await lstat(path.join(absolute, ".git")).catch(() => undefined);
+  if (!gitEntry || gitEntry.isSymbolicLink() || (!gitEntry.isDirectory() && !gitEntry.isFile())) {
+    throw new CreatorError("factory_invalid", "--factory-root must contain its own .git checkout entry");
+  }
+  const git = async (...args: string[]): Promise<string> => {
+    try {
+      const { stdout } = await runFile("git", ["-c", "core.fsmonitor=false", "-C", absolute, ...args], {
+        env: {
+          PATH: process.env.PATH ?? "",
+          ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot ?? "" } : {}),
+          GIT_CEILING_DIRECTORIES: path.dirname(absolute),
+          GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
+          GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0",
+        },
+        maxBuffer: 256 * 1024, timeout: 10_000,
+      });
+      return stdout;
+    } catch {
+      throw new CreatorError("factory_invalid", "local factory checkout cannot be verified without fetching");
+    }
+  };
+  const tag = spec.slice(spec.lastIndexOf("@") + 1);
+  const [checkoutRoot, head, tagSha, changes, tree] = await Promise.all([
+    git("rev-parse", "--show-toplevel"), git("rev-parse", "--verify", "HEAD^{commit}"),
+    git("rev-parse", "--verify", `refs/tags/${tag}^{commit}`), git("status", "--porcelain", "--untracked-files=all"),
+    git("ls-tree", "HEAD", "--", "factory.defaults.json"),
+  ]);
+  if (checkoutRoot.trim() !== absolute || head.trim() !== expectedSha || tagSha.trim() !== expectedSha || changes.trim()
+      || !/^100644 blob [0-9a-f]{40}\tfactory\.defaults\.json\n$/u.test(tree)) {
+    throw new CreatorError("factory_invalid", "factory root, clean checkout, tag, commit SHA, or tracked root defaults do not match the supplied pin");
+  }
+  const text = await git("show", "HEAD:factory.defaults.json");
+  let parsed: unknown;
+  try {
+    assertNoDuplicateJsonKeys(text, "factory defaults");
+    parsed = JSON.parse(text);
+  } catch {
+    throw new CreatorError("factory_invalid", "factory.defaults.json is not valid JSON or has duplicate keys");
+  }
+  if (!isObject(parsed) || Object.keys(parsed).sort().join(",") !== "schema_version,values"
+      || parsed.schema_version !== 1 || !isObject(parsed.values)) {
+    throw new CreatorError("factory_invalid", "factory.defaults.json requires schema_version 1 and a values object");
+  }
+  const values = parsed.values;
+  const byKey = new Map(placeholders.placeholders.map((placeholder) => [placeholder.key, placeholder]));
+  const invalid = Object.keys(values).filter((key) => !byKey.has(key) || key === "FACTORY_SPEC");
+  if (invalid.length) throw new CreatorError("factory_invalid", `factory defaults contain unknown or reserved keys: ${invalid.sort().join(", ")}`);
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value === null || !["string", "number", "boolean"].includes(typeof value)) {
+      throw new CreatorError("factory_invalid", `factory default ${key} must be a scalar value`);
+    }
+    try {
+      normalized[key] = validateValue(byKey.get(key)!, value);
+    } catch (error) {
+      throw new CreatorError("factory_invalid", (error as Error).message);
+    }
+  }
+  return { values: normalized, git };
+};
+
+const validateFactoryWorkflows = async (git: (...args: string[]) => Promise<string>, stacks: string[]): Promise<string[]> => {
+  const digests: string[] = [];
+  for (const stack of stacks) {
+    if (!/^[a-z][a-z0-9-]*$/u.test(stack)) throw new CreatorError("ci_invalid", `invalid CI stack: ${stack}`);
+    const workflowPath = `.github/workflows/${stack}.yml`;
+    const tree = await git("ls-tree", "HEAD", "--", workflowPath);
+    if (!/^100644 blob [0-9a-f]{40}\t\.github\/workflows\/[a-z][a-z0-9-]*\.yml\n$/u.test(tree)) {
+      throw new CreatorError("ci_invalid", `pinned factory is missing a regular tracked workflow: ${workflowPath}`);
+    }
+    const workflow = await git("show", `HEAD:${workflowPath}`);
+    if (Buffer.byteLength(workflow, "utf8") > 64 * 1024) throw new CreatorError("ci_invalid", `pinned factory workflow is too large: ${workflowPath}`);
+    try {
+      const document = parseDocument(workflow, { version: "1.2", uniqueKeys: true });
+      if (document.errors.length) throw new Error("invalid YAML");
+      visit(document, { Alias: () => { throw new Error("aliases are not accepted"); } });
+      const parsed: unknown = document.toJS({ mapAsMap: true, maxAliasCount: 10 });
+      const check = (value: unknown, depth = 0): void => {
+        if (depth > 32) throw new Error("workflow nesting is too deep");
+        if (value instanceof Map) {
+          for (const [key, child] of value) {
+            if (typeof key !== "string" || ["__proto__", "constructor", "prototype"].includes(key)) throw new Error("unsafe YAML key");
+            check(child, depth + 1);
+          }
+        } else if (Array.isArray(value)) {
+          for (const child of value) check(child, depth + 1);
+        }
+      };
+      check(parsed);
+      if (!(parsed instanceof Map) || !(parsed.get("on") instanceof Map)
+          || !parsed.get("on").has("workflow_call")
+          || !(parsed.get("on").get("workflow_call") === null || parsed.get("on").get("workflow_call") instanceof Map)
+          || !(parsed.get("jobs") instanceof Map) || parsed.get("jobs").size === 0) throw new Error("workflow_call and jobs must be mappings");
+      const nonemptyString = (value: unknown): value is string => typeof value === "string" && !!value.trim();
+      const labels = (value: unknown): boolean => nonemptyString(value)
+        || (Array.isArray(value) && value.length > 0 && value.every(nonemptyString));
+      const supportedRunner = (value: unknown): boolean => labels(value)
+        || (value instanceof Map && value.size > 0
+          && [...value.keys()].every((key) => key === "group" || key === "labels")
+          && (!value.has("group") || nonemptyString(value.get("group")))
+          && (!value.has("labels") || labels(value.get("labels"))));
+      for (const job of parsed.get("jobs").values()) {
+        if (!(job instanceof Map) || (job.has("steps") === job.has("uses"))) throw new Error("jobs must contain steps or uses");
+        if (job.has("uses") && (typeof job.get("uses") !== "string" || !job.get("uses").trim())) throw new Error("job uses must be a nonempty string");
+        if (job.has("steps") && !supportedRunner(job.get("runs-on"))) throw new Error("step jobs require a nonempty runs-on runner");
+        if (job.has("steps") && (!Array.isArray(job.get("steps")) || !job.get("steps").length
+            || job.get("steps").some((step: unknown) => !(step instanceof Map)
+              || step.has("run") === step.has("uses")
+              || !["run", "uses"].some((field) => typeof step.get(field) === "string" && step.get(field).trim())))) {
+          throw new Error("job steps must contain exactly one nonempty run or uses field");
+        }
+      }
+    } catch {
+      throw new CreatorError("ci_invalid", `pinned factory workflow must be valid callable YAML: ${workflowPath}`);
+    }
+    digests.push(sha256(Buffer.from(workflow, "utf8")));
+  }
+  return digests;
+};
+
 const validateValue = (placeholder: Placeholder, rawValue: unknown): string => {
   if (rawValue === undefined || rawValue === null) return "";
   if (!["string", "number", "boolean"].includes(typeof rawValue)) {
@@ -466,12 +607,47 @@ const resolveConfig = async (
   configPath: string | undefined,
   nonInteractive: boolean,
   prompt: ((placeholder: Placeholder) => Promise<string>) | undefined,
+  factoryRoot?: string,
+  factorySha?: string,
 ): Promise<CreatorConfig> => {
+  if ((factoryRoot !== undefined || factorySha !== undefined)
+      && (!factoryRoot || !factorySha || !configPath)) {
+    throw new CreatorError("factory_invalid", "factory defaults require --factory-root, --factory-sha, and external --config together");
+  }
+  if (factoryRoot && factorySha && configPath) {
+    const factory = path.resolve(factoryRoot);
+    const config = path.resolve(configPath);
+    const inside = (candidate: string, root: string): boolean => {
+      const relative = path.relative(root, candidate);
+      return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+    };
+    // Refuse both a lexical path in the checkout and an outside link back into it.
+    if (inside(config, factory)) {
+      throw new CreatorError("factory_invalid", "--config must be outside the factory checkout", { path: configPath });
+    }
+    const canonicalFactory = await realpath(factory).catch(() => { throw new CreatorError("factory_invalid", "--factory-root must be a real local checkout directory"); });
+    const canonicalConfig = await realpath(config).catch(() => { throw new CreatorError("invalid_json", "configuration cannot be read", { path: configPath }); });
+    if (inside(canonicalConfig, canonicalFactory)) {
+      throw new CreatorError("factory_invalid", "--config must be outside the factory checkout", { path: configPath });
+    }
+  }
   let input: Record<string, unknown> = {};
   if (configPath) input = valueFromInput(await parseJson(path.resolve(process.cwd(), configPath), "configuration"));
   const knownKeys = new Set(manifest.placeholders.map((placeholder) => placeholder.key));
   const unknownKeys = Object.keys(input).filter((key) => !knownKeys.has(key));
   if (unknownKeys.length > 0) throw new CreatorError("configuration_invalid", `configuration contains unknown keys: ${unknownKeys.sort().join(", ")}`);
+  const factory = factoryRoot && factorySha ? await loadFactoryDefaults(factoryRoot, factorySha, input.FACTORY_SPEC, manifest) : undefined;
+  const organization = factory?.values ?? {};
+  if (organization.FACTORY_REQUIRED === "true" && Object.prototype.hasOwnProperty.call(input, "FACTORY_REQUIRED") && String(input.FACTORY_REQUIRED) !== "true") {
+    throw new CreatorError("factory_invalid", "project answers cannot disable organization FACTORY_REQUIRED");
+  }
+  const merged = { ...organization, ...input };
+  // Provider-specific context must not leak across a project-level provider change.
+  if (Object.prototype.hasOwnProperty.call(input, "TASK_TRACKER") && input.TASK_TRACKER !== organization.TASK_TRACKER) {
+    for (const key of ["TRACKER", "TRACKER_KEY", "EPIC_ID"]) if (!Object.prototype.hasOwnProperty.call(input, key)) delete merged[key];
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "SECRETS_PROVIDER") && input.SECRETS_PROVIDER !== organization.SECRETS_PROVIDER
+      && !Object.prototype.hasOwnProperty.call(input, "SECRETS_PATH")) delete merged.SECRETS_PATH;
   const byKey = new Map(manifest.placeholders.map((placeholder) => [placeholder.key, placeholder]));
   const values: Record<string, string> = {};
   const resolving = new Set<string>();
@@ -484,8 +660,8 @@ const resolveConfig = async (
     const condition = placeholder.condition ?? placeholder.when;
     const conditionValues = { ...values };
     if (condition && !Object.prototype.hasOwnProperty.call(conditionValues, condition.key)) conditionValues[condition.key] = await resolveKey(condition.key);
-    const supplied = Object.prototype.hasOwnProperty.call(input, placeholder.key);
-    const raw = supplied ? input[placeholder.key] : placeholder.default;
+    const supplied = Object.prototype.hasOwnProperty.call(merged, placeholder.key);
+    const raw = supplied ? merged[placeholder.key] : placeholder.default;
     if (!conditionMatches(condition, conditionValues)) {
       values[placeholder.key] = "";
     } else if (!supplied && (raw === undefined || raw === null || raw === "") && placeholder.required) {
@@ -508,8 +684,15 @@ const resolveConfig = async (
   }
   const trackerDisplay: Record<string, string> = { jira: "Jira", "github-issues": "GitHub Issues", "github-projects": "GitHub Projects", linear: "Linear", custom: "(custom)" };
   if (!values.TRACKER && values.TASK_TRACKER) values.TRACKER = trackerDisplay[values.TASK_TRACKER] ?? values.TASK_TRACKER;
+  let factoryCiRef: string | undefined;
+  let workflowDigests: string[] = [];
+  if (factory && values.CI_SYSTEM.toLowerCase().includes("github") && values.CI_STACKS) {
+    workflowDigests = await validateFactoryWorkflows(factory.git, parseStacks(values.CI_STACKS));
+    factoryCiRef = values.FACTORY_SPEC;
+  }
+  const factoryIdentity = factory ? { spec: values.FACTORY_SPEC, sha: factorySha!, workflows: workflowDigests } : undefined;
   const ordered = Object.fromEntries(Object.keys(values).sort().map((key) => [key, values[key]]));
-  return { values, digest: `sha256:${sha256(canonicalJson(ordered))}` };
+  return { values, digest: `sha256:${sha256(canonicalJson(factoryIdentity ? { values: ordered, factory: factoryIdentity } : ordered))}`, factoryCiRef, factoryIdentity };
 };
 
 const safeMode = (mode: string): number => {
@@ -620,7 +803,9 @@ const providerSummary = (catalog: ProviderCatalog, runtimes: ProviderRuntime[], 
 
 const providerConfigDigest = (config: CreatorConfig, selected: string[]): CreatorConfig => ({
   values: config.values,
-  digest: `sha256:${sha256(canonicalJson({ agents: selected, values: Object.fromEntries(Object.keys(config.values).sort().map((key) => [key, config.values[key]])) }))}`,
+  digest: `sha256:${sha256(canonicalJson({ agents: selected, values: Object.fromEntries(Object.keys(config.values).sort().map((key) => [key, config.values[key]])), ...(config.factoryIdentity ? { factory: config.factoryIdentity } : {}) }))}`,
+  factoryCiRef: config.factoryCiRef,
+  factoryIdentity: config.factoryIdentity,
 });
 
 const composeProviderFiles = (
@@ -745,6 +930,10 @@ const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buf
   try { catalog = JSON.parse(recipes.bytes.toString("utf8")) as Record<string, string>; } catch (error) { throw new CreatorError("ci_invalid", `CI recipe catalog is invalid: ${(error as Error).message}`); }
   const unknown = stacks.filter((stack) => !Object.prototype.hasOwnProperty.call(catalog, stack));
   if (unknown.length > 0) throw new CreatorError("ci_invalid", `CI_STACKS contains unknown selection(s): ${unknown.join(", ")}`);
+  if (config.factoryCiRef) {
+    const [repository, tag] = config.factoryCiRef.split("@");
+    return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => `  ${stack}:\n    uses: ${repository}/.github/workflows/${stack}.yml@${tag}`).join("\n")}\n`, "utf8");
+  }
   return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => catalog[stack]).join("\n")}\n`, "utf8");
 };
 
@@ -962,7 +1151,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   let config: CreatorConfig | undefined = options.resolvedConfig;
   if (!config) {
     try {
-      config = await resolveConfig(placeholders, options.configPath, options.nonInteractive ?? false, options.prompt);
+      config = await resolveConfig(placeholders, options.configPath, options.nonInteractive ?? false, options.prompt, options.factoryRoot, options.factorySha);
     } catch (error) {
       if (error instanceof CreatorError) diagnostics.push(diagnostic(error.code, error.message, error.path));
       else throw error;
