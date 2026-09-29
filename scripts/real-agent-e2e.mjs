@@ -166,6 +166,9 @@ export const buildPhaseSchema = (phase) => {
   return { type: "object", properties, required: Object.keys(properties), additionalProperties: false };
 };
 
+export const GH_GUARD_SCRIPT = `#!/bin/sh\ncase "$*" in *status:approved*|*"pr merge"*|*"release create"*|*"release publish"*|*"repo delete"*|*"issue edit"*) printf 'gh %s' "$*" > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GH" "$@";; esac\n`;
+export const GIT_GUARD_SCRIPT = `#!/bin/sh\ncase "$1 $*" in *"push"*" main"*|*"push"*" master"*|*"push --delete"*) printf 'git %s' "$*" > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GIT" "$@";; esac\n`;
+
 const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), `real-agent-${phase}-`));
   try {
@@ -174,14 +177,19 @@ const runPhase = async (workspace, prompt, model, apiKey, token, phase) => {
     await writeFile(schema, JSON.stringify(buildPhaseSchema(phase)));
     const realGh = spawnSync("sh", ["-c", "command -v gh"], { encoding: "utf8" }).stdout.trim(); const realGit = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
     if (!realGh || !realGit) throw new JourneyError("required GitHub or Git executable is unavailable", "runtime_missing");
-    const gh = await makeGuard(guards, "gh", `#!/bin/sh\ncase "$*" in *status:approved*|*"pr merge"*|*"release create"*|*"release publish"*|*"repo delete"*|*"issue edit"*) : > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GH" "$@";; esac\n`);
-    const guardedGit = await makeGuard(guards, "git", `#!/bin/sh\ncase "$1 $*" in *"push"*" main"*|*"push"*" master"*|*"push --delete"*) : > "$REAL_AGENT_BLOCKED"; exit 126;; *) exec "$REAL_GIT" "$@";; esac\n`);
+    const gh = await makeGuard(guards, "gh", GH_GUARD_SCRIPT);
+    const guardedGit = await makeGuard(guards, "git", GIT_GUARD_SCRIPT);
     const environment = { PATH: `${guards}${path.delimiter}${process.env.PATH ?? ""}`, HOME: home, CODEX_HOME: home, CODEX_API_KEY: apiKey, OPENAI_API_KEY: apiKey, OPENAI_MODEL: model, GIT_TERMINAL_PROMPT: "0", REAL_AGENT_BLOCKED: blocked, REAL_GH: realGh, REAL_GIT: realGit };
     if (token) Object.assign(environment, { GH_TOKEN: token, AGENT_GITHUB_TOKEN: token });
     const gitWritableRoot = `sandbox_workspace_write.writable_roots=[${JSON.stringify(path.join(workspace, ".git"))}]`;
     const output = spawnSync("codex", ["exec", "--json", "--ephemeral", "--ignore-user-config", "--sandbox", phase === "request" ? "read-only" : "workspace-write", "-c", 'approval_policy="never"', "--model", model, "-c", "sandbox_workspace_write.network_access=true", "-c", gitWritableRoot, "-c", "features.network_proxy.enabled=true", "-c", 'features.network_proxy.domains={"api.github.com"="allow","github.com"="allow"}', "--output-last-message", final, "--output-schema", schema, "--cd", workspace, "-"], { input: prompt, cwd: workspace, env: environment, encoding: "utf8", timeout: 900_000, maxBuffer: MAX_OUTPUT });
     const parsed = parseEvents(output.stdout ?? "", workspace, [apiKey, token]);
-    if (await import("node:fs/promises").then(({ access }) => access(blocked).then(() => true).catch(() => false)) || parsed.commands.some((command) => BLOCKED.test(command))) throw new JourneyError("approval or destructive action was attempted", "approval_boundary_violation");
+    const blockedContent = await import("node:fs/promises").then(({ readFile }) => readFile(blocked, "utf8").catch(() => null));
+    const blockedCommand = parsed.commands.find((command) => BLOCKED.test(command));
+    if (blockedContent !== null || blockedCommand !== undefined) {
+      const attempted = sanitizeValidationContextValue(blockedContent || blockedCommand || "<unknown>", [apiKey, token], workspace);
+      throw new JourneyError(`approval or destructive action was attempted [attempted=${JSON.stringify(attempted)}]`, "approval_boundary_violation", { attempted });
+    }
     if (output.error?.code === "ETIMEDOUT") throw new JourneyError(`codex CLI timed out during ${phase} phase`, "timeout");
     if (output.status !== 0) {
       const diagnostic = providerDiagnostic(output, [apiKey, token], workspace);
