@@ -139,6 +139,10 @@ test("assertOutcome requires the cold agent to read docs/bindings.md, not the ab
   const outcome = assertOutcome(workspace, "acme/example", data, { required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"] }, decisions, observed, successful);
   assert.equal(outcome.branch, "feature/42-hello-command");
   assert.equal(outcome.commit, commit);
+
+  // The contract match tolerates path prefixes, case, and trailing description text.
+  const tolerant = assertOutcome(workspace, "acme/example", data, { required_documents: ["repo/AGENT.md", "CLAUDE.md — harness entrypoint", "./docs/bindings.md (providers)"] }, decisions, observed, successful);
+  assert.equal(tolerant.branch, "feature/42-hello-command");
 });
 
 test("provider diagnostics are bounded, redacted, and do not retain stdout prompts", () => {
