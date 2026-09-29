@@ -238,6 +238,15 @@ jobs:
           git -C generated commit -m "chore: initialize with Agent Foundry"
           git -C generated remote add origin "https://github.com/$JOURNEY_REPOSITORY.git"
           git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$JOURNEY_TOKEN" | base64 -w0)" -C generated push origin HEAD:main
+      - name: Create archetype issue labels on the generated repository
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          JOURNEY_REPOSITORY: ${{ needs.prepare.outputs.repository }}
+        run: |
+          labels="type:product type:bug $(grep -rhoE 'type:[a-z-]+' generated/.github/ISSUE_TEMPLATE/ 2>/dev/null)"
+          for label in $(printf '%s\n' $labels | sort -u); do
+            gh label create "$label" --repo "$JOURNEY_REPOSITORY" --force
+          done
       - name: Install selected runtime
         run: node scripts/real-agent-journey.mjs install --runtime "$JOURNEY_RUNTIME"
       - name: Run cold-agent adapter
