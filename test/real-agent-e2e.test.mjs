@@ -103,7 +103,6 @@ test("execution prompt binds GitHub Issues to the runtime repository", () => {
   assert.ok(prompt.includes("Immediately after issue creation, use the actual issue number returned by that operation and configured feature slug `hello-command` to create and switch to exactly `feature/<issue-number>-hello-command`."));
   assert.match(prompt, /Do not derive the branch from the issue title or use an alternative slug/u);
   assert.match(prompt, /branch as the exact output of `git branch --show-current`/u);
-  assert.match(prompt, /commit as the exact full output of `git rev-parse HEAD`/u);
   assert.doesNotMatch(prompt, /your-repo|cold-agent-journey/u);
   assert.match(prompt, /read AGENT\.md, CLAUDE\.md, and docs\/bindings\.md/u);
   assert.doesNotMatch(prompt, /agent-init\.md/u);
@@ -281,4 +280,27 @@ test("guard scripts record the attempted blocked command and exec safe ones", as
   const checkoutAllowed = runGuard(gitPath, ["checkout", "-b", "feature/1-hello-command"]);
   assert.equal(checkoutAllowed.status, 0);
   assert.equal(existsSync(flag), false);
+});
+
+test("assertOutcome accepts an abbreviated commit that resolves to HEAD and rejects fabricated or ref values", async (t) => {
+  const workspace = await createWorkspace("feature/42-hello-command");
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  await writeFile(path.join(workspace, "hello.py"), "print('hi #42')\n");
+  git(workspace, "commit", "-am", "feat: hello (#42)");
+  const full = git(workspace, "rev-parse", "HEAD");
+  const decisions = { feature: { slug: "hello-command", implementation_files: ["hello.py"] }, decisions: { TEST_CMD: "python3 -m unittest" } };
+  const request = { required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"] };
+  const observed = ["python3 -m unittest"];
+  const successful = ["python3 -m unittest exit_code 0"];
+  const base = { issue_url: "https://github.com/acme/example/issues/42", status: "passed", branch: "feature/42-hello-command", tests: "passed", approval_gate: "not-approved", reason: "done" };
+
+  // Abbreviated SHA that resolves to HEAD is accepted.
+  const ok = assertOutcome(workspace, "acme/example", { ...base, commit: full.slice(0, 8) }, request, decisions, observed, successful);
+  assert.equal(ok.commit, full);
+
+  // A full-length hex string with the real prefix but a fabricated tail is rejected.
+  assert.throws(() => assertOutcome(workspace, "acme/example", { ...base, commit: `${full.slice(0, 7)}${"0".repeat(33)}` }, request, decisions, observed, successful), (e) => { assert.equal(e.code, "commit_invalid"); return true; });
+
+  // A ref expression (not a hex object name) cannot bypass the check.
+  assert.throws(() => assertOutcome(workspace, "acme/example", { ...base, commit: "HEAD" }, request, decisions, observed, successful), (e) => { assert.equal(e.code, "commit_invalid"); return true; });
 });
