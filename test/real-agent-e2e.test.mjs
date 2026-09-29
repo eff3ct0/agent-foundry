@@ -216,7 +216,6 @@ test("branch validation preserves bounded workspace and reported context", async
   const workspace = await createWorkspace("wrong-branch");
   t.after(() => rm(workspace, { recursive: true, force: true }));
   const [data, request, decisions, observed, successful] = outcomeInput("feature/42-hello-command token=sk-live-secret /home/steam/private", "initial-commit-placeholder");
-  const actualHead = git(workspace, "rev-parse", "HEAD");
 
   assert.throws(() => assertOutcome(workspace, "acme/example", data, request, decisions, observed, successful, ["sk-live-secret"]), (error) => {
     assert.equal(error.code, "branch_invalid");
@@ -224,7 +223,7 @@ test("branch validation preserves bounded workspace and reported context", async
       actual_branch: "wrong-branch",
       expected_branch: "feature/42-hello-command",
       reported_branch: "feature/42-hello-command token=<redacted> <private-path>",
-      actual_head: actualHead,
+      actual_head: "<absent>",
       reported_commit: "initial-commit-placeholder",
     });
     assert.match(error.message, /actual_branch="wrong-branch"/u);
@@ -304,4 +303,25 @@ test("assertOutcome accepts an abbreviated commit that resolves to HEAD and reje
 
   // A ref expression (not a hex object name) cannot bypass the check.
   assert.throws(() => assertOutcome(workspace, "acme/example", { ...base, commit: "HEAD" }, request, decisions, observed, successful), (e) => { assert.equal(e.code, "commit_invalid"); return true; });
+});
+
+test("assertOutcome accepts a feature branch with the work even when the workspace is left on main", async (t) => {
+  const workspace = await createWorkspace("main");
+  t.after(() => rm(workspace, { recursive: true, force: true }));
+  git(workspace, "checkout", "-b", "feature/42-hello-command");
+  await writeFile(path.join(workspace, "hello.py"), "print('hi #42')\n");
+  git(workspace, "commit", "-am", "feat: implement hello (#42)");
+  const featureCommit = git(workspace, "rev-parse", "HEAD");
+  git(workspace, "checkout", "main");
+  assert.equal(git(workspace, "branch", "--show-current"), "main");
+
+  const decisions = { feature: { slug: "hello-command", implementation_files: ["hello.py"] }, decisions: { TEST_CMD: "python3 -m unittest" } };
+  const request = { required_documents: ["AGENT.md", "CLAUDE.md", "docs/bindings.md"] };
+  const observed = ["python3 -m unittest"];
+  const successful = ["python3 -m unittest exit_code 0"];
+  const data = { issue_url: "https://github.com/acme/example/issues/42", status: "passed", branch: "feature/42-hello-command", commit: featureCommit, tests: "passed", approval_gate: "not-approved", reason: "done" };
+
+  const outcome = assertOutcome(workspace, "acme/example", data, request, decisions, observed, successful);
+  assert.equal(outcome.branch, "feature/42-hello-command");
+  assert.equal(outcome.commit, featureCommit);
 });
