@@ -1,0 +1,30 @@
+# #263 documentation evidence — local work-unit projection
+
+## Authority and scope
+
+GitHub issue #263 in `eff3ct0/agent-foundry` is the authoritative open, approved task in milestone #3. This file is a derived local plan and evidence projection, not a provider-confirmed phase handoff or alternate task store. The parent owns tracker checkpoint/readback and remote delivery. Route: delegated direct, single writer on `feature/263-documentation-evidence` from main `a4adea181c59e23198836fe582b9a0c9e41e2cbd`; no child delegation. Historical `odd/tasks/v0-2-0.md` is read-only here; its #247 milestone listing is outdated.
+
+Define a per-accepted-work-unit documentation-impact and completion-evidence contract using #261 family authority and #262 destination profiles. Include unaffected rationale, local Git revision evidence, exact scoped external write/ack/fresh readback and conflict recovery, Pages publication proof, and honest offline/unauthorized pending state. Keep task-provider phase/approval authority unchanged. No live adapter, external operation, remote publication, #269/#270/#272 routing, or global gate for unaffected work.
+
+## Acceptance and route
+
+- Identify affected architecture, constraints, business, and technical families; an unaffected unit records a concise reason and performs no documentation write.
+- Local-canonical completion names changed Git document and revision. External writable completion needs exact destination, expected prior revision, provider acknowledgment, and fresh matching content/revision readback; stale/ambiguous/failed/unreadable cases remain unresolved without silent overwrite.
+- Git-sourced Pages source and deployed intended revision are separate outcomes. Offline or unauthorized propagation is pending/blocked with exact runnable next action; unrelated safe local work remains permitted.
+- Attach evidence to existing provider-confirmed work-unit handoff, never create a parallel lifecycle. Fixture/spec scenarios cover local, external writable, Pages, stale revision, unavailable readback, offline, delayed publication, and interrupted recovery without claiming live provider behavior.
+
+Approach: update inherited documentation/workflow contract and generated binding guidance, with focused generated-project fixture checks if binding output changes. No remote provider is required. Route `ask-on-risk`: approximately 400 authored changed lines is advisory; report a cohesive overage rather than remove meaningful tests/docs.
+
+## Verification and delivery
+
+Run focused tests and foreground `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm test:creator` if generated bindings change, `node scripts/typed-runtime/check-real-agent-workflow.js`, `node scripts/check-determinism.mjs`, `git diff --check`, and `git diff --check main...HEAD`. Normalize with `node scripts/build-payload.mjs --write-lock` after final payload edit; regenerate typed runtime only if typed source changes. Record exact outcomes and fixture semantics here. Local work-unit commit includes docs/tests and references #263; record its SHA in a follow-up evidence commit if needed.
+
+Rollback boundary: revert only #263 documentation contract, binding guidance, focused fixture checks, payload lock, and this projection. Do not change #261/#262 authority or destination identity, bound task-provider operation, approvals, or unrelated local work. Initial state: DEFINITION locally, not provider-confirmed; no GitHub mutation, push, PR, merge, publication, or live external proof. Next action after local verification: parent reviews the local branch, performs independently authorized risk and tracker readback, then decides remote delivery.
+
+## Local implementation and evidence
+
+The handbook now specifies family-level outcomes, external conditional-write/acknowledgment/fresh-readback requirements, conflict/unknown-write recovery, and independent Pages publication proof. `AGENT.md`, workflow, source binding guide, and all four generated profile bindings point cold agents at it. The generated-project fixture applies/verifies/noops local, external-contract, GitHub Pages, and read-only profiles; asserts the handbook's offline scenario table and navigable generated links. These assertions verify shipped specification bytes, **not** provider behavior: no external write, readback, deployment, or publication was performed. Unaffected changes need no write; affected unavailable evidence stays pending/blocked with an exact next operation. Task-provider authority remains unchanged.
+
+Final payload normalization: `node scripts/build-payload.mjs --write-lock` exit 0, digest `sha256:816a4c65fab3f43bfdc6be15c7df64456389f4ba33c220ba3bb5dade6f62164e`. No typed source changed, so emitter regeneration is N/A; `pnpm build` and the typed runtime byte-sync suite passed. Foreground verification: `pnpm build` exit 0; `pnpm typecheck` exit 0; focused `node --test --test-name-pattern='documentation profiles' test/creator.test.mjs` exit 0 (1/1); `pnpm test:creator` exit 0 (37/37); `pnpm test` sequential rerun exit 0 (319/319); `node scripts/typed-runtime/check-real-agent-workflow.js` exit 0 (`real-agent workflow static check OK`); `node scripts/check-determinism.mjs` exit 0 (`determinism and Python-removal audit OK`). The first `pnpm test` attempt overlapped `pnpm test:creator`; both rebuild `dist`, causing one transient missing `dist/payload/placeholders.json` fixture failure (318/319). Sequential rerun passed without a source change. `git diff --check` and `git diff --check main...HEAD` results are recorded at commit closeout.
+
+Local phase: EVIDENCE/DELIVERY, **not** a provider-confirmed checkpoint or task DONE. Rollback only this documentation evidence unit and its evidence follow-up, leaving #261/#262 destination selection, existing task-provider implementation, and unrelated local work intact. Parent next reads back #263 in the bound provider, reviews the local branch independently, and handles separately authorized PR/delivery; no hosted or live documentation outcome is claimed.

@@ -81,6 +81,7 @@ Project capabilities are **bound to concrete providers** in [`docs/bindings.md`]
 The **harness** provides the access mechanism (MCP / CLI / API); the **spec** provides the provider and its rules. This contract takes precedence over agent or harness preferences.
 
 Documentation authority is separate: use the family map in `docs/bindings.md` for architecture, constraints, business, and technical context. Its default is local Git content; an external destination is authoritative only when its family row names a concrete, accessible source. A derived local copy does not silently override that source. Documentation links never replace bound task-provider readback or authorize outward actions.
+For each accepted work unit, record affected documentation families (or why none changed) and follow the [destination-specific evidence procedure](docs/engineering-handbook.md#documentation-evidence-for-affected-families); pending propagation or publication is not a confirmed revision. Keep that evidence with the existing bound-provider work-unit handoff, not a separate task lifecycle.
 
 ## Reading order for a cold agent
 Run `node start.mjs`, then read this `AGENT.md` and [`docs/bindings.md`](docs/bindings.md). Read the bound provider's active task and handoff before local task notes. Use the task-triggered routes above for the relevant mode; workflow, handbook, and initialization topics are not unconditional reading. In a generated project, resolve routed topic paths under `.factory/` as shown; root `AGENT.md` and `docs/bindings.md` remain at root.
