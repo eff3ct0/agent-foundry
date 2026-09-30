@@ -1,6 +1,7 @@
 # Engineering handbook
 
-Standards as checklists. Language-agnostic; fill `<UPPER_SNAKE>` during bootstrap.
+Standards as checklists. Load for a bug fix or implementation via `AGENT.md`'s
+task route. Language-agnostic; fill `<UPPER_SNAKE>` during bootstrap.
 
 ## Code
 - [ ] Format with `<FORMATTER>` and lint with `<LINTER>` successfully.
@@ -39,7 +40,7 @@ Standards as checklists. Language-agnostic; fill `<UPPER_SNAKE>` during bootstra
 - [ ] Keep the changelog current.
 - [ ] Use ADRs for relevant decisions.
 - [ ] Add intent comments where the code is not self-explanatory.
-- [ ] Write all persisted content in `<REPO_LANGUAGE>`; agent conversation language is independent.
+- [ ] Follow `AGENT.md` for persistence language; agent conversation language is independent.
 
 ## Observability
 - [ ] Stack: `<OBSERVABILITY_STACK>`.
@@ -49,4 +50,4 @@ Standards as checklists. Language-agnostic; fill `<UPPER_SNAKE>` during bootstra
 ## Data and migrations
 - [ ] Additive and reversible.
 - [ ] Backward-compatible with existing data.
-- [ ] **Require human approval** (`<APPROVAL_GATED_ACTIONS>`).
+- [ ] Stop for human approval before gated migrations; `AGENT.md` owns the outward-action boundary (`<APPROVAL_GATED_ACTIONS>`).

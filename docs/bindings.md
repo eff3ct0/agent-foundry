@@ -59,15 +59,10 @@ Remote reads, writes, and publication require separate authorization for the
 exact operation, destination, and credential/session; setup does none of them.
 
 ## Protected `status:approved` gate
-The bound task provider may support delegated approval only through its
-fail-closed protocol: a current direct human instruction must name the exact
-issue and `add status:approved`; target-host evidence must bind that principal
-to maintainer/authorized-approver authority; the authenticated actor must have
-`MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must be followed by
-target-host readback. Any mismatch, stale/ambiguous/missing instruction,
-insufficient permission, failed/unknown mutation, or readback mismatch stops
-the operation. Without that evidence, the human applies the label directly.
-This contract change does not approve existing work.
+The detailed fail-closed approval conditions are in [`AGENT.md`](../AGENT.md).
+The selected provider controls the native operation and readback. This
+source-template guide does not bind a provider or grant approval for existing
+work; without the required evidence, the human applies the label directly.
 
 The selected task provider also controls pull-request linkage. Initialization
 composes the native reference into both PR templates; the retained governance

@@ -6,5 +6,7 @@
 This repository is governed by **[`AGENT.md`](AGENT.md)** - the canonical operating contract
 (work rules, provider bindings, and specification index).
 
-Claude Code loads this file as its entrypoint; the normative content lives in `AGENT.md`.
-Every agent, regardless of harness, must read and follow `AGENT.md` and `docs/bindings.md`.
+Claude Code loads this shim, not the task topics. Read `AGENT.md` and `docs/bindings.md`
+first, then follow `AGENT.md`'s mode/task route to open required content. Links do not
+auto-load. The safety and provider boundaries remain in `AGENT.md` and the bound
+provider contract; this shim grants no outward-action approval.

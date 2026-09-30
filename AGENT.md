@@ -25,15 +25,23 @@ It is not tied to any language or stack.
 - Organization baseline (Factory OS): `<FACTORY_SPEC>` - organization spec governing this repo; local content overrides it. See [`docs/org-factory.md`](docs/org-factory.md).
 
 ## Archetype documents
-- [`docs/workflow.md`](docs/workflow.md) - **end-to-end workflow**: intake -> spec -> tickets -> branches -> session/loop execution -> verification -> review -> Definition of Done -> handoff.
-- [`docs/engineering-handbook.md`](docs/engineering-handbook.md) - **engineering standards**: code, testing, security, CI/CD, architecture, documentation, observability.
-- [`docs/bootstrap.md`](docs/bootstrap.md) - **how to initialize** a new project from this template (placeholders, tooling, first commit, checklist).
-- [`docs/bindings.md`](docs/bindings.md) - **provider and documentation authority**: bound task/secrets providers and the canonical source for each documentation family. Read its documentation map before relying on a copy or external link.
-- [`docs/org-factory.md`](docs/org-factory.md) - **organization layer**: how projects reference the org spec (the `.github` repo and `FACTORY_SPEC` pin).
-- [`docs/factory-layout.md`](docs/factory-layout.md) - **layout contract**: root allowlist and `.factory/` support boundary.
-- [`docs/agent-init.md`](docs/agent-init.md) - **agent mode**: procedure for initializing a project from the template (stack detection, bindings, verification).
-- [`templates/`](templates/) - reusable task, pull request, Definition of Done, ADR, and agent runbook templates. The runbook is the project's **loop execution contract**.
-- [`hooks/README.md`](hooks/README.md) - optional harness startup adapters; they always delegate to `start.mjs`.
+
+### Task-triggered context routes
+
+After `node start.mjs`, read this entry and `docs/bindings.md` (provider identity and documentation authority map). Then open the **required** topic for the detected mode and actual task; optional topics are not prerequisites. A link only points to content; it does not load it. Paths below are relative to the repository root. `S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. Do not apply the creator to this source repository.
+
+| Trigger / mode | Required topic (S → G) | Optional when relevant (S → G) |
+| --- | --- | --- |
+| Archetype maintenance (`SELF`) | `MAINTAINERS.md` → not generated; `templates/agent-runbook.md` → `.factory/templates/agent-runbook.md` (WORK only in G) | `docs/factory-layout.md` → `.factory/docs/factory-layout.md` when investigating ownership |
+| Project initialization (`SETUP`) | `docs/agent-init.md` → `.factory/docs/agent-init.md`; `docs/bootstrap.md` → `.factory/docs/bootstrap.md` when creating a repository | `docs/creator.md` → not generated (source/installed package instructions) for CLI details |
+| Ticket execution (`WORK`) | `templates/agent-runbook.md` → `.factory/templates/agent-runbook.md` | `docs/workflow.md` → `.factory/docs/workflow.md` for intake, review, or handoff |
+| Bug fix or implementation (`SELF` or `WORK`) | `docs/engineering-handbook.md` → `.factory/docs/engineering-handbook.md` for code, testing, security | The mapped architecture/technical source in `docs/bindings.md` when the change needs project-specific context |
+| Provider setup or binding failure (`SETUP` or `WORK`) | `docs/agent-init.md` → `.factory/docs/agent-init.md` for setup; `docs/bindings.md` → `docs/bindings.md` for selected provider and recovery | `providers/*` → not generated; source recipes only while maintaining the archetype |
+| Release or deployment (`SELF` or `WORK`) | `MAINTAINERS.md` → not generated for source release; `docs/workflow.md` → `.factory/docs/workflow.md` for project delivery gates | `docs/engineering-handbook.md` → `.factory/docs/engineering-handbook.md` for CI/security changes |
+
+`docs/bindings.md` is required across modes when a bound provider or documentation family applies; in pre-apply `SETUP` its source-template guide is not a selected provider. For architecture, constraints, business, and technical detail, its family map designates local Git content by default or an exact configured external canonical source. Read the mapped source when the task needs it; a derived local copy is not an authoritative fallback. If required content is missing or inaccessible, name the source and limitation, request access or map repair, and stop the dependent work instead of inventing context. Do not infer an external provider from a link.
+
+Review targets, not limits: about 50–200 lines for an entry and 50–150 for a focused agent-instruction topic. Review agent-facing docs approaching 200–300 lines for clearer routes or splitting; retain substantive reference material with a justified exception. A count alone neither passes nor fails, and cosmetic minification is not a solution.
 
 ## Operating rules (language-agnostic core)
 1. **Durable state lives outside the session:** every durable task/TODO mechanism required or configured by the user's harness uses only the setup-bound task provider (`<TASK_TRACKER>`, tracker/board `<TRACKER>` / `<TRACKER_KEY>`) for task state. Version control holds work artifacts, not an alternate task store. Never rely on session memory. A session is disposable.
@@ -52,45 +60,10 @@ It is not tied to any language or stack.
 14. **Delegated delivery:** when a human delegates a specific task, that delegation authorizes the routine delivery flow for that task: tracker updates, implementation, verification, commit, push, pull request, and evidence updates. Do not ask for intermediate confirmation. It does not authorize merge, production deployment, destructive operations, release publication, or other human approval decisions.
 
 ## Ordered phase model
-Every work unit follows this ordered model. `BLOCKED` is an explicit state, not a hidden session condition.
-
-1. `DEFINITION` - record the problem, scope, acceptance criteria, dependencies, and plan.
-2. `IMPLEMENTATION` - make the smallest in-scope code, configuration, or documentation change.
-3. `TESTING/TDD` - add or update behavior checks and run the required test/TDD signal.
-4. `VERIFICATION` - run the applicable test, build, lint, typecheck, and end-to-end gates.
-5. `EVIDENCE/DELIVERY` - record results, review evidence, commit/PR details, and delivery readiness.
-6. `DONE` - enter only after the Definition of Done and required review gates pass.
-
-`BLOCKED` is an explicit interruption state entered from any active phase when approval, an unresolved
-dependency, or the retry limit stops progress. It records the phase to resume.
-
-Phase transitions are deterministic: phases are not skipped; a failed gate stays in its current phase;
-`BLOCKED` records the phase to resume; resolving the blocker returns to that phase with new evidence. No path
-may enter `DONE` without every required Definition of Done item and review gate passing.
+The detailed phase transitions, retry rule, and handoff shape are authoritative in [`templates/agent-runbook.md`](templates/agent-runbook.md), loaded for ticket execution. No phase is skipped; `BLOCKED` records the phase to resume, and `DONE` requires the Definition of Done and review gates. Do not claim a provider checkpoint without confirmation and fresh readback.
 
 ## Durable phase state and cold resumption
-Before inspecting local task lists or continuing after an interruption, read the bound provider's task identity,
-native state, and latest handoff through its configured tracker/board. The setup binding, not a harness default,
-determines where the task lives. After **every completed phase**, update that provider before starting the next
-phase. The provider-confirmed handoff and native state are authoritative. The update MUST include:
-
-- Current phase and status (`ACTIVE`, `BLOCKED`, or `DONE`)
-- Completed work
-- Exact next action
-- Branch and commit
-- Verification evidence, or an explicit statement that it is not yet run
-- Required evidence to resume for the next agent
-
-Create, update, status transition, comment, checkpoint, phase handoff, and completion count as durable only
-after the bound provider confirms the operation **and** a fresh readback verifies the intended task identity and
-state (including the intended comment/handoff). A local file or task UI, including `odd/*.md`, is an optional,
-derived, non-authoritative projection of provider-confirmed state; no projection is required or a fallback.
-Ephemeral scratch notes are not durable tasks. If an operation is unsupported, fails, has ambiguous identity,
-or its readback is unavailable, malformed, or mismatched, stop without claiming a checkpoint, transition, or completion.
-Record the exact missing or failed provider-native operation, target identity, and evidence needed to resume;
-request a supported path rather than silently writing locally or mapping a non-GitHub binding to GitHub.
-Use [`templates/handoff.md`](templates/handoff.md) for the handoff shape. Do not create a second tracker or
-change the one-work-unit-per-session rule.
+Before inspecting local task lists or resuming, read the bound provider's task identity, native state, and latest handoff. Every completed phase and durable task operation requires provider-native confirmation **and fresh readback** of the intended task identity and state. A local file or task UI (including `odd/*.md`) is only an optional derived projection, never a fallback tracker. On unsupported, failed, ambiguous, unavailable, malformed, or mismatched readback, stop without claiming a transition; record the operation, target, and missing evidence. The selected provider's detailed operation contract is in [`docs/bindings.md`](docs/bindings.md); phase handoff fields and timing are in the runbook and [`templates/handoff.md`](templates/handoff.md).
 
 ### Protected `status:approved` gate
 An agent MAY add `status:approved` only through the bound task provider's delegated-approval protocol, and only when every condition below is satisfied:
@@ -110,7 +83,4 @@ The **harness** provides the access mechanism (MCP / CLI / API); the **spec** pr
 Documentation authority is separate: use the family map in `docs/bindings.md` for architecture, constraints, business, and technical context. Its default is local Git content; an external destination is authoritative only when its family row names a concrete, accessible source. A derived local copy does not silently override that source. Documentation links never replace bound task-provider readback or authorize outward actions.
 
 ## Reading order for a cold agent
-1. This `AGENT.md`. 2. [`docs/bindings.md`](docs/bindings.md) (mandatory providers and documentation authority map). 3. `docs/workflow.md`.
-4. The active ticket in `<TRACKER>`. 5. `docs/engineering-handbook.md` for the concrete change standard.
-6. `templates/agent-runbook.md` when operating in loop mode.
-7. [`docs/agent-init.md`](docs/agent-init.md) when **initializing** a project from the template (init mode).
+Run `node start.mjs`, then read this `AGENT.md` and [`docs/bindings.md`](docs/bindings.md). Read the bound provider's active task and handoff before local task notes. Use the task-triggered routes above for the relevant mode; workflow, handbook, and initialization topics are not unconditional reading. In a generated project, resolve routed topic paths under `.factory/` as shown; root `AGENT.md` and `docs/bindings.md` remain at root.
