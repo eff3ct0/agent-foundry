@@ -102,7 +102,14 @@ const validatePlaceholders = async (root) => {
 };
 
 const validateCreatorState = async (root) => {
-  const directory = path.join(root, ".factory-template-creator");
+  const newDirectory = path.join(root, ".factory/creator");
+  const legacyDirectory = path.join(root, ".factory-template-creator");
+  const factory = await lstat(path.join(root, ".factory")).catch(() => undefined);
+  if (factory && (factory.isSymbolicLink() || !factory.isDirectory())) throw new Error("factory path must be a directory");
+  const newEntry = await lstat(newDirectory).catch(() => undefined);
+  const oldEntry = await lstat(legacyDirectory).catch(() => undefined);
+  if (newEntry && oldEntry) throw new Error("both creator state locations exist");
+  const directory = newEntry ? newDirectory : legacyDirectory;
   const entry = await lstat(directory).catch(() => undefined);
   if (!entry) return { present: false, incomplete: false };
   if (entry.isSymbolicLink() || !entry.isDirectory()) throw new Error("creator state path must be a directory");
@@ -112,7 +119,7 @@ const validateCreatorState = async (root) => {
   if (!state || typeof state !== "object" || state.schema_version !== 1 || typeof state.payload_version !== "string" || typeof state.payload_digest !== "string" || typeof state.config_digest !== "string" || !Array.isArray(state.owned_files)) {
     throw new Error("creator state is malformed");
   }
-  return { present: true, incomplete: false };
+  return { present: true, incomplete: false, directory: newEntry ? ".factory/creator" : ".factory-template-creator" };
 };
 
 const workFiles = async (root) => {
@@ -146,7 +153,7 @@ export const detectMode = async (root) => {
     const files = await workFiles(resolved);
     const present = await Promise.all(files.map((relative) => exists(path.join(resolved, relative))));
     if (state.incomplete) {
-      return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("creator_incomplete", "creator state exists without a completed state file", ".factory-template-creator")] };
+      return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("creator_incomplete", "creator state exists without a completed state file", state.directory ?? ".factory/creator")] };
     }
     if (present.every(Boolean)) return { mode: WORK, status: "ready", diagnostics: [] };
     if (present.every((value) => !value)) {
@@ -155,7 +162,7 @@ export const detectMode = async (root) => {
     const missing = files.filter((_, index) => !present[index]);
     return { mode: "ERROR", status: "error", diagnostics: missing.map((relative) => diagnostic("context_missing", `required project context is missing: ${relative}; restore the creator-owned file and run foundry verify before continuing`, relative)) };
   } catch (error) {
-    return { mode: "ERROR", status: "error", diagnostics: [diagnostic("state_malformed", error.message, ".factory-template-creator/state.json")] };
+    return { mode: "ERROR", status: "error", diagnostics: [diagnostic("state_malformed", error.message, ".factory/creator/state.json")] };
   }
 };
 

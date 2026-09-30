@@ -10,6 +10,7 @@ import {
   realpath,
   rename,
   rm,
+  rmdir,
   stat,
   unlink,
   writeFile,
@@ -27,9 +28,11 @@ import {
 } from "./providers";
 
 export const CREATOR_SCHEMA_VERSION = 1;
-export const CREATOR_DIRECTORY = ".factory-template-creator";
+export const CREATOR_DIRECTORY = ".factory/creator";
 export const STATE_FILE = `${CREATOR_DIRECTORY}/state.json`;
 export const STAGING_DIRECTORY = `${CREATOR_DIRECTORY}/.staging`;
+const LEGACY_DIRECTORY = ".factory-template-creator";
+const LEGACY_STATE_FILE = `${LEGACY_DIRECTORY}/state.json`;
 
 const MAX_STATE_FILES = 10_000;
 const MAX_STATE_BYTES = 10 * 1024 * 1024;
@@ -202,6 +205,7 @@ export interface PreparedPlan {
   stateBytes?: Buffer;
   config?: CreatorConfig;
   state?: CreatorState;
+  legacyState?: boolean;
   failAfter?: number;
   interruptAfter?: number;
   providerRuntimes: ProviderRuntime[];
@@ -1193,37 +1197,53 @@ const readPayloadFiles = async (
   return { files, sourceFiles, removedSourcePaths, providerSummary: composedProviders.summary };
 };
 
-const readState = async (target: string): Promise<CreatorState | undefined> => {
-  const statePath = path.join(target, STATE_FILE);
+const readState = async (target: string, relativePath: string): Promise<CreatorState | undefined> => {
+  const statePath = path.join(target, relativePath);
   try {
+    const entry = await lstat(statePath);
+    if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o7777) !== 0o600 || entry.size > MAX_STATE_BYTES) {
+      throw new CreatorError("state_invalid", "creator state must be a bounded regular 0600 file", { path: relativePath });
+    }
     const raw = await readFile(statePath, "utf8");
     let value: CreatorState;
     try {
       value = JSON.parse(raw) as CreatorState;
     } catch (error) {
-      throw new CreatorError("state_invalid", `creator state is not valid JSON: ${(error as Error).message}`, { path: STATE_FILE });
+      throw new CreatorError("state_invalid", `creator state is not valid JSON: ${(error as Error).message}`, { path: relativePath });
     }
-    if (!isObject(value) || value.schema_version !== CREATOR_SCHEMA_VERSION || !Array.isArray(value.owned_files)) {
-      throw new CreatorError("state_invalid", "creator state has an unsupported shape", { path: STATE_FILE });
+    if (!isObject(value) || value.schema_version !== CREATOR_SCHEMA_VERSION || !Array.isArray(value.owned_files) ||
+      typeof value.payload_version !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(value.payload_digest) ||
+      !/^sha256:[0-9a-f]{64}$/u.test(value.config_digest) ||
+      value.owned_files.some((file) => !isObject(file) || typeof file.path !== "string" ||
+        !/^0[0-7]{3}$/u.test(file.mode) || !Number.isSafeInteger(file.size) || file.size < 0 ||
+        typeof file.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(file.sha256))) {
+      throw new CreatorError("state_invalid", "creator state has an unsupported shape", { path: relativePath });
     }
-    if (value.owned_files.length > MAX_STATE_FILES) throw new CreatorError("state_invalid", "creator state lists too many files", { path: STATE_FILE });
+    if (value.owned_files.length > MAX_STATE_FILES || !Buffer.from(raw).equals(canonicalJson(value))) {
+      throw new CreatorError("state_invalid", "creator state is not canonical or lists too many files", { path: relativePath });
+    }
+    const paths = new Set<string>();
+    for (const file of value.owned_files) {
+      try { assertSafeRelative(file.path); } catch { throw new CreatorError("state_invalid", "creator state contains an unsafe path", { path: relativePath }); }
+      if (paths.has(file.path) || file.path === CREATOR_DIRECTORY || file.path.startsWith(`${CREATOR_DIRECTORY}/`) ||
+        file.path === LEGACY_DIRECTORY || file.path.startsWith(`${LEGACY_DIRECTORY}/`)) {
+        throw new CreatorError("state_invalid", "creator state contains duplicate or reserved ownership", { path: relativePath });
+      }
+      paths.add(file.path);
+    }
     return value;
   } catch (error) {
     if (error instanceof CreatorError) throw error;
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    return undefined;
+    throw new CreatorError("state_invalid", `cannot read creator state: ${(error as Error).message}`, { path: relativePath });
   }
 };
 
-const creatorDirectoryStatus = async (target: string): Promise<{ safe: boolean; diagnostic?: Diagnostic }> => {
-  const creatorPath = path.join(target, CREATOR_DIRECTORY);
-  const entry = await lstat(creatorPath).catch(() => undefined);
-  if (!entry) return { safe: true };
-  if (entry.isSymbolicLink()) {
-    return { safe: false, diagnostic: diagnostic("symlink_escape", "creator state directory must not be a symlink", CREATOR_DIRECTORY) };
-  }
-  if (!entry.isDirectory()) {
-    return { safe: false, diagnostic: diagnostic("path_conflict", "creator state path must be a directory", CREATOR_DIRECTORY) };
+const creatorDirectoryStatus = async (target: string, relativePath: string): Promise<{ safe: boolean; diagnostic?: Diagnostic }> => {
+  for (const parent of [...parentPaths(`${relativePath}/state.json`)].reverse()) {
+    const entry = await lstat(path.join(target, parent)).catch(() => undefined);
+    if (entry?.isSymbolicLink()) return { safe: false, diagnostic: diagnostic("symlink_escape", "creator state directory must not be a symlink", parent) };
+    if (entry && !entry.isDirectory()) return { safe: false, diagnostic: diagnostic("path_conflict", "creator state path must be a directory", parent) };
   }
   return { safe: true };
 };
@@ -1307,15 +1327,27 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   const target = await resolveTarget(options.target);
   const envelope = baseEnvelope(options.command, target.absolute, manifest);
   const diagnostics: Diagnostic[] = [];
-  const creatorDirectory = await creatorDirectoryStatus(target.absolute);
-  if (creatorDirectory.diagnostic) diagnostics.push(creatorDirectory.diagnostic);
+  const creatorDirectory = await creatorDirectoryStatus(target.absolute, CREATOR_DIRECTORY);
+  const legacyDirectory = await creatorDirectoryStatus(target.absolute, LEGACY_DIRECTORY);
+  for (const directory of [creatorDirectory, legacyDirectory]) if (directory.diagnostic) diagnostics.push(directory.diagnostic);
   const targetEntries = target.existed ? await collectEntries(target.absolute) : [];
-  if (targetEntries.some((entry) => entry.path === STAGING_DIRECTORY || entry.path.startsWith(`${STAGING_DIRECTORY}/`))) {
-    diagnostics.push(diagnostic("staging_interrupted", "an interrupted staging directory requires recovery", STAGING_DIRECTORY));
+  for (const staging of [STAGING_DIRECTORY, `${LEGACY_DIRECTORY}/.staging`]) {
+    if (targetEntries.some((entry) => entry.path === staging || entry.path.startsWith(`${staging}/`))) {
+      diagnostics.push(diagnostic("staging_interrupted", "an interrupted staging directory requires recovery", staging));
+    }
   }
-  const state = target.existed && creatorDirectory.safe ? await readState(target.absolute) : undefined;
-  if (state && (state.payload_version !== manifest.payload_version || state.payload_digest !== manifest.payload_digest)) {
+  const hasNewState = targetEntries.some((entry) => entry.path === STATE_FILE);
+  const hasLegacyState = targetEntries.some((entry) => entry.path === LEGACY_STATE_FILE);
+  if (hasNewState && hasLegacyState) diagnostics.push(diagnostic("state_conflict", "both creator state locations exist", LEGACY_STATE_FILE));
+  const legacyState = hasLegacyState && !hasNewState;
+  const statePath = legacyState ? LEGACY_STATE_FILE : STATE_FILE;
+  const state = target.existed && creatorDirectory.safe && legacyDirectory.safe && !(hasNewState && hasLegacyState)
+    ? await readState(target.absolute, statePath) : undefined;
+  if (state && !legacyState && (state.payload_version !== manifest.payload_version || state.payload_digest !== manifest.payload_digest)) {
     diagnostics.push(diagnostic("payload_mismatch", "creator state does not match the packaged payload"));
+  }
+  if (targetEntries.some((entry) => entry.path.startsWith(`${LEGACY_DIRECTORY}/`) && entry.path !== LEGACY_STATE_FILE && entry.path !== `${LEGACY_DIRECTORY}/.staging` && !entry.path.startsWith(`${LEGACY_DIRECTORY}/.staging/`))) {
+    diagnostics.push(diagnostic("state_conflict", "legacy creator directory contains unexpected entries", LEGACY_DIRECTORY));
   }
 
   let config: CreatorConfig | undefined = options.resolvedConfig;
@@ -1374,20 +1406,33 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   const oldOwned = new Map((state?.owned_files ?? []).map((file) => [file.path, file]));
   const desiredPaths = new Set(files.map((file) => file.relativePath));
   const removablePaths = new Set(composed.removedSourcePaths);
-  const knownStatePaths = new Set([CREATOR_DIRECTORY, STATE_FILE, STAGING_DIRECTORY]);
+  const knownStatePaths = new Set([CREATOR_DIRECTORY, STATE_FILE, STAGING_DIRECTORY, LEGACY_DIRECTORY, LEGACY_STATE_FILE]);
   const allowedDirectories = new Set<string>([
     CREATOR_DIRECTORY,
+    ...parentPaths(STATE_FILE),
     ...files.flatMap((file) => [...parentPaths(file.relativePath)]),
     ...[...removablePaths].flatMap((file) => [...parentPaths(file)]),
   ]);
   for (const entry of targetEntries) {
-    if (knownStatePaths.has(entry.path) || entry.path.startsWith(`${STAGING_DIRECTORY}/`)) continue;
+    if (knownStatePaths.has(entry.path) || entry.path.startsWith(`${STAGING_DIRECTORY}/`) || entry.path.startsWith(`${LEGACY_DIRECTORY}/.staging/`)) continue;
     if (entry.directory && allowedDirectories.has(entry.path)) continue;
     if (desiredPaths.has(entry.path) || oldOwned.has(entry.path) || removablePaths.has(entry.path)) continue;
     diagnostics.push(diagnostic("unknown_file_conflict", "target contains a file or directory not owned by the creator", entry.path));
   }
-  if (!state && targetEntries.some((entry) => entry.path !== CREATOR_DIRECTORY && !entry.path.startsWith(`${CREATOR_DIRECTORY}/`) && !removablePaths.has(entry.path))) {
+  if (!state && targetEntries.some((entry) => !knownStatePaths.has(entry.path) && !entry.path.startsWith(`${STAGING_DIRECTORY}/`) && !removablePaths.has(entry.path))) {
     diagnostics.push(diagnostic("unknown_file_conflict", "a non-empty target has no creator ownership state"));
+  }
+  if (legacyState && state) {
+    if (state.config_digest !== config.digest || state.owned_files.some((file) => !desiredPaths.has(file.path) && !removablePaths.has(file.path))) {
+      diagnostics.push(diagnostic("state_conflict", "legacy migration requires unchanged configuration and known ownership", LEGACY_STATE_FILE));
+    }
+    for (const owned of state.owned_files) {
+      const entry = await lstat(path.join(target.absolute, owned.path)).catch(() => undefined);
+      if (!entry?.isFile() || entry.isSymbolicLink() || (entry.mode & 0o7777).toString(8).padStart(4, "0") !== owned.mode ||
+        entry.size !== owned.size || sha256(await readFile(path.join(target.absolute, owned.path))) !== owned.sha256) {
+        diagnostics.push(diagnostic("owned_file_drift", "legacy migration requires unchanged owned files", owned.path));
+      }
+    }
   }
   const operations: Operation[] = [];
   for (const file of files) {
@@ -1412,7 +1457,8 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
     const existingBytes = await readFile(destination);
     const same = sha256(existingBytes) === file.sha256 && (existing.mode & 0o7777) === file.mode;
     if (same) operations.push(fileOperation(file, "noop", "unchanged"));
-    else if (owned && state?.config_digest !== config.digest && owned.sha256 === sha256(existingBytes)) {
+    else if (owned && (legacyState || state?.config_digest !== config.digest) &&
+      owned.sha256 === sha256(existingBytes) && owned.mode === (existing.mode & 0o7777).toString(8).padStart(4, "0")) {
       operations.push(fileOperation(file, "update", "configuration-changed"));
     } else {
       operations.push(fileOperation(file, "conflict", "owned-file-drift"));
@@ -1444,6 +1490,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
     const source = composed.sourceFiles.get(relativePath);
     await removalOperation(relativePath, "ownership-removed", source ? sha256(source.bytes) : undefined);
   }
+  if (legacyState && state) await removalOperation(LEGACY_STATE_FILE, "legacy-state-migration", sha256(await readFile(path.join(target.absolute, LEGACY_STATE_FILE))));
 
   const stateBytes = stateBytesFor(manifest, config, files);
   const stateFile = expectedStateFile(stateBytes);
@@ -1452,11 +1499,11 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   operations.push(fileOperation(stateFile, stateSame ? "noop" : (existingState ? "update" : "create"), stateSame ? "unchanged" : "state"));
 
   const sortedOperations = sortOperations(operations);
-  const hasConflict = diagnostics.some((item) => ["unknown_file_conflict", "staging_interrupted", "payload_mismatch", "symlink_escape", "path_conflict", "owned_file_drift", "removed_file_drift"].includes(item.code)) || sortedOperations.some((operation) => operation.action === "conflict");
+  const hasConflict = diagnostics.some((item) => ["unknown_file_conflict", "staging_interrupted", "payload_mismatch", "state_conflict", "symlink_escape", "path_conflict", "owned_file_drift", "removed_file_drift"].includes(item.code)) || sortedOperations.some((operation) => operation.action === "conflict");
   envelope.operations = sortedOperations;
   envelope.diagnostics = sortDiagnostics(diagnostics);
   envelope.status = hasConflict ? "conflict" : sortedOperations.every((operation) => operation.action === "noop") ? "noop" : options.command === "dry-run" ? "dry-run" : "planned";
-  return { envelope, target: target.absolute, targetExisted: target.existed, files: [...files, stateFile], stateBytes, config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes };
+  return { envelope, target: target.absolute, targetExisted: target.existed, files: [...files, stateFile], stateBytes, config, state, legacyState, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes };
 };
 
 const pathFor = (target: string, relativePath: string): string => path.join(target, relativePath);
@@ -1466,7 +1513,7 @@ const removeEmptyParents = async (target: string, relativePath: string): Promise
   const stop = path.resolve(target);
   while (current !== stop && current.startsWith(`${stop}${path.sep}`)) {
     try {
-      await rm(current, { recursive: false });
+      await rmdir(current);
     } catch {
       break;
     }
@@ -1486,7 +1533,7 @@ export const applyPlan = async (prepared: PreparedPlan): Promise<CreatorEnvelope
   let committed = 0;
   try {
     await mkdir(prepared.target, { recursive: true });
-    const creatorDirectory = await creatorDirectoryStatus(prepared.target);
+    const creatorDirectory = await creatorDirectoryStatus(prepared.target, CREATOR_DIRECTORY);
     if (!creatorDirectory.safe) {
       throw new CreatorError(creatorDirectory.diagnostic?.code ?? "path_conflict", creatorDirectory.diagnostic?.message ?? "creator state path is unsafe", { plan: prepared, path: CREATOR_DIRECTORY });
     }
@@ -1541,6 +1588,7 @@ export const applyPlan = async (prepared: PreparedPlan): Promise<CreatorEnvelope
       try {
         if (existedBefore.get(operation.path)) {
           await rm(destination, { force: true });
+          await mkdir(path.dirname(destination), { recursive: true });
           await rename(backup, destination);
         } else {
           await rm(destination, { force: true });
@@ -1552,6 +1600,7 @@ export const applyPlan = async (prepared: PreparedPlan): Promise<CreatorEnvelope
     }
     try {
       await rm(stagingPath, { recursive: true, force: true });
+      if (prepared.legacyState) await removeEmptyParents(prepared.target, STATE_FILE);
       if (!prepared.targetExisted) await rm(prepared.target, { recursive: true, force: true });
     } catch {
       restored = false;
@@ -1564,6 +1613,8 @@ export const applyPlan = async (prepared: PreparedPlan): Promise<CreatorEnvelope
 export const doctor = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
   const diagnostics = [...prepared.envelope.diagnostics];
   if (prepared.envelope.config_digest === undefined) diagnostics.push(diagnostic("incomplete_configuration", "doctor could not validate the target without complete configuration"));
+  if (prepared.legacyState && prepared.envelope.status !== "conflict") diagnostics.push(diagnostic("migration_pending", "legacy creator state requires a verified apply migration", LEGACY_STATE_FILE));
+  else if (prepared.envelope.operations.some((operation) => operation.action !== "noop") && diagnostics.length === 0) diagnostics.push(diagnostic("changes_pending", "creator plan has unapplied changes"));
   return {
     ...prepared.envelope,
     command: "doctor",
@@ -1573,12 +1624,13 @@ export const doctor = async (prepared: PreparedPlan): Promise<CreatorEnvelope> =
 };
 
 export const verify = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
-  const missing = prepared.envelope.operations.some((operation) => operation.action === "create" || operation.action === "update");
+  const missing = prepared.envelope.operations.some((operation) => operation.action !== "noop");
   const conflict = prepared.envelope.status === "conflict" || prepared.envelope.status === "error";
   return {
     ...prepared.envelope,
     command: "verify",
     status: conflict ? "failed" : missing ? "not-created" : "verified",
+    diagnostics: prepared.legacyState && !conflict ? sortDiagnostics([...prepared.envelope.diagnostics, diagnostic("migration_pending", "legacy creator state requires a verified apply migration", LEGACY_STATE_FILE)]) : prepared.envelope.diagnostics,
   };
 };
 

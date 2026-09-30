@@ -373,8 +373,8 @@
     {
       "path": "start.mjs",
       "mode": "100644",
-      "size": 11697,
-      "sha256": "a76329262622ae8fa51ce763cfac2c5905e84d4ba644dfdf1302f632f6b0f04c"
+      "size": 12330,
+      "sha256": "0ac21a721e2ad3d0ed3b6561c16cdd0991886b7ce350c05e54546331bdfdf6d6"
     },
     {
       "path": "templates/adr.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:c1d15b97d8b04555c9da3ec7da49e378795fd363c106688a6564b340f7c49ce8"
+  "payload_digest": "sha256:36bd7752b5bbcb88f062096cb3fa443672b1da5222eb93d45afd8eaf7fea3ead"
 }

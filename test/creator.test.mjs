@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { parseDocument } from "yaml";
+import { createHash } from "node:crypto";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -168,12 +169,12 @@ test("generated module inventory uses the composed creator plan, not application
     await assert.rejects(checkGeneratedModulePolicy(options), /generated inventory symlink/u);
     await rm(path.join(target, ".factory/scripts/nested/link.js"));
 
-    const statePath = path.join(target, ".factory-template-creator/state.json");
+    const statePath = path.join(target, ".factory/creator/state.json");
     const originalState = await readFile(statePath, "utf8");
     const state = JSON.parse(originalState);
     state.owned_files.push({ path: "app/own.js", mode: "0644", size: 10, sha256: "forged" });
     await writeFile(statePath, JSON.stringify(state));
-    await assert.rejects(checkGeneratedModulePolicy(options), /does not match the composed creator plan/u);
+    await assert.rejects(checkGeneratedModulePolicy(options), /state_invalid|creator state/u);
     await writeFile(statePath, originalState);
 
     const owned = path.join(target, ".factory/scripts/typed-inherited-runtime/check-pr-governance.js");
@@ -237,7 +238,7 @@ test("pinned defaults merge per key, preserve explicit clears and verify generat
     assert.doesNotMatch(agent, /old\/path|OLD-1|https:\/\/example\.invalid\/old/u);
     assert.doesNotMatch(await readFile(path.join(target, "docs/bindings.md"), "utf8"), /old\/path|OLD-1/u);
     assert.equal((await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/check-factory-layout.mjs"), "--target", target], { cwd: target })).stdout.trim(), "factory layout OK");
-    const state = JSON.parse(await readFile(path.join(target, ".factory-template-creator/state.json"), "utf8"));
+    const state = JSON.parse(await readFile(path.join(target, ".factory/creator/state.json"), "utf8"));
     assert.equal(state.config_digest, json(first).config_digest);
     await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Changed", TASK_TRACKER: "github-issues", FACTORY_SPEC: "acme/factory@v1", SECRETS_PROVIDER: "none", CI_SYSTEM: "none" } }));
     assert.equal(json(await run(["plan", ...args])).status, "planned");
@@ -447,7 +448,7 @@ test("pinned factory CI emits selected versioned callers and protects creator ow
     assert.equal(await readFile(ciPath, "utf8"), "name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n  rust:\n    uses: eff3ct0/factory/.github/workflows/rust.yml@v1\n  typescript:\n    uses: eff3ct0/factory/.github/workflows/typescript.yml@v1\n");
     assert.equal(json(await run(["verify", ...args])).status, "verified");
     assert.equal(json(await run(["apply", ...args])).status, "noop");
-    const state = JSON.parse(await readFile(path.join(target, ".factory-template-creator/state.json"), "utf8"));
+    const state = JSON.parse(await readFile(path.join(target, ".factory/creator/state.json"), "utf8"));
     assert.ok(state.owned_files.some(({ path: entry }) => entry === ".github/workflows/ci.yml"));
     await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Example project", TASK_TRACKER: "github-issues", FACTORY_SPEC: "eff3ct0/factory@v1", CI_STACKS: "typescript" } }));
     assert.ok(json(await run(["plan", ...args])).operations.some(({ path: entry, action }) => entry === ".github/workflows/ci.yml" && action === "update"));
@@ -603,7 +604,7 @@ test("owned inline CI migrates with unchanged answers and follows pinned workflo
     const revision = await run(["plan", ...pinned(next)]);
     assert.equal(revision.code, 0, revision.stdout);
     assert.notEqual(json(revision).config_digest, json(plan).config_digest);
-    assert.ok(json(revision).operations.some(({ path: entry, action }) => entry === ".factory-template-creator/state.json" && action === "update"));
+    assert.ok(json(revision).operations.some(({ path: entry, action }) => entry === ".factory/creator/state.json" && action === "update"));
     assert.equal(json(await run(["apply", ...pinned(next)])).verification, "verified");
     assert.equal(json(await run(["apply", ...pinned(next)])).status, "noop");
     await writeFile(ciPath, "user-managed\n");
@@ -903,7 +904,7 @@ test("rejects a symlinked creator state directory without writing outside the ta
   const config = await configFile(parent);
   await mkdir(target);
   await mkdir(outside);
-  await symlink(outside, path.join(target, ".factory-template-creator"));
+  await symlink(outside, path.join(target, ".factory"));
   const result = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
   assert.notEqual(result.code, 0);
   assert.ok(json(result).diagnostics.some((item) => item.code === "symlink_escape"));
@@ -924,6 +925,95 @@ test("rollback restores creator-owned files after an injected commit failure", a
   assert.deepEqual(await readFile(path.join(target, "README.md")), before);
 });
 
+test("legacy creator state migrates transactionally and remains updatable", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-legacy-migration-"));
+  try {
+    const target = path.join(parent, "project");
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    const relocated = path.join(target, ".factory/creator/state.json");
+    const legacy = path.join(target, ".factory-template-creator/state.json");
+    await mkdir(path.dirname(legacy));
+    await rename(relocated, legacy);
+    await rm(path.dirname(relocated), { recursive: true });
+    const prior = JSON.parse(await readFile(legacy, "utf8"));
+    prior.payload_digest = `sha256:${"b".repeat(64)}`;
+    const readme = path.join(target, "README.md");
+    const expectedReadme = await readFile(readme);
+    const oldReadme = Buffer.from("# Previous creator output\n");
+    await writeFile(readme, oldReadme);
+    const ownedReadme = prior.owned_files.find(({ path: relative }) => relative === "README.md");
+    ownedReadme.size = oldReadme.length;
+    ownedReadme.sha256 = createHash("sha256").update(oldReadme).digest("hex");
+    await writeFile(legacy, `${JSON.stringify(prior, null, 2)}\n`);
+    const legacyBytes = await readFile(legacy);
+    assert.equal(json(await run(["verify", ...args])).status, "not-created");
+    assert.ok(json(await run(["verify", ...args])).diagnostics.some(({ code }) => code === "migration_pending"));
+    assert.ok(json(await run(["doctor", ...args])).diagnostics.some(({ code }) => code === "migration_pending"));
+    await assert.rejects(checkGeneratedModulePolicy({ target, configPath: config }), /does not match the composed creator plan/u);
+    for (const count of [1, 2, 3]) {
+      const failed = await run(["apply", ...args, "--failure-after", String(count)]);
+      assert.notEqual(failed.code, 0);
+      assert.equal(json(failed).rollback.restored, true);
+      assert.deepEqual(await readFile(legacy), legacyBytes);
+      assert.deepEqual(await readFile(readme), oldReadme);
+      await assert.rejects(stat(relocated));
+      await assert.rejects(stat(path.dirname(relocated)));
+    }
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stdout);
+    assert.equal(json(applied).verification, "verified");
+    assert.deepEqual(await readFile(readme), expectedReadme);
+    assert.notDeepEqual(JSON.parse(await readFile(relocated, "utf8")).owned_files, prior.owned_files);
+    await assert.rejects(stat(path.dirname(legacy)));
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["doctor", ...args])).status, "healthy");
+    assert.ok(Array.isArray(await checkGeneratedModulePolicy({ target, configPath: config })));
+    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Updated", TASK_TRACKER: "github-issues" } }));
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("legacy ambiguity, drift, config changes, symlinks, and unknown state paths fail closed", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-legacy-reject-"));
+  try {
+    const target = path.join(parent, "project");
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    assert.equal(json(await run(["apply", ...args])).verification, "verified");
+    const relocated = path.join(target, ".factory/creator/state.json");
+    const legacy = path.join(target, ".factory-template-creator/state.json");
+    const agent = path.join(target, "AGENT.md");
+    const originalAgent = await readFile(agent);
+    await mkdir(path.dirname(legacy));
+    await copyFile(relocated, legacy);
+    assert.ok(json(await run(["plan", ...args])).diagnostics.some(({ code }) => code === "state_conflict"));
+    await rm(relocated);
+    const changed = await configFile(parent, { PROJECT_NAME: "Changed" });
+    assert.ok(json(await run(["apply", "--target", target, "--config", changed, "--non-interactive"])).diagnostics.some(({ code }) => code === "state_conflict"));
+    await writeFile(agent, "drift\n");
+    assert.ok(json(await run(["plan", ...args])).diagnostics.some(({ code }) => code === "owned_file_drift"));
+    await rm(agent);
+    await symlink(path.join(parent, "missing"), agent);
+    assert.ok(json(await run(["plan", ...args])).diagnostics.some(({ code }) => code === "owned_file_drift"));
+    await rm(agent);
+    await writeFile(agent, originalAgent);
+    await writeFile(path.join(target, ".factory-template-creator/extra"), "unknown\n");
+    assert.ok(json(await run(["plan", ...args])).diagnostics.some(({ code }) => code === "state_conflict"));
+    await rm(path.join(target, ".factory-template-creator/extra"));
+    await writeFile(path.join(target, ".factory/creator/extra"), "unknown\n");
+    assert.ok(json(await run(["plan", ...args])).diagnostics.some(({ code }) => code === "unknown_file_conflict"));
+    await rm(path.join(target, ".factory/creator/extra"));
+    await rm(legacy);
+    await symlink(path.join(parent, "missing"), legacy);
+    assert.ok(json(await run(["apply", ...args])).diagnostics.some(({ code }) => code === "state_invalid"));
+    assert.equal((await lstat(legacy)).isSymbolicLink(), true);
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
 test("doctor reports owned drift and payload identity mismatch", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-drift-"));
   const target = path.join(parent, "project");
@@ -935,10 +1025,10 @@ test("doctor reports owned drift and payload identity mismatch", async () => {
   assert.notEqual(drift.code, 0);
   assert.ok(json(drift).diagnostics.some((item) => item.code === "owned_file_drift"));
 
-  const statePath = path.join(target, ".factory-template-creator", "state.json");
+  const statePath = path.join(target, ".factory", "creator", "state.json");
   const state = JSON.parse(await readFile(statePath, "utf8"));
-  state.payload_digest = "sha256:changed";
-  await writeFile(statePath, JSON.stringify(state));
+  state.payload_digest = `sha256:${"a".repeat(64)}`;
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
   const mismatch = await run(["doctor", "--target", target, "--config", config, "--non-interactive"]);
   assert.notEqual(mismatch.code, 0);
   assert.ok(json(mismatch).diagnostics.some((item) => item.code === "payload_mismatch"));
