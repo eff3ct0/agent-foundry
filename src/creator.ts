@@ -648,6 +648,9 @@ const resolveConfig = async (
   }
   if (Object.prototype.hasOwnProperty.call(input, "SECRETS_PROVIDER") && input.SECRETS_PROVIDER !== organization.SECRETS_PROVIDER
       && !Object.prototype.hasOwnProperty.call(input, "SECRETS_PATH")) delete merged.SECRETS_PATH;
+  if (Object.hasOwn(input, "DOCS_DESTINATION") && input.DOCS_DESTINATION !== organization.DOCS_DESTINATION) {
+    for (const key of documentationFields) if (!Object.hasOwn(input, key)) delete merged[key];
+  }
   const byKey = new Map(manifest.placeholders.map((placeholder) => [placeholder.key, placeholder]));
   const values: Record<string, string> = {};
   const resolving = new Set<string>();
@@ -682,6 +685,7 @@ const resolveConfig = async (
   if (values.FACTORY_REQUIRED === "true" && !values.FACTORY_SPEC) {
     throw new CreatorError("incomplete_configuration", "FACTORY_SPEC is required when FACTORY_REQUIRED is true");
   }
+  validateDocumentationConfig(values, input);
   const trackerDisplay: Record<string, string> = { jira: "Jira", "github-issues": "GitHub Issues", "github-projects": "GitHub Projects", linear: "Linear", custom: "(custom)" };
   if (!values.TRACKER && values.TASK_TRACKER) values.TRACKER = trackerDisplay[values.TASK_TRACKER] ?? values.TASK_TRACKER;
   let factoryCiRef: string | undefined;
@@ -693,6 +697,57 @@ const resolveConfig = async (
   const factoryIdentity = factory ? { spec: values.FACTORY_SPEC, sha: factorySha!, workflows: workflowDigests } : undefined;
   const ordered = Object.fromEntries(Object.keys(values).sort().map((key) => [key, values[key]]));
   return { values, digest: `sha256:${sha256(canonicalJson(factoryIdentity ? { values: ordered, factory: factoryIdentity } : ordered))}`, factoryCiRef, factoryIdentity };
+};
+
+const documentationFamilies = ["ARCHITECTURE", "CONSTRAINTS", "BUSINESS", "TECHNICAL"] as const;
+const documentationFields = ["DOCS_DESTINATION_ID", "DOCS_GIT_SOURCE", ...documentationFamilies.map((family) => `DOCS_${family}_SOURCE`),
+  "DOCS_INTEGRATION", "DOCS_ACCESS_MECHANISM", "DOCS_READ_CONTRACT", "DOCS_WRITE_CONTRACT", "DOCS_READBACK_CONTRACT"];
+
+const documentationUrl = (key: string, value: string): URL => {
+  if (!value || /[\s|<>`]/u.test(value)) throw new CreatorError("documentation_invalid", `${key} requires an exact HTTPS URL without whitespace or markup`);
+  let url: URL;
+  try { url = new URL(value); } catch { throw new CreatorError("documentation_invalid", `${key} requires an exact HTTPS URL`); }
+  if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash || url.href !== value) {
+    throw new CreatorError("documentation_invalid", `${key} requires an exact HTTPS URL without credentials, query, or fragment`);
+  }
+  return url;
+};
+
+const validateDocumentationConfig = (values: Record<string, string>, input: Record<string, unknown>): void => {
+  const profile = values.DOCS_DESTINATION;
+  const fields = profile === "local" ? [] : profile === "github-pages" ? ["DOCS_DESTINATION_ID", "DOCS_GIT_SOURCE"]
+    : profile === "website-readonly" ? ["DOCS_DESTINATION_ID", ...documentationFamilies.map((family) => `DOCS_${family}_SOURCE`)]
+    : ["DOCS_DESTINATION_ID", ...documentationFamilies.map((family) => `DOCS_${family}_SOURCE`), "DOCS_INTEGRATION", "DOCS_ACCESS_MECHANISM",
+      "DOCS_READ_CONTRACT", "DOCS_WRITE_CONTRACT", "DOCS_READBACK_CONTRACT"];
+  if (profile !== "local" && input.DOCS_DESTINATION !== profile) {
+    throw new CreatorError("documentation_invalid", `project answers must explicitly select DOCS_DESTINATION=${profile}; a factory default cannot authorize a project destination`);
+  }
+  for (const key of documentationFields) {
+    if (!fields.includes(key) && values[key]) throw new CreatorError("documentation_invalid", `${key} is not applicable to DOCS_DESTINATION=${profile}; clear stale destination fields`);
+    if (fields.includes(key) && (!Object.hasOwn(input, key) || !values[key])) {
+      throw new CreatorError("documentation_invalid", `${key} requires an explicit project answer for DOCS_DESTINATION=${profile}; factory defaults are only suggestions`);
+    }
+  }
+  if (profile === "local") return;
+  const destination = documentationUrl("DOCS_DESTINATION_ID", values.DOCS_DESTINATION_ID);
+  if (profile === "github-pages") {
+    documentationUrl("DOCS_GIT_SOURCE", values.DOCS_GIT_SOURCE);
+    return;
+  }
+  for (const family of documentationFamilies) {
+    const key = `DOCS_${family}_SOURCE`;
+    const source = documentationUrl(key, values[key]);
+    const base = destination.pathname.endsWith("/") ? destination.pathname : `${destination.pathname}/`;
+    if (source.origin !== destination.origin || (source.pathname !== destination.pathname && !source.pathname.startsWith(base))) {
+      throw new CreatorError("documentation_invalid", `${key} must be inside DOCS_DESTINATION_ID; correct the canonical target identity`);
+    }
+  }
+  if (profile === "external-contract") {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,79}$/u.test(values.DOCS_INTEGRATION)) {
+      throw new CreatorError("documentation_invalid", "DOCS_INTEGRATION requires a named supported integration, not a secret or markup");
+    }
+    for (const key of ["DOCS_READ_CONTRACT", "DOCS_WRITE_CONTRACT", "DOCS_READBACK_CONTRACT"]) documentationUrl(key, values[key]);
+  }
 };
 
 const safeMode = (mode: string): number => {
@@ -892,6 +947,62 @@ map does not change task-provider confirmation/readback or outward-action gates.
 The bound task provider may support delegated approval only through its fail-closed protocol: a current direct human instruction must name the exact issue and add status:approved; target-host evidence must bind that principal to maintainer/authorized-approver authority; the authenticated actor must have MAINTAIN or ADMIN; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation. Without that evidence, the human applies the label directly. This contract change does not approve existing work.
 `;
 
+const documentationBinding = (values: Record<string, string>): string => {
+  const profile = values.DOCS_DESTINATION;
+  const start = bindingHeader.indexOf("## Documentation authority");
+  const end = bindingHeader.indexOf("## Protected `status:approved` gate");
+  const prefix = bindingHeader.slice(0, start);
+  const suffix = bindingHeader.slice(end);
+  const common = `
+Local project rules override the pinned organization baseline. A factory default is only a proposal: it cannot authorize access, document writes, publication, or migration. Never discover ambient credentials or put credential values in this binding. Before any remote operation, obtain explicit user authorization for its exact destination, action, and credential/session, verify supported access and readback, then record the resulting revision or publication evidence. Selection and creator plan/apply/verify perform no remote operation. If the canonical source is inaccessible or divergent from a derived copy, stop current-content claims and ask the owner to restore access or reconcile the copy; do not silently fall back. Migrate authority only after the new source and access are verified, and label old copies "Derived - not authoritative" with source and last-confirmed revision. This map does not change task-provider confirmation/readback or outward-action gates.
+`;
+  if (profile === "local") {
+    return bindingHeader.replace("## Protected `status:approved` gate", `## Documentation destination capabilities
+
+- Profile: local; destination identity: this repository's Git-tracked documentation.
+- Read: local Git content. Write: local Git content under ordinary review. Publish: not configured.
+- Families: architecture, constraints, business, and technical use the canonical local-default entrypoints above. No external credentials, migration, or publication are needed.
+${common}
+## Protected \`status:approved\` gate`);
+  }
+  const localMap = bindingHeader.slice(bindingHeader.indexOf("| Family |"), bindingHeader.indexOf("For mixed or external documentation"));
+  if (profile === "github-pages") {
+    return `${prefix}## Documentation authority
+
+The canonical source for every family remains local Git content. GitHub Pages is a publication target, not a directly writable documentation store.
+
+${localMap.trimEnd()}
+
+## Documentation destination capabilities
+
+- Profile: github-pages; publication destination: ${values.DOCS_DESTINATION_ID}.
+- Git source for publication: ${values.DOCS_GIT_SOURCE}. Match its repository, branch, and path to the intended local source before publication.
+- Read: local Git content. Write: local Git content under ordinary review; direct Pages document write: unsupported. Publish: only through a separately authorized Git-to-Pages workflow, not by selecting this profile.
+- Publication evidence: verify the target URL, deployment status, and published source commit/revision against the Git source; absent or stale evidence is not proof of a published change.
+${common}
+${suffix}`;
+  }
+  const rows = documentationFamilies.map((family) => `| ${family.charAt(0)}${family.slice(1).toLowerCase()} | ${values[`DOCS_${family}_SOURCE`]} |`).join("\n");
+  const writable = profile === "external-contract";
+  return `${prefix}## Documentation authority
+
+The following exact sources are canonical for their families. Retain this local map and AGENT.md as bootstrap pointers, not competing copies. Read the specified source through the supported integration; an unavailable source is not replaced by a local export.
+
+| Family | Canonical source |
+| --- | --- |
+${rows}
+
+## Documentation destination capabilities
+
+- Profile: ${profile}; destination identity: ${values.DOCS_DESTINATION_ID}.
+- Families served: architecture, constraints, business, technical.
+- Read: ${writable ? "contract-declared; verify the named integration and readback before relying on current content" : "public HTTPS, subject to actual access and current-content verification"}. Write: ${writable ? "contract-declared, only through the verified integration and an authorized operation with matching readback" : "unsupported"}. Publish: unsupported; no publication is inferred from writing.
+${writable ? `- Integration: ${values.DOCS_INTEGRATION}; access mechanism: ${values.DOCS_ACCESS_MECHANISM} (operator supplied, never discovered or stored here).
+- Supported-operation specifications: read ${values.DOCS_READ_CONTRACT}; write ${values.DOCS_WRITE_CONTRACT}; readback/revision ${values.DOCS_READBACK_CONTRACT}. These are declarations, not an installed adapter or live proof. If any operation, access, exact identity, or readback is unavailable, stop and ask the owner for a supported path; do not write or claim success.` : "- This website is read-only. An arbitrary or unsupported website cannot be selected as a writable provider; configure a supported external contract separately."}
+${common}
+${suffix}`;
+};
+
 const providerFragment = (sources: Map<string, SourceFile>, capability: string, name: string): SourceFile => {
   const selected = `providers/${capability}/${name}.md`;
   const fallback = `providers/${capability}/custom.md`;
@@ -918,7 +1029,7 @@ const composeBindings = (
   const secrets = config.values.SECRETS_PROVIDER || "none";
   const codeIntel = config.values.CODE_INTELLIGENCE || "none";
   if (!task) throw new CreatorError("configuration_invalid", "TASK_TRACKER is required for binding composition");
-  const parts = [renderMarkdown(bindingHeader, "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd(),
+  const parts = [renderMarkdown(documentationBinding(config.values), "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd(),
     `## Bound task identity
 
 - Task provider (TASK_TRACKER): ${task}

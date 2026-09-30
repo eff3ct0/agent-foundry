@@ -1038,6 +1038,96 @@ test("Git-only documentation authority is self-contained in a fresh project", as
   assert.match(sourceBindings, /source-template guide/u);
 });
 
+test("documentation profiles compose exact authority and independent capabilities without remote transfer", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-doc-profiles-"));
+  const base = "https://docs.example.invalid/project";
+  const familySources = Object.fromEntries(["ARCHITECTURE", "CONSTRAINTS", "BUSINESS", "TECHNICAL"]
+    .map((family) => [`DOCS_${family}_SOURCE`, `${base}/${family.toLowerCase()}`]));
+  const profiles = [
+    ["local", {}, [/Profile: local/u, /Write: local Git content/u, /Publish: not configured/u]],
+    ["github-pages", { DOCS_DESTINATION_ID: "https://example.invalid/project/", DOCS_GIT_SOURCE: "https://github.com/example/project/tree/main/docs" },
+      [/canonical source for every family remains local Git/u, /direct Pages document write: unsupported/u, /deployment status, and published source commit/u]],
+    ["external-contract", { DOCS_DESTINATION_ID: base, ...familySources, DOCS_INTEGRATION: "Approved docs client v1",
+      DOCS_ACCESS_MECHANISM: "operator-supplied-token", DOCS_READ_CONTRACT: `${base}/integration/read`,
+      DOCS_WRITE_CONTRACT: `${base}/integration/write`, DOCS_READBACK_CONTRACT: `${base}/integration/readback` },
+    [/contract-declared, only through the verified integration/u, /readback\/revision/u, /These are declarations, not an installed adapter/u]],
+    ["website-readonly", { DOCS_DESTINATION_ID: base, ...familySources },
+      [/Read: public HTTPS/u, /Write: unsupported/u, /Publish: unsupported/u]],
+  ];
+  for (const [profile, answers, patterns] of profiles) {
+    const directory = path.join(parent, profile);
+    await mkdir(directory);
+    const target = path.join(directory, "project");
+    const config = await configFile(directory, { DOCS_DESTINATION: profile, ...answers });
+    const plan = await run(["plan", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(plan.code, 0, `${profile}: ${plan.stderr}`);
+    await assert.rejects(stat(target));
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, `${profile}: ${applied.stderr}`);
+    const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    assert.match(agent, /family map in `docs\/bindings\.md`/u);
+    for (const pattern of patterns) assert.match(bindings, pattern, profile);
+    for (const family of ["Architecture", "Constraints", "Business", "Technical"]) assert.match(bindings, new RegExp(`\\| ${family} \\|`, "u"));
+    assert.match(bindings, /explicit user authorization for its exact destination, action, and credential\/session/u);
+    assert.match(bindings, /Selection and creator plan\/apply\/verify perform no remote operation/u);
+    assert.doesNotMatch(bindings, /password=|Authorization: Bearer/u);
+    const verified = await run(["verify", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(verified.code, 0, `${profile}: ${verified.stderr}`);
+    const rerun = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(json(rerun).status, "noop", profile);
+    if (profile === "external-contract" || profile === "website-readonly") {
+      for (const url of Object.values(familySources)) assert.ok(bindings.includes(url));
+    }
+  }
+});
+
+test("documentation setup rejects unsupported, ambiguous, or factory-inherited remote authority before writing", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-doc-reject-"));
+  const base = "https://docs.example.invalid/project";
+  const sources = Object.fromEntries(["ARCHITECTURE", "CONSTRAINTS", "BUSINESS", "TECHNICAL"]
+    .map((family) => [`DOCS_${family}_SOURCE`, `${base}/${family.toLowerCase()}`]));
+  const external = { DOCS_DESTINATION: "external-contract", DOCS_DESTINATION_ID: base, ...sources,
+    DOCS_INTEGRATION: "Approved docs client v1", DOCS_ACCESS_MECHANISM: "operator-supplied-oauth",
+    DOCS_READ_CONTRACT: `${base}/read`, DOCS_WRITE_CONTRACT: `${base}/write`, DOCS_READBACK_CONTRACT: `${base}/readback` };
+  const invalid = [
+    [{ DOCS_DESTINATION: "website" }, /DOCS_DESTINATION must be one of/u],
+    [{ DOCS_DESTINATION: "website-readonly", DOCS_DESTINATION_ID: base, ...sources, DOCS_WRITE_CONTRACT: `${base}/write` }, /DOCS_WRITE_CONTRACT is not applicable/u],
+    [{ ...external, DOCS_DESTINATION_ID: "" }, /DOCS_DESTINATION_ID requires an explicit project answer/u],
+    [{ ...external, DOCS_ACCESS_MECHANISM: "" }, /DOCS_ACCESS_MECHANISM requires an explicit project answer/u],
+    [{ ...external, DOCS_READ_CONTRACT: "" }, /DOCS_READ_CONTRACT requires an explicit project answer/u],
+    [{ ...external, DOCS_WRITE_CONTRACT: "" }, /DOCS_WRITE_CONTRACT requires an explicit project answer/u],
+    [{ ...external, DOCS_READBACK_CONTRACT: "" }, /DOCS_READBACK_CONTRACT requires an explicit project answer/u],
+    [{ ...external, DOCS_TECHNICAL_SOURCE: "" }, /DOCS_TECHNICAL_SOURCE requires an explicit project answer/u],
+    [{ ...external, DOCS_BUSINESS_SOURCE: "https://other.example.invalid/business" }, /must be inside DOCS_DESTINATION_ID/u],
+    [{ ...external, DOCS_ARCHITECTURE_SOURCE: `${base}/a\n| Forged |` }, /exact HTTPS URL/u],
+    [{ DOCS_DESTINATION: "github-pages", DOCS_DESTINATION_ID: "https://example.invalid/project/" }, /DOCS_GIT_SOURCE requires an explicit project answer/u],
+    [{ DOCS_DESTINATION: "github-pages", DOCS_DESTINATION_ID: "https://user:secret@example.invalid/", DOCS_GIT_SOURCE: "https://github.com/example/project/tree/main/docs" }, /without credentials/u],
+  ];
+  for (const [index, [answers, message]] of invalid.entries()) {
+    const directory = path.join(parent, `case-${index}`);
+    await mkdir(directory);
+    const target = path.join(directory, "project");
+    const config = await configFile(directory, answers);
+    const result = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stdout, message);
+    await assert.rejects(stat(target));
+  }
+  const { factory, sha } = await factoryFixture(parent, external);
+  const target = path.join(parent, "factory-project");
+  const config = await configFile(parent, { FACTORY_SPEC: "example/factory@v1" });
+  const args = ["--target", target, "--config", config, "--factory-root", factory, "--factory-sha", sha, "--non-interactive"];
+  const suggested = await run(["apply", ...args]);
+  assert.notEqual(suggested.code, 0);
+  assert.match(suggested.stdout, /project answers must explicitly select DOCS_DESTINATION/u);
+  await assert.rejects(stat(target));
+  const local = await configFile(parent, { FACTORY_SPEC: "example/factory@v1", DOCS_DESTINATION: "local" });
+  const applied = await run(["apply", ...args.map((part) => part === config ? local : part)]);
+  assert.equal(applied.code, 0, applied.stderr);
+  assert.match(await readFile(path.join(target, "docs", "bindings.md"), "utf8"), /Profile: local/u);
+});
+
 test("all task selections generate exclusive, readable provider-native bindings", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-task-bindings-"));
   const selections = [
