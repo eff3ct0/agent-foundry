@@ -57,6 +57,12 @@ integration answers must be explicitly supplied by the project. Never put
 credential values in answers or generated docs or discover ambient sessions.
 Remote reads, writes, and publication require separate authorization for the
 exact operation, destination, and credential/session; setup does none of them.
+For an accepted work unit, assess affected families (or record why none changed)
+and use the evidence procedure in [`engineering-handbook.md`](engineering-handbook.md#documentation-evidence-for-affected-families).
+An external contract is not proof of conditional writes, provider acknowledgment,
+or fresh matching readback; a Pages source commit is not proof of publication.
+Unresolved propagation stays pending/blocked in the bound task-provider handoff,
+without blocking unrelated safe local work or creating a new task lifecycle.
 
 ## Protected `status:approved` gate
 The detailed fail-closed approval conditions are in [`AGENT.md`](../AGENT.md).

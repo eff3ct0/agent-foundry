@@ -28,7 +28,8 @@ Fill `<UPPER_SNAKE>` during bootstrap.
 ## 5. Verification
 - `<TEST_CMD>`, `<BUILD_CMD>`, and `<TYPECHECK_CMD>` pass.
 - Perform a **real e2e check** against `<ENV>` when warranted.
-- Implemented != verified: without a real signal, work is not done.
+- **Implemented != verified**: without a real signal, work is not done.
+- Assess affected documentation families and attach destination-specific revision or pending evidence to the same work unit; follow the [documentation evidence procedure](engineering-handbook.md#documentation-evidence-for-affected-families). An unaffected unit records its reason and needs no document write. Source updates alone do not prove external propagation or Pages publication.
 
 ## 6. Review
 - **Self-review** the complete diff before requesting review.

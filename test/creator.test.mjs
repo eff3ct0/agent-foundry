@@ -1087,8 +1087,25 @@ test("documentation profiles compose exact authority and independent capabilitie
     assert.equal(applied.code, 0, `${profile}: ${applied.stderr}`);
     const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
     const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    const handbook = await readFile(path.join(target, ".factory", "docs", "engineering-handbook.md"), "utf8");
     assert.match(agent, /family map in `docs\/bindings\.md`/u);
     for (const pattern of patterns) assert.match(bindings, pattern, profile);
+    assert.match(bindings, /assess which canonical families changed or record a concise unaffected reason/u);
+    assert.match(bindings, /declared external contract does not prove conditional-write support or a successful sync/u);
+    assert.match(agent, /pending propagation or publication is not a confirmed revision/u);
+    assert.match(bindings, /\[Documentation evidence procedure\]\(\.\.\/\.factory\/docs\/engineering-handbook\.md#documentation-evidence-for-affected-families\)/u);
+    assert.match(agent, /\[destination-specific evidence procedure\]\(\.factory\/docs\/engineering-handbook\.md#documentation-evidence-for-affected-families\)/u);
+    for (const scenario of [
+      /No affected family \| Record why; no write and no new gate/u,
+      /Local changed Git doc, committed SHA \| Record path\/SHA/u,
+      /External prior revision stale, destination ambiguous, or conditional write unsupported \| `BLOCKED`/u,
+      /External acknowledged write but readback unavailable or mismatched \| `PENDING`/u,
+      /Offline\/unauthorized external update \| `PENDING`\/`BLOCKED`/u,
+      /Pages Git source updated but deployment delayed or publication evidence absent \| Source revision recorded; publication `PENDING`/u,
+      /Interrupted external attempt \| `PENDING`/u,
+    ]) assert.match(handbook, scenario, profile);
+    assert.match(handbook, /provider acknowledgment for that exact document and operation; then a fresh independent read/u);
+    assert.match(handbook, /do not blindly retry/u);
     for (const family of ["Architecture", "Constraints", "Business", "Technical"]) assert.match(bindings, new RegExp(`\\| ${family} \\|`, "u"));
     assert.match(bindings, /explicit user authorization for its exact destination, action, and credential\/session/u);
     assert.match(bindings, /Selection and creator plan\/apply\/verify perform no remote operation/u);
