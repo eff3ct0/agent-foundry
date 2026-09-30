@@ -856,6 +856,38 @@ The shape of each instance is defined by:
 - [CI recipe contract](../ci/_contract.md)
 The harness provides access and the binding provides the rules.
 
+## Documentation authority
+
+Read this map after AGENT.md and before relying on a documentation copy. It is
+the local Git-only default, not evidence that an external service is configured.
+Each row names the canonical local entrypoint for that family; optional detailed
+documents are not required merely because a family is listed.
+
+| Family | Canonical local-default entrypoint |
+| --- | --- |
+| Architecture | [AGENT.md](../AGENT.md) project coordinates and [engineering handbook](engineering-handbook.md) architecture standards; project-specific decisions only where recorded. |
+| Constraints | [AGENT.md](../AGENT.md) operating/approval rules and [workflow](workflow.md); [engineering handbook](engineering-handbook.md) security and migration standards. |
+| Business | [AGENT.md](../AGENT.md) project coordinates; add a repository link to actual product requirements when present. No detailed business source is assumed. |
+| Technical | [AGENT.md](../AGENT.md) stack/commands and [engineering handbook](engineering-handbook.md) code, testing, and CI standards. |
+
+For mixed or external documentation, the project owner must replace each
+affected row with the exact canonical URL or stable identifier and the access
+and recovery path. Keep this local map and AGENT.md as the minimal cold-start
+bootstrap. Label any retained export or summary "Derived - not authoritative",
+including source and last-confirmed revision. A derived copy never wins over
+its mapped canonical source. An external destination is not selected by this
+creator; do not infer one from a task, secret, or code-intelligence provider.
+
+Local project rules override the pinned organization baseline where they
+overlap. For a mapped external family, use that source rather than a divergent
+derived copy. If access fails or a link breaks, report the exact unavailable
+source, stop claims that depend on its current content, and ask the owner to
+restore access or repair the link; do not invent current context or silently
+fall back to a copy. If copies differ, reconcile them against the canonical
+source. When migrating, verify the replacement and access first, then update
+the row and relabel old copies; never leave two competing authorities. This
+map does not change task-provider confirmation/readback or outward-action gates.
+
 ## Protected \`status:approved\` gate
 The bound task provider may support delegated approval only through its fail-closed protocol: a current direct human instruction must name the exact issue and add status:approved; target-host evidence must bind that principal to maintainer/authorized-approver authority; the authenticated actor must have MAINTAIN or ADMIN; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation. Without that evidence, the human applies the label directly. This contract change does not approve existing work.
 `;

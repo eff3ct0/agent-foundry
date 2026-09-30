@@ -28,7 +28,7 @@ It is not tied to any language or stack.
 - [`docs/workflow.md`](docs/workflow.md) - **end-to-end workflow**: intake -> spec -> tickets -> branches -> session/loop execution -> verification -> review -> Definition of Done -> handoff.
 - [`docs/engineering-handbook.md`](docs/engineering-handbook.md) - **engineering standards**: code, testing, security, CI/CD, architecture, documentation, observability.
 - [`docs/bootstrap.md`](docs/bootstrap.md) - **how to initialize** a new project from this template (placeholders, tooling, first commit, checklist).
-- [`docs/bindings.md`](docs/bindings.md) - **provider contract**: the task tracker and secrets manager bound to the project (composed from `providers/` during initialization). Mandatory and exclusive use.
+- [`docs/bindings.md`](docs/bindings.md) - **provider and documentation authority**: bound task/secrets providers and the canonical source for each documentation family. Read its documentation map before relying on a copy or external link.
 - [`docs/org-factory.md`](docs/org-factory.md) - **organization layer**: how projects reference the org spec (the `.github` repo and `FACTORY_SPEC` pin).
 - [`docs/factory-layout.md`](docs/factory-layout.md) - **layout contract**: root allowlist and `.factory/` support boundary.
 - [`docs/agent-init.md`](docs/agent-init.md) - **agent mode**: procedure for initializing a project from the template (stack detection, bindings, verification).
@@ -107,8 +107,10 @@ Without all of that evidence, stop and ask the human to apply the label directly
 Project capabilities are **bound to concrete providers** in [`docs/bindings.md`](docs/bindings.md): the task tracker (`<TASK_TRACKER>`, `<TRACKER>` / `<TRACKER_KEY>`) and secrets manager (`<SECRETS_PROVIDER>`). Their use is **MANDATORY and EXCLUSIVE** for every agent and every harness task/TODO mechanism; alternatives are not used.
 The **harness** provides the access mechanism (MCP / CLI / API); the **spec** provides the provider and its rules. This contract takes precedence over agent or harness preferences.
 
+Documentation authority is separate: use the family map in `docs/bindings.md` for architecture, constraints, business, and technical context. Its default is local Git content; an external destination is authoritative only when its family row names a concrete, accessible source. A derived local copy does not silently override that source. Documentation links never replace bound task-provider readback or authorize outward actions.
+
 ## Reading order for a cold agent
-1. This `AGENT.md`. 2. [`docs/bindings.md`](docs/bindings.md) (mandatory providers). 3. `docs/workflow.md`.
+1. This `AGENT.md`. 2. [`docs/bindings.md`](docs/bindings.md) (mandatory providers and documentation authority map). 3. `docs/workflow.md`.
 4. The active ticket in `<TRACKER>`. 5. `docs/engineering-handbook.md` for the concrete change standard.
 6. `templates/agent-runbook.md` when operating in loop mode.
 7. [`docs/agent-init.md`](docs/agent-init.md) when **initializing** a project from the template (init mode).
