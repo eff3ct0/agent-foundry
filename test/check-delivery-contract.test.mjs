@@ -62,6 +62,26 @@ test("source entry rejects headings-only safety, removed rules, and broken requi
   });
 });
 
+test("source approval gate rejects explicit inversions even beside the valid rule", async () => {
+  await fixture(async (directory) => {
+    for (const relative of ["AGENT.md", "MAINTAINERS.md", "docs/bindings.md", "docs/agent-init.md", "docs/bootstrap.md", "docs/engineering-handbook.md", "docs/workflow.md", "templates/agent-runbook.md", "templates/definition-of-done.md", "templates/handoff.md", "hooks/README.md", "docs/org-factory.md"]) {
+      await mkdir(path.dirname(path.join(directory, relative)), { recursive: true });
+      await copyFile(path.join(root, relative), path.join(directory, relative));
+    }
+    const target = path.join(directory, "AGENT.md");
+    const original = await readFile(target, "utf8");
+    for (const [inversion, requirement] of [
+      ["TRIAGE is allowed to approve.", "TRIAGE must not approve"],
+      ["Target-host readback is optional.", "target-host readback must not be optional"],
+      ["TRIAGE may add status:approved.", "TRIAGE must not approve"],
+    ]) {
+      await writeFile(target, original.replace("Without all of that evidence, stop", `${inversion}\n\nWithout all of that evidence, stop`));
+      const errors = await check([target], directory);
+      assert.ok(errors.some((error) => error.includes(requirement)), `${inversion}: ${errors.join("; ")}`);
+    }
+  });
+});
+
 test("the required task contracts make provider readback and local projections explicit", async () => {
   for (const relative of ["AGENT.md", "templates/handoff.md", "docs/agent-init.md", "providers/task/_contract.md"]) {
     const text = await readFile(path.join(root, relative), "utf8");

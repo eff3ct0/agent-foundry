@@ -1108,6 +1108,10 @@ test("fresh generated context routes use retained paths and reject stale or miss
     const agentPath = path.join(target, "AGENT.md");
     assert.deepEqual(await checkDeliveryContract(undefined, target), []);
     const bindingPath = path.join(target, "docs/bindings.md");
+    await writeFile(bindingPath, files.get("docs/bindings.md").replace(/Project\/board \(TRACKER_KEY\): [^\n]+/u, "Project/board (TRACKER_KEY): not configured; resolve before durable task operations"));
+    assert.deepEqual(await checkDeliveryContract([bindingPath], target), []);
+    await writeFile(bindingPath, files.get("docs/bindings.md").replace("> **Provider:** `github-issues`", "> **Provider:** `jira`"));
+    assert.ok((await checkDeliveryContract([bindingPath], target)).some((error) => error.includes("selected task provider fragment must match TASK_TRACKER")));
     await writeFile(bindingPath, files.get("docs/bindings.md").replace("Task provider (TASK_TRACKER): github-issues", "Task provider (TASK_TRACKER): <UNKNOWN>"));
     assert.ok((await checkDeliveryContract([bindingPath], target)).some((error) => error.includes("## Bound task identity missing critical rule: selected task provider and tracker identity")));
     await writeFile(bindingPath, files.get("docs/bindings.md").replace("Confirm each native operation and read back the intended task identity, state, and handoff", "Trust the local task file"));

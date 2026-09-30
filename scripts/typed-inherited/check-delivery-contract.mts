@@ -72,6 +72,10 @@ const criticalRules = [
   ["Durable phase state and cold resumption", "mismatched readback stops the transition", /mismatched readback[\s\S]*?stop without claiming a transition/iu],
   ["Bindings (provider contract)", "exclusive bound task and secrets providers", /task tracker[\s\S]*?secrets manager[\s\S]*?MANDATORY and EXCLUSIVE/iu],
 ] as const;
+const approvalInversions = [
+  ["TRIAGE must not approve", /\bTRIAGE\s+(?:is\s+(?:also\s+)?(?:allowed|permitted|authorized)\s+to|may|can)\s+(?:approve|add\s+`?status:approved)/iu],
+  ["target-host readback must not be optional", /\breadback\s+(?:(?:is|can|may)\s+)?(?:optional|not required|be skipped)\b/iu],
+] as const;
 
 const routeTopics = [
   ["Project initialization", "agent-init.md"],
@@ -111,6 +115,10 @@ const checkAgentRoutes = (text: string, projectRoot: string, errors: string[]): 
 const checkAgentRules = (text: string, projectRoot: string, errors: string[]): void => {
   for (const [section, requirement, pattern] of criticalRules) {
     if (!pattern.test(sectionBody(text, section))) errors.push(`AGENT.md ## ${section} missing critical rule: ${requirement}`);
+  }
+  const approval = sectionBody(text, "Protected `status:approved` gate");
+  for (const [requirement, pattern] of approvalInversions) {
+    if (pattern.test(approval)) errors.push(`AGENT.md ## Protected \`status:approved\` gate contradicts critical rule: ${requirement}`);
   }
   checkAgentRoutes(text, projectRoot, errors);
 };
@@ -177,6 +185,15 @@ const checkDocument = (target: string, text: string, projectRoot: string, errors
       ["native confirmation and matching task readback", /Confirm each native operation and read back the intended task identity, state, and handoff[\s\S]*?Missing identity or readback blocks/iu],
     ] as const) {
       if (!pattern.test(identity)) errors.push(`${display(target, projectRoot)} ## Bound task identity missing critical rule: ${requirement}`);
+    }
+    const selectedProvider = field(identity, "Task provider (TASK_TRACKER)").replaceAll("`", "");
+    const afterIdentity = text.split(/^## Bound task identity\s*$/mu)[1] ?? "";
+    const taskHeading = afterIdentity.match(/^## (.+?)\s*$/mu)?.[1];
+    const taskFragment = taskHeading ? sectionBody(text, taskHeading) : "";
+    if (selectedProvider && !selectedProvider.startsWith("<") && selectedProvider.toLowerCase() !== "not configured"
+      && (field(taskFragment, "Capability").replaceAll("`", "").toLowerCase() !== "task"
+        || field(taskFragment, "Provider").replaceAll("`", "").toLowerCase() !== selectedProvider.toLowerCase())) {
+      errors.push(`${display(target, projectRoot)} ## Bound task identity selected task provider fragment must match TASK_TRACKER`);
     }
   }
   const linked = new Set([...text.matchAll(localLink)].map((match) => path.resolve(path.dirname(target), match[1].split("#", 1)[0])));

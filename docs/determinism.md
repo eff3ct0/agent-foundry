@@ -22,10 +22,15 @@ the same content and reports `noop` for unchanged files.
 ## Static route validation
 
 The delivery-contract fixture starts at the real `AGENT.md` entry in source and a
-fresh initialized project. It checks bounded safety clauses in their designated
-sections and follows required bug-fix, provider-setup, and release routes to
-local files. Optional topics are not required. A missing clause or required
-destination produces a diagnostic; a heading or link label alone is not proof.
+fresh initialized project. It checks bounded safety clauses and explicit
+approval/readback inversions in the designated approval section, compares the
+generated task provider fragment with its bound `TASK_TRACKER`, and follows
+required bug-fix, provider-setup, and release routes to local files. Optional
+topics and an unconfigured `TRACKER_KEY` are allowed. A missing or contradictory
+clause, mismatched provider, or missing required destination produces a
+diagnostic; a heading or link label alone is not proof. These checks recognize
+specific fixture wording, not arbitrary paraphrases or contradictory policy
+outside the checked section.
 This is **static navigation and text evidence**, not proof that a running agent
 read, understood, or obeyed the guidance. It does not verify live task-provider
 identity/readback, approval authority, remote access, or release behavior. The
