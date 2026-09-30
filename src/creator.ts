@@ -796,8 +796,32 @@ const renderMarkdown = (
   const mapped = destinations.get(sourceTarget);
   if (!mapped || removed.has(sourceTarget)) return label;
   const rebased = path.posix.relative(path.posix.dirname(destinationPath), mapped) || path.posix.basename(mapped);
-  return `[${label}](${rebased}${anchor === undefined ? "" : `#${anchor}`})`;
+  const plainLabel = label.startsWith("`") && label.endsWith("`") ? label.slice(1, -1) : label;
+  const displayed = plainLabel === sourceTarget || plainLabel === targetPath
+    ? label === plainLabel ? mapped : `\`${mapped}\`` : label;
+  return `[${displayed}](${rebased}${anchor === undefined ? "" : `#${anchor}`})`;
 });
+
+const renderGeneratedAgentRoutes = (text: string): string => {
+  const start = text.indexOf("| Trigger / mode | Required topic (S → G) | Optional when relevant (S → G) |");
+  const end = text.indexOf("\n\n", start);
+  if (start < 0 || end < 0) throw new CreatorError("composition_invalid", "AGENT.md context route table is missing");
+  const table = text.slice(start, end).split("\n")
+    .filter((line) => !line.startsWith("| Archetype maintenance (`SELF`)"))
+    .map((line) => {
+      let generated = line
+        .replaceAll(/`[^`]+` → (`[^`]+`|not generated[^;|]*)/gu, (_, destination: string) => destination.startsWith("`") ? destination : "source-only; not a generated-project action")
+        .replaceAll("(`SELF` or `WORK`)", "(`WORK`)");
+      if (line.startsWith("| Project initialization")) generated = generated.replace("source-only; not a generated-project action", "Installed creator CLI help when needed");
+      if (line.startsWith("| Provider setup")) generated = generated.replace(/source-only; not a generated-project action; source recipes[^|]*/u, "No source recipes are generated ");
+      if (line.startsWith("| Release or deployment")) generated = generated.replace("source-only; not a generated-project action; ", "");
+      return generated;
+    })
+    .join("\n")
+    .replace("Required topic (S → G)", "Required topic (generated path)")
+    .replace("Optional when relevant (S → G)", "Optional when relevant (generated path)");
+  return text.slice(0, start).replace("`S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. Do not apply the creator to this source repository.", "These routes use initialized-project paths. Before creator apply, use the source template's SETUP instructions; after apply, use the generated paths shown below.") + table + text.slice(end);
+};
 
 const renderTextFile = (
   source: SourceFile,
@@ -831,6 +855,7 @@ const renderTextFile = (
     }
   }
   if (destinationPath.endsWith(".md")) rendered = renderMarkdown(rendered, source.path, destinationPath, destinations, removed);
+  if (source.path === "AGENT.md" && destinationPath === "AGENT.md") rendered = renderGeneratedAgentRoutes(rendered);
   for (const key of Object.keys(config.values)) {
     if (rendered.includes(`<${key}>`)) throw new CreatorError("unresolved_placeholder", `generated file contains unresolved placeholder: ${key}`, { path: destinationPath });
   }

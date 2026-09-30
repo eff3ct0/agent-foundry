@@ -47,7 +47,24 @@ test("startup routing recognizes source, setup, work, moved, incomplete, and mal
     const setup = path.join(parent, "setup");
     await mkdir(setup);
     await writeFile(path.join(setup, "placeholders.json"), JSON.stringify({ placeholders: [] }));
+    assert.equal((await route(setup)).status, "incomplete");
+    assert.match((await route(setup)).message, /missing: docs\/agent-init\.md; restore the template-owned file/u);
+    await mkdir(path.join(setup, "docs"));
+    await writeFile(path.join(setup, "docs/agent-init.md"), "setup\n");
     assert.equal((await detectMode(setup, "git@github.com:acme/service.git")).mode, SETUP);
+    assert.equal((await route(setup)).status, "ready");
+    assert.match((await route(setup)).message, /installed CLI help and documentation/u);
+    assert.doesNotMatch((await route(setup)).message, /docs\/creator\.md/u);
+    await writeFile(path.join(setup, "docs/creator.md"), "source guide\n");
+    assert.match((await route(setup)).message, /docs\/creator\.md only when that source guide exists/u);
+
+    const relocatedSetup = path.join(parent, "relocated-setup");
+    await mkdir(path.join(relocatedSetup, ".factory/docs"), { recursive: true });
+    await writeFile(path.join(relocatedSetup, "placeholders.json"), JSON.stringify({ placeholders: [] }));
+    await writeFile(path.join(relocatedSetup, ".factory/docs/agent-init.md"), "setup\n");
+    assert.equal((await route(relocatedSetup)).status, "ready");
+    assert.match((await route(relocatedSetup)).message, /Follow \.factory\/docs\/agent-init\.md/u);
+    assert.doesNotMatch((await route(relocatedSetup)).message, /docs\/creator\.md/u);
 
     const incomplete = path.join(parent, "incomplete");
     await mkdir(path.join(incomplete, ".factory-template-creator"), { recursive: true });
@@ -93,6 +110,8 @@ test("startup JSON output is deterministic and errors stay bounded", async () =>
   const parent = await mkdtemp(path.join(os.tmpdir(), "factory-startup-output-"));
   try {
     await writeFile(path.join(parent, "placeholders.json"), JSON.stringify({ placeholders: [] }));
+    await mkdir(path.join(parent, "docs"));
+    await writeFile(path.join(parent, "docs/agent-init.md"), "setup\n");
     const first = await run(["--cwd", parent, "--json"]);
     const second = await run(["--cwd", parent, "--json"]);
     assert.equal(first.code, 0);
@@ -128,6 +147,8 @@ test("source mode uses a local marker instead of GitHub repository identity", as
   const parent = await mkdtemp(path.join(os.tmpdir(), "factory-startup-marker-"));
   try {
     await writeFile(path.join(parent, "placeholders.json"), JSON.stringify({ placeholders: [] }));
+    await mkdir(path.join(parent, "docs"));
+    await writeFile(path.join(parent, "docs/agent-init.md"), "setup\n");
     const result = await run(["--cwd", parent, "--json"]);
     assert.equal(JSON.parse(result.stdout).mode, SETUP);
     assert.match(JSON.parse(result.stdout).message, /exact-version creator package/);

@@ -32,7 +32,7 @@ const messages = {
   [SETUP]: [
     "SETUP mode - uninitialized instance (placeholders.json exists).",
     "  - Follow docs/agent-init.md; detect the stack.",
-    "  - Use the exact-version creator package documented in docs/creator.md.",
+    "  - Use the exact-version creator package; consult docs/creator.md only when that source guide exists.",
     "  - Review the plan, then apply and verify with the package CLI.",
     "  - No outward action without explicit approval.",
   ].join("\n"),
@@ -74,12 +74,16 @@ const layoutPath = async (root, relative) => {
   if (await exists(direct)) return relative;
   const factory = path.join(root, ".factory", relative);
   if (await exists(factory)) return `.factory/${relative}`;
+  if (relative !== "docs/bindings.md" && await exists(path.join(root, ".factory"))) return `.factory/${relative}`;
   return relative;
 };
 
 const setupMessage = async (root) => {
   let message = messages[SETUP];
   message = message.replaceAll("docs/agent-init.md", await layoutPath(root, "docs/agent-init.md"));
+  if (!(await exists(path.join(root, "docs/creator.md")))) {
+    message = message.replace("; consult docs/creator.md only when that source guide exists", " (see its installed CLI help and documentation)");
+  }
   return message;
 };
 
@@ -127,6 +131,10 @@ export const detectMode = async (root) => {
   if (placeholders) {
     try {
       await validatePlaceholders(resolved);
+      if (!(await exists(path.join(resolved, "docs/agent-init.md"))) && !(await exists(path.join(resolved, ".factory/docs/agent-init.md")))) {
+        const topic = await layoutPath(resolved, "docs/agent-init.md");
+        return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("context_missing", `required setup topic is missing: ${topic}; restore the template-owned file before continuing creator setup`, topic)] };
+      }
       return { mode: SETUP, status: "ready", diagnostics: [] };
     } catch (error) {
       return { mode: "ERROR", status: "error", diagnostics: [diagnostic("setup_malformed", error.message, "placeholders.json")] };
@@ -144,7 +152,8 @@ export const detectMode = async (root) => {
     if (present.every((value) => !value)) {
       return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("project_incomplete", "generated project contracts are not present")] };
     }
-    return { mode: "ERROR", status: "error", diagnostics: [diagnostic("project_malformed", "generated project is missing one or more required contracts")] };
+    const missing = files.filter((_, index) => !present[index]);
+    return { mode: "ERROR", status: "error", diagnostics: missing.map((relative) => diagnostic("context_missing", `required project context is missing: ${relative}; restore the creator-owned file and run foundry verify before continuing`, relative)) };
   } catch (error) {
     return { mode: "ERROR", status: "error", diagnostics: [diagnostic("state_malformed", error.message, ".factory-template-creator/state.json")] };
   }
@@ -153,7 +162,9 @@ export const detectMode = async (root) => {
 export const route = async (root) => {
   const resolved = path.resolve(root);
   const result = await detectMode(resolved);
-  const message = result.mode === SELF ? messages[SELF] : result.mode === SETUP ? await setupMessage(resolved) : result.mode === WORK ? await workMessage(resolved) : "Startup routing failed closed; inspect diagnostics and repair the workspace before continuing.";
+  const message = result.mode === SELF ? messages[SELF] : result.mode === SETUP && result.diagnostics[0]?.code === "context_missing"
+    ? `SETUP incomplete - ${result.diagnostics[0].message}`
+    : result.mode === SETUP ? await setupMessage(resolved) : result.mode === WORK ? await workMessage(resolved) : "Startup routing failed closed; inspect diagnostics and repair the workspace before continuing.";
   return {
     schema_version: STARTUP_SCHEMA_VERSION,
     root: resolved,

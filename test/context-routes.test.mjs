@@ -39,7 +39,7 @@ test("entry and shim distinguish mandatory discovery from optional task context"
   assert.match(shim, /node start\.mjs/u);
   assert.match(shim, /AGENT\.md.*docs\/bindings\.md/u);
   assert.match(agent, /A link only points to content; it does not load it/u);
-  assert.match(agent, /missing or inaccessible/u);
+  assert.match(agent, /required local content is missing/u);
   assert.match(agent, /50–200.*50–150/u);
   assert.match(bindings, /source-template guide/u);
   assert.match(bindings, /canonical source/u);

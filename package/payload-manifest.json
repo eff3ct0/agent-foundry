@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 12370,
-      "sha256": "270788e45e47e8358e1c5b8dd31f157d78dbfd20a6d832a9cd9f5b65a064e692"
+      "size": 12576,
+      "sha256": "14a7499d7f422ede053db1cd4eda97e43100c9cd34281d3e63adb9da7ed54d46"
     },
     {
       "path": "CLAUDE.md",
@@ -373,8 +373,8 @@
     {
       "path": "start.mjs",
       "mode": "100644",
-      "size": 10600,
-      "sha256": "55c0d0f2840d597272d4531ec7ff39c5e0fc8290f1a733fe6f23a5ba1a030d46"
+      "size": 11697,
+      "sha256": "a76329262622ae8fa51ce763cfac2c5905e84d4ba644dfdf1302f632f6b0f04c"
     },
     {
       "path": "templates/adr.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:69f603ebd72af9f9c7f115c5559c766a1a337492090c1883ddd5b106b9062cdd"
+  "payload_digest": "sha256:ccf84d2e41fab858b4e32fb9aa28758217dce27808d7cd7f6ed44cf9765d9b0a"
 }
