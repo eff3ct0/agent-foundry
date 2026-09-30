@@ -36,10 +36,10 @@ or `--label "type:bug"`. Do not use free-form `--body` or omit the body.
 `gh`, fill that structure in a file and use `gh pr create --body-file <filled-template>`.
 
 **Rules and lifecycle:**
-- Type is selected by label: `task` for work, `bug` for defects.
+- Type is selected from `.github/labels.json`: `type:product` for product improvements, `type:bug` for defects, or another declared `type:*` label matching the issue.
 - Status uses labels (e.g. `status:in-progress`) or native open/closed state; use the repository's existing convention.
 - At start, mark the issue in progress and comment the plan; at close, reference the commit/PR.
-- After every completed phase, add the latest [`templates/handoff.md`](../../templates/handoff.md) state to the issue. The handoff MUST record current phase/status, completed work, exact next action, branch/commit, verification evidence, and required evidence to resume.
+- After every completed phase, add the latest [handoff template](../../templates/handoff.md) state to the issue. The handoff MUST record current phase/status, completed work, exact next action, branch/commit, verification evidence, and required evidence to resume.
 - Leave progress/checkpoint comments on the issue.
 - One issue = one unit of work. Every commit/PR references `#<number>`.
 - A delegated issue authorizes routine delivery without intermediate confirmation: update the issue, implement, verify, commit, push, open the PR, and comment the evidence.

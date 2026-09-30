@@ -283,26 +283,26 @@
     {
       "path": "providers/task/github-issues.md",
       "mode": "100644",
-      "size": 4347,
-      "sha256": "9542205ad0a6f38265f853d9bf40db4f09b6ad3318c29b594277e644548c6a4d"
+      "size": 4443,
+      "sha256": "8a740c86a4ad8205ecdaa304b752761a17e15614f90012789a46bb99941edab2"
     },
     {
       "path": "providers/task/github-projects.md",
       "mode": "100644",
-      "size": 4883,
-      "sha256": "253062cd6bc87c336c1cfbf0a1ceacbdd4d7a4b4b655e182481402efde1fb95e"
+      "size": 4877,
+      "sha256": "099ad72f4eb06df7f538fd8889e558b0c4be4f8643b058e4fe1fe452e15cbd93"
     },
     {
       "path": "providers/task/jira.md",
       "mode": "100644",
-      "size": 3449,
-      "sha256": "1df5b92408a2498bafba755562d63fcad304f82ec68d84cbc12573cac5c72311"
+      "size": 3443,
+      "sha256": "3b6decd86eaebfc267c45351e969cdd790dc900431ef6decebd657d38e6f3cc4"
     },
     {
       "path": "providers/task/linear.md",
       "mode": "100644",
-      "size": 3249,
-      "sha256": "9404a25e38f15401db3d27dc79dccc00485851e5b30d03458577380c2276e11e"
+      "size": 3243,
+      "sha256": "acb587ca6e84799ecb3af3be299a41d09a93bd5e95e96271f78802c591d38b70"
     },
     {
       "path": "scripts/check-factory-layout.mjs",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:ccf84d2e41fab858b4e32fb9aa28758217dce27808d7cd7f6ed44cf9765d9b0a"
+  "payload_digest": "sha256:56af441013056dd2d6cb1eefd3de466b682ae4953c58a48559a67432dbd88527"
 }
