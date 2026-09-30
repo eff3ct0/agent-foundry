@@ -13,6 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(root, "dist", "index.js");
 const { preparePlan } = await import("../dist/creator.js");
 const { checkGeneratedModulePolicy } = await import("../dist/module-policy-generated.js");
+const { check: checkDeliveryContract } = await import("../scripts/typed-inherited-runtime/check-delivery-contract.js");
 
 const run = async (args, options = {}) => {
   try {
@@ -1073,6 +1074,19 @@ test("fresh generated context routes use retained paths and reject stale or miss
     const context = await Promise.all(["CLAUDE.md", "AGENT.md", "docs/bindings.md", ".factory/docs/workflow.md", ".factory/docs/engineering-handbook.md", ".factory/templates/agent-runbook.md"]
       .map(async (relative) => [relative, await readFile(path.join(target, relative), "utf8")]));
     const files = new Map(context);
+    for (const [trigger, expected, unrelated] of [
+      ["Bug fix or implementation", ".factory/docs/engineering-handbook.md", ".factory/docs/agent-init.md"],
+      ["Provider setup or binding failure", ".factory/docs/agent-init.md", ".factory/docs/workflow.md"],
+      ["Release or deployment", ".factory/docs/workflow.md", ".factory/docs/engineering-handbook.md"],
+    ]) {
+      const row = files.get("AGENT.md").split("\n").find((line) => line.startsWith(`| ${trigger} (`));
+      assert.ok(row, `${trigger} must be discoverable after cold WORK startup`);
+      const required = row.split("|")[2];
+      const loaded = [...required.matchAll(/`([^`]+\.md)`/gu)].map((match) => match[1]);
+      assert.ok(loaded.includes(expected), `${trigger} must load ${expected}`);
+      assert.ok(!loaded.includes(unrelated), `${trigger} must not load ${unrelated}`);
+      for (const relative of loaded) assert.ok((await readFile(path.join(target, relative), "utf8")).trim(), relative);
+    }
     const requiredPaths = ["CLAUDE.md", "AGENT.md", "start.mjs", "docs/bindings.md", ".factory/docs/workflow.md", ".factory/docs/engineering-handbook.md", ".factory/templates/agent-runbook.md"];
     for (const relative of requiredPaths) await stat(path.join(target, relative));
     assert.match(files.get("AGENT.md"), /Required topic \(generated path\)/u);
@@ -1091,6 +1105,26 @@ test("fresh generated context routes use retained paths and reject stale or miss
     for (const [, content] of context) checkInlineRoute(content);
     assert.equal((await startup()).status, "verified");
     assert.equal(json(await run(["apply", ...args])).status, "noop");
+    const agentPath = path.join(target, "AGENT.md");
+    assert.deepEqual(await checkDeliveryContract(undefined, target), []);
+    const bindingPath = path.join(target, "docs/bindings.md");
+    await writeFile(bindingPath, files.get("docs/bindings.md").replace(/Project\/board \(TRACKER_KEY\): [^\n]+/u, "Project/board (TRACKER_KEY): not configured; resolve before durable task operations"));
+    assert.deepEqual(await checkDeliveryContract([bindingPath], target), []);
+    await writeFile(bindingPath, files.get("docs/bindings.md").replace("> **Provider:** `github-issues`", "> **Provider:** `jira`"));
+    assert.ok((await checkDeliveryContract([bindingPath], target)).some((error) => error.includes("selected task provider fragment must match TASK_TRACKER")));
+    await writeFile(bindingPath, files.get("docs/bindings.md").replace("Task provider (TASK_TRACKER): github-issues", "Task provider (TASK_TRACKER): <UNKNOWN>"));
+    assert.ok((await checkDeliveryContract([bindingPath], target)).some((error) => error.includes("## Bound task identity missing critical rule: selected task provider and tracker identity")));
+    await writeFile(bindingPath, files.get("docs/bindings.md").replace("Confirm each native operation and read back the intended task identity, state, and handoff", "Trust the local task file"));
+    assert.ok((await checkDeliveryContract([bindingPath], target)).some((error) => error.includes("## Bound task identity missing critical rule: native confirmation and matching task readback")));
+    await writeFile(bindingPath, files.get("docs/bindings.md"));
+    const originalAgent = files.get("AGENT.md");
+    await writeFile(agentPath, originalAgent.split("\n").filter((line) => /^#{1,6} /u.test(line)).join("\n"));
+    assert.ok((await checkDeliveryContract([agentPath], target)).some((error) => error.includes("missing critical rule: single add and immediate target-host readback")));
+    await writeFile(agentPath, originalAgent.replace("The authenticated actor has target-host capability `MAINTAIN` or `ADMIN`.", "The actor may proceed."));
+    assert.ok((await checkDeliveryContract([agentPath], target)).some((error) => error.includes("missing critical rule: actor MAINTAIN or ADMIN capability")));
+    await writeFile(agentPath, originalAgent.replace("`.factory/docs/workflow.md` for project delivery gates", "`.factory/docs/missing/workflow.md` for project delivery gates"));
+    assert.ok((await checkDeliveryContract([agentPath], target)).some((error) => error.includes("Release or deployment required route missing destination: .factory/docs/missing/workflow.md")));
+    await writeFile(agentPath, originalAgent);
     const shim = path.join(target, "CLAUDE.md");
     await writeFile(shim, `${files.get("CLAUDE.md")}\nFollow \`docs/workflow.md\`.\n`);
     const staleContent = await readFile(shim, "utf8");

@@ -14,10 +14,28 @@ the same content and reports `noop` for unchanged files.
 | `foundry verify` | Read-only, offline | Revalidates generated contracts and ownership |
 | `foundry doctor` | Read-only, offline | Reports interrupted staging, payload mismatch, and drift |
 | `scripts/check-determinism.mjs` | Source-only static audit | Same result for unchanged source and package contracts |
-| `scripts/typed-inherited-runtime/check-delivery-contract.js` | Compiled Node structural contract | Validates docs, providers, and CI recipe data; build verifies exact typed-source output before packaging |
+| `scripts/typed-inherited-runtime/check-delivery-contract.js` | Compiled Node structural contract | Validates designated entry safety clauses, required task-route destinations, docs, providers, and CI recipe data; build verifies exact typed-source output before packaging |
 | `scripts/check-factory-layout.mjs` | Node layout contract | Validates initialized-project support boundaries |
 | `scripts/check-bootstrap-workflow.mjs` | Node workflow contract | Rejects floating actions and unsafe release boundaries |
 | `scripts/typed-runtime/check-real-agent-workflow.js` | Compiled Node workflow contract | Rejects unpinned or cross-credential real-agent paths; build verifies exact typed-source output before packaging |
+
+## Static route validation
+
+The delivery-contract fixture starts at the real `AGENT.md` entry in source and a
+fresh initialized project. It checks bounded safety clauses and explicit
+approval/readback inversions in the designated approval section, compares the
+generated task provider fragment with its bound `TASK_TRACKER`, and follows
+required bug-fix, provider-setup, and release routes to local files. Optional
+topics and an unconfigured `TRACKER_KEY` are allowed. A missing or contradictory
+clause, mismatched provider, or missing required destination produces a
+diagnostic; a heading or link label alone is not proof. These checks recognize
+specific fixture wording, not arbitrary paraphrases or contradictory policy
+outside the checked section.
+This is **static navigation and text evidence**, not proof that a running agent
+read, understood, or obeyed the guidance. It does not verify live task-provider
+identity/readback, approval authority, remote access, or release behavior. The
+parent context-routing issue still needs its independent acceptance and runtime
+evidence.
 
 ## Payload and ownership
 

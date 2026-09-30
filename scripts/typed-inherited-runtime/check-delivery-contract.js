@@ -40,6 +40,88 @@ const display = (target, projectRoot) => {
 };
 const headings = (text) => [...String(text).matchAll(/^#{2,6}\s+(.+?)\s*$/gmu)].map((match) => match[1].trim().replace(/#+$/u, "").trim());
 const sectionKey = (section) => section.toLowerCase().split(" (", 1)[0].trim();
+const sectionBody = (text, name) => {
+    const lines = text.split("\n");
+    const start = lines.findIndex((line) => {
+        const match = line.match(/^(#{2,6})\s+(.+?)\s*$/u);
+        return match && sectionKey(match[2]) === sectionKey(name);
+    });
+    if (start < 0)
+        return "";
+    const depth = lines[start].match(/^#+/u)[0].length;
+    const end = lines.findIndex((line, index) => index > start && new RegExp(`^#{2,${depth}}\\s`, "u").test(line));
+    return lines.slice(start + 1, end < 0 ? undefined : end).join("\n");
+};
+// Inspect only the designated rule body: labels elsewhere must not satisfy a missing rule.
+const criticalRules = [
+    ["Protected `status:approved` gate", "direct human instruction naming the issue and action", /direct human instruction[\s\S]*?exact target issue[\s\S]*?add status:approved/iu],
+    ["Protected `status:approved` gate", "target-host approver authority", /target-host evidence[\s\S]*?(?:maintainer|authorized-approver)/iu],
+    ["Protected `status:approved` gate", "actor MAINTAIN or ADMIN capability", /authenticated actor[\s\S]*?MAINTAIN[\s\S]*?ADMIN[\s\S]*?TRIAGE/iu],
+    ["Protected `status:approved` gate", "single add and immediate target-host readback", /one add attempt[\s\S]*?immediately[\s\S]*?target-host readback/iu],
+    ["Protected `status:approved` gate", "fail-closed approval stop", /(?:mismatch|insufficient)[\s\S]*?stops[\s\S]*?without retrying/iu],
+    ["Operating rules", "exclusive bound task provider", /every durable task\/TODO mechanism[\s\S]*?only the setup-bound task provider/iu],
+    ["Operating rules", "explicit outward-action approval", /hard-to-reverse or outward actions[\s\S]*?NOT executed without explicit approval/iu],
+    ["Operating rules", "delegation does not authorize merge or release", /delegation authorizes[\s\S]*?does not authorize merge[\s\S]*?release publication/iu],
+    ["Durable phase state and cold resumption", "provider-native confirmation and fresh readback", /provider-native confirmation[\s\S]*?fresh readback[\s\S]*?task identity and state/iu],
+    ["Durable phase state and cold resumption", "mismatched readback stops the transition", /mismatched readback[\s\S]*?stop without claiming a transition/iu],
+    ["Bindings (provider contract)", "exclusive bound task and secrets providers", /task tracker[\s\S]*?secrets manager[\s\S]*?MANDATORY and EXCLUSIVE/iu],
+];
+const approvalInversions = [
+    ["TRIAGE must not approve", /\bTRIAGE\s+(?:is\s+(?:also\s+)?(?:allowed|permitted|authorized)\s+to|may|can)\s+(?:approve|add\s+`?status:approved)/iu],
+    ["target-host readback must not be optional", /\breadback\s+(?:(?:is|can|may)\s+)?(?:optional|not required|be skipped)\b/iu],
+];
+const routeTopics = [
+    ["Project initialization", "agent-init.md"],
+    ["Ticket execution", "agent-runbook.md"],
+    ["Bug fix or implementation", "engineering-handbook.md"],
+    ["Provider setup or binding failure", "agent-init.md", "bindings.md"],
+    ["Release or deployment", "workflow.md"],
+];
+const checkAgentRoutes = (text, projectRoot, errors) => {
+    const generated = fs.existsSync(path.join(projectRoot, ".factory"));
+    const table = sectionBody(text, "Task-triggered context routes");
+    if (!/After `node start\.mjs`, read this entry and `docs\/bindings\.md`[\s\S]*?open the \*\*required\*\* topic/u.test(table)) {
+        errors.push("AGENT.md route entry must direct cold readers from start.mjs through bindings to required task topics");
+    }
+    const applicable = generated ? routeTopics : [["Archetype maintenance", "MAINTAINERS.md", "agent-runbook.md"], ...routeTopics];
+    for (const [trigger, ...topics] of applicable) {
+        const row = table.split("\n").find((line) => line.startsWith(`| ${trigger} (`));
+        if (!row) {
+            errors.push(`AGENT.md missing required task route: ${trigger}`);
+            continue;
+        }
+        const required = row.split("|")[2] ?? "";
+        const destinations = generated
+            ? [...required.matchAll(/`([^`]+\.md)`/gu)].map((match) => match[1])
+            : [...required.matchAll(/`([^`]+\.md)` → /gu)].map((match) => match[1]);
+        for (const topic of topics) {
+            const destination = destinations.find((candidate) => path.basename(candidate) === topic);
+            if (!destination) {
+                errors.push(`AGENT.md ${trigger} missing required route to ${topic}`);
+                continue;
+            }
+        }
+        if (!generated && trigger === "Release or deployment" && !destinations.includes("MAINTAINERS.md")) {
+            errors.push("AGENT.md Release or deployment missing required source route to MAINTAINERS.md");
+        }
+        for (const destination of destinations) {
+            if (!fs.existsSync(path.join(projectRoot, destination)))
+                errors.push(`AGENT.md ${trigger} required route missing destination: ${destination}; restore the creator-owned file and verify`);
+        }
+    }
+};
+const checkAgentRules = (text, projectRoot, errors) => {
+    for (const [section, requirement, pattern] of criticalRules) {
+        if (!pattern.test(sectionBody(text, section)))
+            errors.push(`AGENT.md ## ${section} missing critical rule: ${requirement}`);
+    }
+    const approval = sectionBody(text, "Protected `status:approved` gate");
+    for (const [requirement, pattern] of approvalInversions) {
+        if (pattern.test(approval))
+            errors.push(`AGENT.md ## Protected \`status:approved\` gate contradicts critical rule: ${requirement}`);
+    }
+    checkAgentRoutes(text, projectRoot, errors);
+};
 const field = (text, name) => {
     for (const rawLine of String(text).split("\n")) {
         const line = rawLine.replace(/^\s*[-*>]\s*/u, "").replaceAll("**", "");
@@ -100,6 +182,26 @@ const checkDocument = (target, text, projectRoot, errors) => {
     }
     if (path.basename(target) !== "bindings.md")
         return;
+    if (fs.existsSync(path.join(projectRoot, ".factory"))) {
+        const identity = sectionBody(text, "Bound task identity");
+        for (const [requirement, pattern] of [
+            ["selected task provider and tracker identity", /Task provider \(TASK_TRACKER\):\s*(?!<|not configured)\S+[\s\S]*?Tracker \(TRACKER\):\s*(?!<|not configured)\S+[\s\S]*?Project\/board \(TRACKER_KEY\):\s*\S+/iu],
+            ["exclusive durable harness task provider", /Use only this provider and tracker for every durable harness task\/TODO/iu],
+            ["native confirmation and matching task readback", /Confirm each native operation and read back the intended task identity, state, and handoff[\s\S]*?Missing identity or readback blocks/iu],
+        ]) {
+            if (!pattern.test(identity))
+                errors.push(`${display(target, projectRoot)} ## Bound task identity missing critical rule: ${requirement}`);
+        }
+        const selectedProvider = field(identity, "Task provider (TASK_TRACKER)").replaceAll("`", "");
+        const afterIdentity = text.split(/^## Bound task identity\s*$/mu)[1] ?? "";
+        const taskHeading = afterIdentity.match(/^## (.+?)\s*$/mu)?.[1];
+        const taskFragment = taskHeading ? sectionBody(text, taskHeading) : "";
+        if (selectedProvider && !selectedProvider.startsWith("<") && selectedProvider.toLowerCase() !== "not configured"
+            && (field(taskFragment, "Capability").replaceAll("`", "").toLowerCase() !== "task"
+                || field(taskFragment, "Provider").replaceAll("`", "").toLowerCase() !== selectedProvider.toLowerCase())) {
+            errors.push(`${display(target, projectRoot)} ## Bound task identity selected task provider fragment must match TASK_TRACKER`);
+        }
+    }
     const linked = new Set([...text.matchAll(localLink)].map((match) => path.resolve(path.dirname(target), match[1].split("#", 1)[0])));
     for (const relative of ["providers/task/_contract.md", "providers/secrets/_contract.md", "providers/code-intel/_contract.md", "ci/_contract.md"]) {
         const contract = path.join(projectRoot, relative);
@@ -212,6 +314,8 @@ export const check = async (paths, projectRoot = root) => {
         const text = await readFile(target, "utf8");
         checkLinks(target, text, effectiveRoot, errors);
         checkDocument(target, text, effectiveRoot, errors);
+        if (path.resolve(target) === path.join(effectiveRoot, "AGENT.md"))
+            checkAgentRules(text, effectiveRoot, errors);
     }
     const contracts = new Map();
     for (const [capability, directory] of Object.entries(providerDirectories)) {

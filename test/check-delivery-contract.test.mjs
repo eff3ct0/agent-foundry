@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,57 @@ const fixture = async (callback) => {
 
 test("the repository delivery contract remains structurally valid", async () => {
   assert.deepEqual(await check(), []);
+});
+
+test("source entry rejects headings-only safety, removed rules, and broken required routes", async () => {
+  await fixture(async (directory) => {
+    for (const relative of ["AGENT.md", "MAINTAINERS.md", "docs/bindings.md", "docs/agent-init.md", "docs/bootstrap.md", "docs/engineering-handbook.md", "docs/workflow.md", "templates/agent-runbook.md"]) {
+      await mkdir(path.dirname(path.join(directory, relative)), { recursive: true });
+      await copyFile(path.join(root, relative), path.join(directory, relative));
+    }
+    const target = path.join(directory, "AGENT.md");
+    const original = await readFile(target, "utf8");
+    const routeErrors = async () => (await check([target], directory)).filter((error) => /critical rule|task route|required route|route entry/u.test(error));
+    await assert.rejects(readFile(path.join(directory, "docs/factory-layout.md")));
+    assert.deepEqual(await routeErrors(), []); // An absent optional topic is not a required-route failure.
+
+    await writeFile(target, original.split("\n").filter((line) => /^#{1,6} /u.test(line)).join("\n"));
+    assert.ok((await routeErrors()).some((error) => error.includes("missing critical rule: single add and immediate target-host readback")));
+
+    for (const [clause, replacement, requirement] of [
+      ["The authenticated actor has target-host capability `MAINTAIN` or `ADMIN`.", "The actor may proceed.", "actor MAINTAIN or ADMIN capability"],
+      ["only the setup-bound task provider", "any convenient task provider", "exclusive bound task provider"],
+      ["provider-native confirmation **and fresh readback**", "local confirmation", "provider-native confirmation and fresh readback"],
+      ["are NOT executed without explicit approval", "may be executed routinely", "explicit outward-action approval"],
+    ]) {
+      assert.ok(original.includes(clause), `fixture clause missing: ${clause}`);
+      await writeFile(target, original.replace(clause, replacement));
+      assert.ok((await routeErrors()).some((error) => error.includes(`missing critical rule: ${requirement}`)), requirement);
+    }
+
+    await writeFile(target, original.replace("`docs/engineering-handbook.md` → `.factory/docs/engineering-handbook.md` for code", "`docs/missing/engineering-handbook.md` → `.factory/docs/engineering-handbook.md` for code"));
+    assert.ok((await routeErrors()).some((error) => error.includes("Bug fix or implementation required route missing destination: docs/missing/engineering-handbook.md")));
+  });
+});
+
+test("source approval gate rejects explicit inversions even beside the valid rule", async () => {
+  await fixture(async (directory) => {
+    for (const relative of ["AGENT.md", "MAINTAINERS.md", "docs/bindings.md", "docs/agent-init.md", "docs/bootstrap.md", "docs/engineering-handbook.md", "docs/workflow.md", "templates/agent-runbook.md", "templates/definition-of-done.md", "templates/handoff.md", "hooks/README.md", "docs/org-factory.md"]) {
+      await mkdir(path.dirname(path.join(directory, relative)), { recursive: true });
+      await copyFile(path.join(root, relative), path.join(directory, relative));
+    }
+    const target = path.join(directory, "AGENT.md");
+    const original = await readFile(target, "utf8");
+    for (const [inversion, requirement] of [
+      ["TRIAGE is allowed to approve.", "TRIAGE must not approve"],
+      ["Target-host readback is optional.", "target-host readback must not be optional"],
+      ["TRIAGE may add status:approved.", "TRIAGE must not approve"],
+    ]) {
+      await writeFile(target, original.replace("Without all of that evidence, stop", `${inversion}\n\nWithout all of that evidence, stop`));
+      const errors = await check([target], directory);
+      assert.ok(errors.some((error) => error.includes(requirement)), `${inversion}: ${errors.join("; ")}`);
+    }
+  });
 });
 
 test("the required task contracts make provider readback and local projections explicit", async () => {
