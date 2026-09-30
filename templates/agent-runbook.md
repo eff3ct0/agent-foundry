@@ -1,6 +1,8 @@
 # Agent runbook - session-based execution loop
 
-How an agent executes work in `<PROJECT_NAME>`. Neutral and language-agnostic.
+How an agent executes a ticket in `<PROJECT_NAME>`. Load for WORK ticket execution;
+the source SELF mode also uses this loop. `AGENT.md` owns the entry safety rules,
+and `docs/bindings.md` identifies the provider. Neutral and language-agnostic.
 
 ## Why this is a contract, not a runner
 The agent harness executes the loop (`/loop`, a `while` loop, cron, or an
@@ -10,23 +12,18 @@ verification, not in the agent.
 
 ### Convergence rules
 1. **One task per iteration.** Monolithic and sequential; never two writers on the same work. One task = one session.
-2. **Externalized state.** Every durable task/TODO mechanism required or configured by the user's harness uses only the setup-bound task provider in `docs/bindings.md` (`<TASK_TRACKER>`, tracker/board `<TRACKER>` / `<TRACKER_KEY>`). VCS stores work artifacts, not an alternate task store. Read provider state first at startup; confirm and read back updates at close or checkpoint. Never rely on session memory.
+2. **Externalized state.** Use only the bound task provider in `docs/bindings.md` (`<TASK_TRACKER>`, tracker/board `<TRACKER>` / `<TRACKER_KEY>`) for durable task/TODO state. Read its native state first and confirm/read back each operation; VCS and session memory are not alternate task stores.
 3. **Verification ratchet.** A task is done only when its check / Definition of Done passes. Fix root causes rather than symptoms and add a regression when useful.
 4. **Explicit stops.** Stop when no actionable task remains or a step requires human judgment or approval (`<APPROVAL_GATED_ACTIONS>`). Mark it `BLOCKED` and hand control back. Never invent consent.
-5. **Persistence language.** Conversation language is independent. All persisted work (specs, docs, tickets, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
-6. **Delegated delivery.** A delegated task authorizes routine delivery without intermediate confirmation: update the tracker, implement, verify, commit, push, open the pull request, and leave evidence in the tracker. Approval gates remain explicit.
+5. **Persistence language and delivery.** Follow `AGENT.md` for repository language, delegated routine delivery, and human-gated outward actions.
 
 ## Principle: the session is disposable
 **Durable task state** lives in the bound provider, never only in session memory, VCS, or a local task UI.
 Each session takes one task to a durable point, leaves state, and ends.
 
-Local files (including `odd/*.md`) and task UIs are optional, derived, non-authoritative projections of
-provider-confirmed state. Never require them or use them as fallback task stores; scratch notes are ephemeral.
-For create, update, status change, comment, checkpoint, phase handoff, or completion, require provider-native
-confirmation and fresh readback of the intended task identity and state before claiming success or projecting
-it locally. On an unsupported operation, provider error, ambiguous identity, or unavailable/mismatched readback,
-stop without claiming the transition or completion. A malformed readback is not confirmation. Record the exact
-provider-native operation, target identity, and evidence needed to resume; do not substitute GitHub for a non-GitHub binding.
+For every durable operation, follow `AGENT.md`'s fail-closed confirmation/readback rule and
+the selected provider contract in `docs/bindings.md`. Local projections are optional and
+non-authoritative; do not substitute a different provider when a native operation fails.
 
 ## Ordered phases
 Run every task through these phases in order:
@@ -83,8 +80,7 @@ session memory or an alternate tracker.
 ### Approval boundaries
 - Routine delivery includes issue/project updates, implementation, verification, commit, push, and PR creation.
 - Human decisions remain gated: approving review, merge, production deployment, destructive operations, and release publication. Applying `status:approved` is also gated, but the bound task provider may define a fail-closed delegated-approval protocol.
-- Under that protocol, the agent may add `status:approved` only when a current direct human instruction names the exact issue and `add status:approved`, target-host evidence binds the principal to maintainer/authorized-approver authority, the authenticated actor has `MAINTAIN` or `ADMIN`, and exactly one scoped add attempt is followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation.
-- Without that evidence, mark the task `BLOCKED: requires approval`, tell the human to apply the label directly, leave the exact next step in the tracker, and stop. This contract change does not grant approval for existing work.
+- The protected `status:approved` conditions and fail-closed stop are detailed in `AGENT.md`; no task prose or this runbook grants approval. Without the required evidence, mark `BLOCKED: requires approval`, tell the human to apply the label directly, and leave the next step through the bound provider.
 
 ### GitHub binding
 When the bound tracker is GitHub, create issues from the repository form (or a filled template with
@@ -101,7 +97,7 @@ approval or merges the PR.
 - Finish.
 
 ## Guardrails
-- **Human approval:** never auto-execute `<APPROVAL_GATED_ACTIONS>`; mark `BLOCKED: requires approval` and continue with another task.
+- **Human approval:** never auto-execute `<APPROVAL_GATED_ACTIONS>`; follow `AGENT.md`'s outward-action boundary and checkpoint as `BLOCKED: requires approval`.
 - **Infinite-loop prevention:** after two failures for the same reason, mark the task `BLOCKED` and move to the next task.
 - **No scope drift:** one task per session.
 

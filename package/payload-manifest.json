@@ -67,14 +67,14 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 11933,
-      "sha256": "bb05a00bb2d9278887d7fddd17eb99d7c34ae2c7daedbe433c4723dd2b73bf7c"
+      "size": 11981,
+      "sha256": "67c8d9d72d11039c24f91bcb080b61f9d6551cfa97dbef651b29ddcb5e342141"
     },
     {
       "path": "CLAUDE.md",
       "mode": "100644",
-      "size": 543,
-      "sha256": "89ec0e74165798a2f20d3ed74e31022a206449bc61313578c629cb95f9972c2d"
+      "size": 682,
+      "sha256": "0f35eafe28cddaf497b273a06ec6b40a6718bf24b7ee0dd4e5c4f6e4ec9618b2"
     },
     {
       "path": "README.md",
@@ -121,8 +121,8 @@
     {
       "path": "docs/engineering-handbook.md",
       "mode": "100644",
-      "size": 2042,
-      "sha256": "09ceb1808bb6937f04e598f8bdef065f69c07521a42f4640bcdff5bcd0cca0a3"
+      "size": 2168,
+      "sha256": "dc94ca79782abafcd13bc584e822cc885453e0b2d198e05e8e9baaa4c3217057"
     },
     {
       "path": "docs/factory-layout.md",
@@ -145,8 +145,8 @@
     {
       "path": "docs/workflow.md",
       "mode": "100644",
-      "size": 3255,
-      "sha256": "7f15a68cc77bae682674e8ac0911535cf477a1832c24e933a4681f5e4fc38098"
+      "size": 3236,
+      "sha256": "ca85e0ea46d1b404d1f0a72eb4937a9be9785fc7cf7f8e7a6b0f5805102e9768"
     },
     {
       "path": "hooks/README.md",
@@ -187,26 +187,26 @@
     {
       "path": "providers/agents/templates/claude-code.md",
       "mode": "100644",
-      "size": 570,
-      "sha256": "e0246d13562da0942c3459aefe8beffe4f716baf9113d92e38378bdb60d9a252"
+      "size": 847,
+      "sha256": "619350c31cae7cde5b8742e536a179145fc1370c9c84d2a82817800629e0cae9"
     },
     {
       "path": "providers/agents/templates/codex.md",
       "mode": "100644",
-      "size": 558,
-      "sha256": "76c7324f431db358b64d12e053c6fbfcd28a9ecd39ffa2d69963d5725ab6f882"
+      "size": 835,
+      "sha256": "7db9b5f864ff397d38ac818c7009a45f3f05556df5d5eed33eaa8708b95ebefb"
     },
     {
       "path": "providers/agents/templates/opencode.md",
       "mode": "100644",
-      "size": 564,
-      "sha256": "0215578917a9b402e03fc44f5a4206ff82bbd6a16c0c438f1a6c870c4cdb4a2e"
+      "size": 841,
+      "sha256": "bdd89bd95efd3c1f3ad4a5d998dae9f553154448347922fedd812ee07b99f205"
     },
     {
       "path": "providers/agents/templates/pi.md",
       "mode": "100644",
-      "size": 552,
-      "sha256": "3d4fdc815d4a6fdb48557d81d83bc74386e65fb622924b54deebe16dbd9a0646"
+      "size": 829,
+      "sha256": "81a49c739468bbe8d046d6795cd67f45d50fc7d4dafee77ed830bd268e44d160"
     },
     {
       "path": "providers/code-intel/_contract.md",
@@ -385,8 +385,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 8870,
-      "sha256": "0c0f19db261736350a6e45ab9c8b84d4e092c0d554becab74689aaaf305b635c"
+      "size": 7699,
+      "sha256": "c0bb1e7951a2a70cce2773590add2d2261316ad40f7da2a64e9693a3fbbbea20"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:4560dd49e486506feac6cd9a690ef449035e8e12ecc724012d42021d08b7d81a"
+  "payload_digest": "sha256:6e81d3c8284597f89ece391fbad0cfbfec800b29d452f933cf518c3af98c4f06"
 }

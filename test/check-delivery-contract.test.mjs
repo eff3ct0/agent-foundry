@@ -32,7 +32,7 @@ test("the repository delivery contract remains structurally valid", async () => 
 });
 
 test("the required task contracts make provider readback and local projections explicit", async () => {
-  for (const relative of ["AGENT.md", "templates/agent-runbook.md", "templates/handoff.md", "docs/agent-init.md", "providers/task/_contract.md"]) {
+  for (const relative of ["AGENT.md", "templates/handoff.md", "docs/agent-init.md", "providers/task/_contract.md"]) {
     const text = await readFile(path.join(root, relative), "utf8");
     assert.match(text, /every durable task\/TODO mechanism[\s\S]*?harness/iu, relative);
     assert.match(text, /(?:<TASK_TRACKER>|`TASK_TRACKER`)/u, relative);
@@ -42,6 +42,11 @@ test("the required task contracts make provider readback and local projections e
     assert.match(text, /(?:cold|resum)[\s\S]*?provider|provider[\s\S]*?(?:cold|resum)/iu, relative);
     assert.match(text, /(?:unsupported|fails?)[\s\S]*?(?:ambiguous|mismatch)/iu, relative);
   }
+  const runbook = await readFile(path.join(root, "templates/agent-runbook.md"), "utf8");
+  assert.match(runbook, /bound task provider in `docs\/bindings\.md`/u);
+  assert.match(runbook, /confirm\/read back each operation/u);
+  assert.match(runbook, /optional and\s+non-authoritative/u);
+  assert.match(runbook, /native operation fails/u);
 });
 
 test("the task contract checker rejects missing binding and fail-closed clauses for every selection", async () => {

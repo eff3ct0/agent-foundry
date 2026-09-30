@@ -1,7 +1,9 @@
 # End-to-end workflow
 
 How development work in `<PROJECT_NAME>` moves from objective to delivery.
-Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
+Load for intake, review, handoff, or deployment via `AGENT.md`'s task route;
+the runbook owns detailed phase transitions and provider handoff. Language-agnostic.
+Fill `<UPPER_SNAKE>` during bootstrap.
 
 ## 1. Intake and specification
 - Capture the **objective** (what problem, for whom).
@@ -10,8 +12,8 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 - Record assumptions and dependencies.
 
 ## 2. Ticket decomposition
-- Decompose work into tickets in `<TRACKER>`, the **bound** tracker in [`bindings.md`](bindings.md) (compliance is mandatory; do not choose another).
-- **One ticket = one unit of work** (one agent session).
+- Decompose work into tickets in `<TRACKER>`, the bound tracker in [`bindings.md`](bindings.md).
+- One ticket = one unit of work (one agent session).
 - Link each ticket to its default epic `<EPIC_ID>`.
 - Use [`templates/ticket.md`](../templates/ticket.md).
 
@@ -21,15 +23,12 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 - Naming: `<BRANCH_NAMING>` (e.g. `<TICKET_ID>-<short-description>`).
 
 ## 4. Session execution loop
-- See the complete cycle in [`templates/agent-runbook.md`](../templates/agent-runbook.md).
-- **One task per session**; no scope drift.
-- Announce at start: `Working <TICKET_ID>`.
-- Move the ticket to *In Progress* and comment the plan.
+- See the complete cycle, provider-native confirmation/readback, and retry rules in [`templates/agent-runbook.md`](../templates/agent-runbook.md).
 
 ## 5. Verification
 - `<TEST_CMD>`, `<BUILD_CMD>`, and `<TYPECHECK_CMD>` pass.
 - Perform a **real e2e check** against `<ENV>` when warranted.
-- **Implemented != verified**: without a real signal, work is not done.
+- Implemented != verified: without a real signal, work is not done.
 
 ## 6. Review
 - **Self-review** the complete diff before requesting review.
@@ -38,20 +37,17 @@ Language-agnostic. Fill `<UPPER_SNAKE>` during bootstrap.
 
 ## 7. Definition of Done
 - Closeout contract: [`templates/definition-of-done.md`](../templates/definition-of-done.md).
-- Do not mark work done with pending or failed verification.
+- The runbook owns the phase transition to `DONE`; pending or failed verification cannot satisfy the closeout contract.
 
 ## 8. Handoff / checkpoint
-- Before ending or compacting, leave **durable state** in the tracker and VCS.
-- Commit (WIP if needed) and comment on the ticket: remaining work, branch, last commit, next step.
-- Announce `CHECKPOINT <TICKET_ID>`.
+- Before ending or compacting, follow the runbook handoff fields and confirm/read back the bound-provider state. VCS holds work artifacts, not task authority.
 
 ## 9. Integration and deployment
 - `<INTEGRATION_BRANCH>` -> `<ENVIRONMENTS>` (dev -> staging -> prod).
-- Approval gates: do not execute `<APPROVAL_GATED_ACTIONS>` without explicit human approval.
+- Approval gates remain in `AGENT.md`: do not execute `<APPROVAL_GATED_ACTIONS>` without explicit human approval. Routine delivery is not merge or release authorization.
 
 ## 10. Persistence language
-- The agent's conversation language is independent of `<REPO_LANGUAGE>`.
-- Specs, docs, tickets, tasks, code, comments, commits, and pull requests MUST use `<REPO_LANGUAGE>` (default: English).
+- Follow the repository persistence-language rule in `AGENT.md`; conversation language is independent.
 
 ## 11. Template ownership boundary
 

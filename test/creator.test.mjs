@@ -696,7 +696,11 @@ test("provider selection supports none, one, and multiple providers with stable 
   assert.deepEqual(json(one).providers.selected.map(({ id }) => id), ["codex"]);
   const manifest = await readFile(path.join(oneTarget, ".factory", "provider-manifest.json"), "utf8");
   assert.match(manifest, /"catalog_version": "1\.0\.0"/);
-  assert.match(await readFile(path.join(oneTarget, ".codex", "AGENTS.md"), "utf8"), /Codex workspace instructions/);
+  const codexShim = await readFile(path.join(oneTarget, ".codex", "AGENTS.md"), "utf8");
+  assert.match(codexShim, /Codex workspace instructions/);
+  assert.match(codexShim, /First run `node start\.mjs`.*`AGENT\.md` and `docs\/bindings\.md`/u);
+  assert.match(codexShim, /required mode\/task topic.*Links do not load content/u);
+  assert.match(codexShim, /confirmation and fresh readback.*protected approval actions/u);
   const rerun = await run(["apply", "--target", oneTarget, "--config", noneConfig, "--agent", "codex", "--non-interactive"], { env: baseEnvironment });
   assert.equal(rerun.code, 0, rerun.stderr);
   assert.equal(json(rerun).status, "noop");
@@ -706,8 +710,12 @@ test("provider selection supports none, one, and multiple providers with stable 
   const multiple = await run(["apply", "--target", multipleTarget, "--config", noneConfig, "--agents", "opencode,claude-code", "--non-interactive"], { env: baseEnvironment });
   assert.equal(multiple.code, 0, multiple.stderr);
   assert.deepEqual(json(multiple).providers.selected.map(({ id }) => id), ["claude-code", "opencode"]);
-  assert.ok(await readFile(path.join(multipleTarget, ".opencode", "agents", "factory-template.md"), "utf8"));
-  assert.ok(await readFile(path.join(multipleTarget, ".claude", "factory-template.md"), "utf8"));
+  for (const shimPath of [
+    path.join(multipleTarget, ".opencode", "agents", "factory-template.md"),
+    path.join(multipleTarget, ".claude", "factory-template.md"),
+  ]) {
+    assert.match(await readFile(shimPath, "utf8"), /First run `node start\.mjs`.*required mode\/task topic/u);
+  }
 });
 
 test("interactive provider selection accepts a single provider", async () => {
@@ -1017,6 +1025,19 @@ test("Git-only documentation authority is self-contained in a fresh project", as
   const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
   const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
   assert.match(agent, /family map in `docs\/bindings\.md`/u);
+  assert.match(agent, /Task-triggered context routes/u);
+  for (const [trigger, required, destination] of [
+    ["Bug fix or implementation", "docs/engineering-handbook.md", ".factory/docs/engineering-handbook.md"],
+    ["Provider setup or binding failure", "docs/agent-init.md", ".factory/docs/agent-init.md"],
+    ["Release or deployment", "docs/workflow.md", ".factory/docs/workflow.md"],
+  ]) {
+    const row = agent.split("\n").find((line) => line.startsWith(`| ${trigger} (`));
+    assert.ok(row?.includes(`\`${required}\` → \`${destination}\``), `${trigger} route is not navigable`);
+    await stat(path.join(target, destination));
+  }
+  assert.match(agent, /configured external canonical source/u);
+  assert.match(agent, /missing or inaccessible/u);
+  assert.match(await readFile(path.join(target, "CLAUDE.md"), "utf8"), /mode\/task route/u);
   assert.match(bindings, /\| Business \|[^\n]*No detailed business source is assumed/u);
   assert.match(bindings, /external destination is not selected by this/u);
   assert.doesNotMatch(bindings, /confluence\.example|<DOCUMENTATION_/iu);
@@ -1173,13 +1194,13 @@ test("all task selections generate exclusive, readable provider-native bindings"
     }
     const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
     assert.ok(agent.includes(`- Task tracker: \`${tracker}\` (project/board \`${key}\`)`), provider);
-    assert.match(agent, /optional,[\s\S]*?derived,[\s\S]*?non-authoritative projection/u, provider);
-    assert.match(agent, /unsupported, fails, has ambiguous identity,[\s\S]*?readback is unavailable, malformed, or mismatched/u, provider);
+    assert.match(agent, /optional derived projection, never a fallback tracker/u, provider);
+    assert.match(agent, /unsupported, failed, ambiguous, unavailable, malformed, or mismatched readback, stop/u, provider);
     const runbook = await readFile(path.join(target, ".factory", "templates", "agent-runbook.md"), "utf8");
     assert.ok(runbook.includes(`${provider}`) && runbook.includes(key), provider);
-    assert.match(runbook, /Never require them or use them as fallback task stores/u, provider);
-    assert.match(runbook, /provider-native[\s\S]*?confirmation and fresh readback/u, provider);
-    assert.match(runbook, /A malformed readback is not confirmation/u, provider);
+    assert.match(runbook, /Local projections are optional and\s+non-authoritative/u, provider);
+    assert.match(runbook, /confirm\/read back each operation/u, provider);
+    assert.match(runbook, /follow `AGENT\.md`'s fail-closed confirmation\/readback rule/u, provider);
     const handoff = await readFile(path.join(target, ".factory", "templates", "handoff.md"), "utf8");
     assert.match(handoff, /Confirm the comment or native handoff operation[\s\S]*?read back its intended content/u, provider);
     assert.match(handoff, /unsupported, fails, identifies an ambiguous task, or cannot be read back/u, provider);
