@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,6 +97,33 @@ test("startup routing recognizes source, setup, work, moved, incomplete, and mal
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
+});
+
+test("startup accepts both creator state generations but rejects ambiguous and linked boundaries", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "factory-startup-state-"));
+  try {
+    const project = path.join(parent, "project");
+    await mkdir(project);
+    await writeWork(project);
+    const state = JSON.stringify({ schema_version: 1, payload_version: "test", payload_digest: "digest", config_digest: "config", owned_files: [] });
+    const modern = path.join(project, ".factory/creator");
+    const legacy = path.join(project, ".factory-template-creator");
+    await mkdir(modern, { recursive: true });
+    assert.equal((await detectMode(project)).status, "incomplete");
+    await writeFile(path.join(modern, "state.json"), state);
+    await chmod(path.join(modern, "state.json"), 0o600);
+    assert.equal((await detectMode(project)).mode, WORK);
+    await mkdir(legacy);
+    assert.equal((await detectMode(project)).mode, "ERROR");
+    await rm(legacy, { recursive: true });
+    await rename(modern, legacy);
+    assert.equal((await detectMode(project)).mode, WORK);
+    const outside = path.join(parent, "outside");
+    await mkdir(outside);
+    await rm(path.join(project, ".factory"), { recursive: true });
+    await symlink(outside, path.join(project, ".factory"));
+    assert.equal((await detectMode(project)).mode, "ERROR");
+  } finally { await rm(parent, { recursive: true, force: true }); }
 });
 
 test("SELF mode directs source maintenance to the current repository", async () => {
