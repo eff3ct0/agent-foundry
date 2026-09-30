@@ -219,6 +219,7 @@ test("fresh consumer guidance is concrete, routed, and creator-owned without cha
     const readme = await readFile(path.join(target, "README.md"), "utf8");
     const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
     assert.match(readme, /^# Example project\n\nTypeScript repository\./u);
+    assert.match(agent, /^# Example project — Agent operating contract\n/u);
     assert.match(readme, /task provider is github-issues/u);
     assert.match(readme, /\.factory\/creator\/state\.json/u);
     assert.match(agent, /Name: `Example project`/u);

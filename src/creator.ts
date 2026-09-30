@@ -826,7 +826,8 @@ const renderGeneratedAgentRoutes = (text: string): string => {
   return text.slice(0, start).replace("`S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. Do not apply the creator to this source repository.", "These routes use initialized-project paths. After setup, use the WORK paths shown below.") + table + text.slice(end);
 };
 
-const renderConsumerAgent = (text: string): string => renderGeneratedAgentRoutes(text)
+const renderConsumerAgent = (text: string, projectName: string): string => renderGeneratedAgentRoutes(text)
+  .replace("# AGENT.md - Agent-first, language-agnostic development archetype\n", `# ${projectName} — Agent operating contract\n`)
   .replace(/The \*\*primary\*\* document for agents and humans working in ([^\n]+)\. This is a template:[\s\S]*?It is not tied to any language or stack\./u, "The **primary** operating contract for agents and humans working in $1.")
   .replace(/> If the harness supports session hooks,[\s\S]*?exact-version creator package is the primary project path\.\n\n/u, "")
   .replace(/> Placeholder convention:[\s\S]*?when it does not apply\.\n\n/u, "")
@@ -880,7 +881,7 @@ const renderTextFile = (
     }
   }
   if (destinationPath.endsWith(".md")) rendered = renderMarkdown(rendered, source.path, destinationPath, destinations, removed);
-  if (source.path === "AGENT.md" && destinationPath === "AGENT.md") rendered = renderConsumerAgent(rendered);
+  if (source.path === "AGENT.md" && destinationPath === "AGENT.md") rendered = renderConsumerAgent(rendered, config.values.PROJECT_NAME);
   if (source.path === "README.md" && destinationPath === "README.md") rendered = renderConsumerReadme(config);
   for (const key of Object.keys(config.values)) {
     if (rendered.includes(`<${key}>`)) throw new CreatorError("unresolved_placeholder", `generated file contains unresolved placeholder: ${key}`, { path: destinationPath });
