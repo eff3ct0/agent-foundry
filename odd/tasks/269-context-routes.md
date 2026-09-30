@@ -42,4 +42,4 @@ Delivery strategy: ask-on-risk. If a cohesive work unit exceeds ~400 authored ad
 
 Rollback boundary: revert the #269 route/docs/tests work-unit commit and its generated payload lock update together; leave provider adapters, creator relocation behavior, hosted journey assets, and sibling work untouched. If an authority/product decision cannot be verified safely, record the gap and stop rather than assuming.
 
-Authored changed-line count: 293 additions plus deletions (331 total staged lines minus 38 generated payload-lock lines) before this evidence-line update; under the ~400 advisory budget. Commit SHA: pending local work-unit commit. Parent handles authorized provider checkpoint/readback, PR, and parent #265 completion after the sibling children.
+Authored changed-line count: 293 additions plus deletions in work-unit `bee137c62f0f6c467769ef0f95773e383a0dd593` (331 total changed lines minus 38 generated payload-lock lines), under the ~400 advisory budget. The evidence-only SHA follow-up changes this line; parent handles authorized provider checkpoint/readback, PR, and parent #265 completion after the sibling children.
