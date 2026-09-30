@@ -331,8 +331,8 @@
     {
       "path": "scripts/typed-inherited-runtime/check-delivery-contract.js",
       "mode": "100644",
-      "size": 26911,
-      "sha256": "78d2592373380aac3de75ef972a25b58208edeb4c4b778ac778737b716286fd7"
+      "size": 27067,
+      "sha256": "2ec8ecb0e52f7218186f7e44e050cd75398135b5b5850215683512a614ea991b"
     },
     {
       "path": "scripts/typed-inherited-runtime/check-pr-governance.js",
@@ -355,8 +355,8 @@
     {
       "path": "scripts/typed-inherited/check-delivery-contract.mts",
       "mode": "100644",
-      "size": 26188,
-      "sha256": "f4b8586381c70a10fc6c6de1fae4ede07d1bf2996bc637d10aae379515cf6257"
+      "size": 26340,
+      "sha256": "5d15c4bc0c3e74249250fb58428c5d606fae437c8f91bd320152a70f43d7becf"
     },
     {
       "path": "scripts/typed-inherited/check-pr-governance.mts",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:36bd7752b5bbcb88f062096cb3fa443672b1da5222eb93d45afd8eaf7fea3ead"
+  "payload_digest": "sha256:6966f91903b9c0bece0b35ef59040188758f8c5fad802c8c1e0874ed1e235885"
 }

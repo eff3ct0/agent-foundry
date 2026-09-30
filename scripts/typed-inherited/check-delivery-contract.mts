@@ -91,7 +91,7 @@ const checkAgentRoutes = (text: string, projectRoot: string, errors: string[]): 
   if (!/After `node start\.mjs`, read this entry and `docs\/bindings\.md`[\s\S]*?open the \*\*required\*\* topic/u.test(table)) {
     errors.push("AGENT.md route entry must direct cold readers from start.mjs through bindings to required task topics");
   }
-  const applicable = generated ? routeTopics : [["Archetype maintenance", "MAINTAINERS.md", "agent-runbook.md"], ...routeTopics] as const;
+  const applicable = generated ? routeTopics.slice(1) : [["Archetype maintenance", "MAINTAINERS.md", "agent-runbook.md"], ...routeTopics] as const;
   for (const [trigger, ...topics] of applicable) {
     const row = table.split("\n").find((line) => line.startsWith(`| ${trigger} (`));
     if (!row) { errors.push(`AGENT.md missing required task route: ${trigger}`); continue; }
@@ -174,7 +174,8 @@ const checkLinks = (target: string, text: string, projectRoot: string, errors: s
 
 const checkDocument = (target: string, text: string, projectRoot: string, errors: string[]): void => {
   for (const section of documentSections[path.basename(target)] ?? []) {
-    if (!new Set(headings(text).map(sectionKey)).has(sectionKey(section))) errors.push(`${display(target, projectRoot)} missing section: ## ${section}`);
+    const expected = section === "Archetype documents" && fs.existsSync(path.join(projectRoot, ".factory")) ? "Project documents" : section;
+    if (!new Set(headings(text).map(sectionKey)).has(sectionKey(expected))) errors.push(`${display(target, projectRoot)} missing section: ## ${expected}`);
   }
   if (path.basename(target) !== "bindings.md") return;
   if (fs.existsSync(path.join(projectRoot, ".factory"))) {

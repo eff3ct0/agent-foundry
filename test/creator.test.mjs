@@ -207,6 +207,46 @@ test("plan and dry-run are deterministic and do not mutate an empty target", asy
   assert.ok(json(first).operations.every((operation) => operation.path));
 });
 
+test("fresh consumer guidance is concrete, routed, and creator-owned without changing SELF guidance", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-consumer-guidance-"));
+  try {
+    const sourceAgent = await readFile(path.join(root, "AGENT.md"), "utf8");
+    const sourceReadme = await readFile(path.join(root, "README.md"), "utf8");
+    const target = path.join(parent, "project");
+    const config = await configFile(parent, { LANGUAGES_AND_FRAMEWORKS: "TypeScript", TRACKER_KEY: "BOARD-1" });
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    assert.equal(json(await run(["apply", ...args])).status, "applied");
+    const readme = await readFile(path.join(target, "README.md"), "utf8");
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    assert.match(readme, /^# Example project\n\nTypeScript repository\./u);
+    assert.match(readme, /task provider is github-issues/u);
+    assert.match(readme, /\.factory\/creator\/state\.json/u);
+    assert.match(agent, /Name: `Example project`/u);
+    assert.match(agent, /Project documents[\s\S]*?\| Ticket execution \(`WORK`\)/u);
+    assert.match(agent, /\.factory\/templates\/agent-runbook\.md/u);
+    assert.match(agent, /Protected `status:approved` gate/u);
+    assert.match(agent, /docs\/bindings\.md.*documentation authority/u);
+    for (const text of [readme, agent]) assert.doesNotMatch(text, /This is a template|source archetype|creator package is the primary project path|Archetype maintenance|Project initialization \(`SETUP`\)|npm-release\.yml|Template mode|<EXACT_VERSION>/u);
+    for (const [name, text] of [["README.md", readme], ["AGENT.md", agent]]) {
+      for (const [, href] of text.matchAll(/\[[^\]]+\]\(([^)]+)\)/gu)) {
+        if (href.startsWith("#") || href.includes("://")) continue;
+        const relative = href.split("#")[0];
+        await stat(path.resolve(target, path.dirname(name), relative));
+      }
+    }
+    assert.equal((await execFileAsync(process.execPath, [path.join(target, "start.mjs")], { cwd: target })).stdout.includes("WORK mode"), true);
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["doctor", ...args])).status, "healthy");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    assert.equal(await readFile(path.join(root, "AGENT.md"), "utf8"), sourceAgent);
+    assert.equal(await readFile(path.join(root, "README.md"), "utf8"), sourceReadme);
+    await writeFile(path.join(target, "README.md"), "user edit\n");
+    const drift = await run(["apply", ...args]);
+    assert.notEqual(drift.code, 0);
+    assert.ok(json(drift).diagnostics.some(({ code }) => code === "owned_file_drift"));
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
 test("pinned defaults merge per key, preserve explicit clears and verify generated no-CI layout", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-factory-"));
   try {

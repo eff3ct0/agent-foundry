@@ -811,21 +811,42 @@ const renderGeneratedAgentRoutes = (text: string): string => {
   const end = text.indexOf("\n\n", start);
   if (start < 0 || end < 0) throw new CreatorError("composition_invalid", "AGENT.md context route table is missing");
   const table = text.slice(start, end).split("\n")
-    .filter((line) => !line.startsWith("| Archetype maintenance (`SELF`)"))
+    .filter((line) => !line.startsWith("| Archetype maintenance (`SELF`)") && !line.startsWith("| Project initialization (`SETUP`)"))
     .map((line) => {
       let generated = line
         .replaceAll(/`[^`]+` → (`[^`]+`|not generated[^;|]*)/gu, (_, destination: string) => destination.startsWith("`") ? destination : "source-only; not a generated-project action")
         .replaceAll("(`SELF` or `WORK`)", "(`WORK`)");
-      if (line.startsWith("| Project initialization")) generated = generated.replace("source-only; not a generated-project action", "Installed creator CLI help when needed");
-      if (line.startsWith("| Provider setup")) generated = generated.replace(/source-only; not a generated-project action; source recipes[^|]*/u, "No source recipes are generated ");
+      if (line.startsWith("| Provider setup")) generated = generated.replace("(`SETUP` or `WORK`)", "(`WORK`)").replace("for setup;", "for provider recovery;").replace(/source-only; not a generated-project action; source recipes[^|]*/u, "Use the selected binding for recovery ");
       if (line.startsWith("| Release or deployment")) generated = generated.replace("source-only; not a generated-project action; ", "");
       return generated;
     })
     .join("\n")
     .replace("Required topic (S → G)", "Required topic (generated path)")
     .replace("Optional when relevant (S → G)", "Optional when relevant (generated path)");
-  return text.slice(0, start).replace("`S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. Do not apply the creator to this source repository.", "These routes use initialized-project paths. Before creator apply, use the source template's SETUP instructions; after apply, use the generated paths shown below.") + table + text.slice(end);
+  return text.slice(0, start).replace("`S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. Do not apply the creator to this source repository.", "These routes use initialized-project paths. After setup, use the WORK paths shown below.") + table + text.slice(end);
 };
+
+const renderConsumerAgent = (text: string): string => renderGeneratedAgentRoutes(text)
+  .replace(/The \*\*primary\*\* document for agents and humans working in ([^\n]+)\. This is a template:[\s\S]*?It is not tied to any language or stack\./u, "The **primary** operating contract for agents and humans working in $1.")
+  .replace(/> If the harness supports session hooks,[\s\S]*?exact-version creator package is the primary project path\.\n\n/u, "")
+  .replace(/> Placeholder convention:[\s\S]*?when it does not apply\.\n\n/u, "")
+  .replace("## Project coordinates (fill in)", "## Project coordinates")
+  .replace("## Archetype documents", "## Project documents")
+  .replace("in pre-apply `SETUP` its source-template guide is not a selected provider. ", "")
+  .replace("In a generated project, resolve routed topic paths under `.factory/` as shown; root `AGENT.md` and `docs/bindings.md` remain at root.", "Resolve routed topic paths under `.factory/` as shown; root `AGENT.md` and `docs/bindings.md` remain at root.");
+
+const renderConsumerReadme = (config: CreatorConfig): string => `# ${config.values.PROJECT_NAME}
+
+${config.values.LANGUAGES_AND_FRAMEWORKS ? `${config.values.LANGUAGES_AND_FRAMEWORKS} repository.` : "Project repository."} The task provider is ${config.values.TASK_TRACKER}; its selected binding and documentation authority are in [docs/bindings.md](docs/bindings.md).
+
+## Start work
+
+1. Run \`node start.mjs\` and follow [AGENT.md](AGENT.md).
+2. Read [docs/bindings.md](docs/bindings.md), then the active task in the bound provider.
+3. Follow the [agent runbook](.factory/templates/agent-runbook.md) for implementation and verification. Use [.factory/docs/engineering-handbook.md](.factory/docs/engineering-handbook.md) for code and testing standards.
+
+Creator recovery metadata is retained at \`${STATE_FILE}\` so the installed creator can still apply, verify, and diagnose this project. Keep it with the generated files; do not delete it after setup.
+`;
 
 const renderTextFile = (
   source: SourceFile,
@@ -859,7 +880,8 @@ const renderTextFile = (
     }
   }
   if (destinationPath.endsWith(".md")) rendered = renderMarkdown(rendered, source.path, destinationPath, destinations, removed);
-  if (source.path === "AGENT.md" && destinationPath === "AGENT.md") rendered = renderGeneratedAgentRoutes(rendered);
+  if (source.path === "AGENT.md" && destinationPath === "AGENT.md") rendered = renderConsumerAgent(rendered);
+  if (source.path === "README.md" && destinationPath === "README.md") rendered = renderConsumerReadme(config);
   for (const key of Object.keys(config.values)) {
     if (rendered.includes(`<${key}>`)) throw new CreatorError("unresolved_placeholder", `generated file contains unresolved placeholder: ${key}`, { path: destinationPath });
   }

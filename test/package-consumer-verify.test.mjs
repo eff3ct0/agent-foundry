@@ -66,6 +66,14 @@ test("offline package consumers verify exact identity, apply/verify, noop, start
       assert.match(consumer.identity.tarball_digest, /^sha256:[0-9a-f]{64}$/u);
       assert.match(consumer.identity.payload.digest, /^sha256:[0-9a-f]{64}$/u);
       assert.match(consumer.identity.tree_digest, /^sha256:[0-9a-f]{64}$/u);
+      const project = path.join(parent, "evidence", consumer.consumer, "project");
+      const readme = await readFile(path.join(project, "README.md"), "utf8");
+      const agent = await readFile(path.join(project, "AGENT.md"), "utf8");
+      assert.match(readme, /^# /u);
+      assert.match(readme, /\.factory\/creator\/state\.json/u);
+      assert.match(agent, /\.factory\/templates\/agent-runbook\.md/u);
+      assert.match(agent, /Protected `status:approved` gate/u);
+      for (const text of [readme, agent]) assert.doesNotMatch(text, /This is a template|creator package is the primary project path|Archetype maintenance|Project initialization \(`SETUP`\)|npm-release\.yml|<EXACT_VERSION>/u);
       const startup = await readFile(path.join(parent, "evidence", consumer.consumer, "agent-startup.txt"), "utf8");
       assert.equal(startup, `--cd\n${path.join(parent, "evidence", consumer.consumer, "project")}\n`);
     }
