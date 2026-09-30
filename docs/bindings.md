@@ -34,8 +34,13 @@ replace the corresponding local-default row with its exact durable URL or
 identifier and keep a minimal local bootstrap pointer and access/recovery
 instructions. Mark retained summaries and exported copies `Derived - not
 authoritative` with source and last-confirmed revision; they are not a fallback
-authority. This is a manual documentation contract, **not** a configured
-external provider, destination selector, or synchronization mechanism.
+authority. The setup-time `DOCS_DESTINATION` profile in `placeholders.json`
+composes this map for local Git, Git-sourced Pages publication, a declared
+external read/write/readback integration, or a read-only website. Local Git
+remains the offline default. External family URLs must be exact and inside the
+declared destination identity; Pages keeps Git canonical and identifies its
+source separately from the publication URL. A contract declaration does not
+install an adapter, verify live support, or authorize transfer.
 
 Read the map before using a copy. Local project rules override the pinned
 organization baseline for overlapping local rules; an explicitly mapped
@@ -46,6 +51,12 @@ repair the exact map/link and reconcile the copy. During migration, change
 the canonical row only after the new source and access are verified; label old
 copies derived and remove stale references deliberately. Do not move task
 state or approval evidence into documentation.
+
+Factory defaults may suggest a profile but non-local project identity and
+integration answers must be explicitly supplied by the project. Never put
+credential values in answers or generated docs or discover ambient sessions.
+Remote reads, writes, and publication require separate authorization for the
+exact operation, destination, and credential/session; setup does none of them.
 
 ## Protected `status:approved` gate
 The bound task provider may support delegated approval only through its

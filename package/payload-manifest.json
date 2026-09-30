@@ -103,14 +103,14 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 4234,
-      "sha256": "fe17ed22f175300b390d1402f0bf0163f04e77a3bb4b003c7beb48d7ec9a7c90"
+      "size": 5165,
+      "sha256": "d2bc00b0ec0be66581a555aee705d05ecacc0520dbb6c4985d3fb291db5fb435"
     },
     {
       "path": "docs/bootstrap.md",
       "mode": "100644",
-      "size": 3468,
-      "sha256": "0e3dd820e03110b5708888c9f530591b2e3b44a9028aa39a571f436300f97e9a"
+      "size": 3998,
+      "sha256": "e836f11e24068240dce93da27aa8e5e36db0b2db6b655b577c9404481f355520"
     },
     {
       "path": "docs/determinism.md",
@@ -175,8 +175,8 @@
     {
       "path": "placeholders.json",
       "mode": "100644",
-      "size": 6019,
-      "sha256": "c56ea8f4758d7e9c0a557195bcb51030dc1ca8a2ca62e931dfe411136d1013ad"
+      "size": 8133,
+      "sha256": "0e4549162c2d4609f36b99fb3731b4f8d81523597773c06056f3932d4c148cfb"
     },
     {
       "path": "providers/agents/catalog.json",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:3ab7b3a34460b161aad9e51bd2089accd99a2d4d17afe675b8f6657b1b599a87"
+  "payload_digest": "sha256:4560dd49e486506feac6cd9a690ef449035e8e12ecc724012d42021d08b7d81a"
 }

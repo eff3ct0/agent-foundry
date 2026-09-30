@@ -47,6 +47,14 @@ Select the task tracker, secrets provider, optional code-intelligence provider,
 and persistence language explicitly. The generated `docs/bindings.md` contract
 is mandatory and exclusive for the initialized project.
 
+Select a documentation profile independently: local Git needs no credentials;
+GitHub Pages is only a publication target for an identified Git source; a
+declared external read/write/readback contract needs exact project family URLs,
+integration and access mechanism; a website without such a contract is
+read-only. Review the setup questions in [`agent-init.md`](agent-init.md).
+Factory defaults may suggest a profile, but cannot supply project-specific
+authorization. No remote document write or publication occurs during setup.
+
 ## 5. First commit and branch protection
 
 Make the initial commit using conventional commits. Protect the integration

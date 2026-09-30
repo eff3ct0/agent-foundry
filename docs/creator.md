@@ -58,6 +58,19 @@ v1 configuration and inline CI behavior are unchanged. To roll back this extensi
 omit both factory flags and use explicit project answers; applying that change
 updates creator-owned files, subject to the usual conflict checks.
 
+Documentation defaults follow the same precedence, but non-local profiles
+require an explicit project selection and project-supplied identity/contract
+fields. A factory suggestion cannot authorize a remote destination. Selecting
+`local` after a factory suggestion discards inherited destination fields and
+keeps the Git-only authority map. The creator validates exact HTTPS family
+URLs within the destination identity; external-contract declarations name a
+supported integration, access mechanism category, and read/write/readback
+specifications. This is not a live adapter or remote verification. A read-only
+website cannot gain write capability by selection, and Pages publication
+requires separate deployment evidence. Plan/apply/verify make no remote
+documentation calls; every later remote operation needs explicit user
+authorization for the target, action, and credential/session.
+
 ### Reusable GitHub CI from the same pin
 
 When the pinned project selects GitHub CI and `CI_STACKS`, the creator requires

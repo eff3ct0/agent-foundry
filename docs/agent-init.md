@@ -25,6 +25,19 @@ agent handoff providers explicitly. A local `.github/` directory is not proof
 of a GitHub provider. The selected provider fragments and CI recipes are
 composed into generated outputs and then removed from the generated project.
 
+Choose `DOCS_DESTINATION=local` (the offline default) or explicitly name a
+non-local profile and its project-specific identity in `answers.json`. For
+`github-pages`, supply the exact Pages URL and Git source URL; Git remains
+canonical, and publication needs independent deployment/revision evidence.
+For `external-contract`, supply four canonical family URLs within the exact
+destination URL, a named integration, an access-mechanism category, and HTTPS
+specifications for its read, write, and readback operations. This declares a
+manual contract, not a live Confluence or other service adapter. For
+`website-readonly`, supply the exact website and four source URLs; writes and
+publication remain unsupported. Unsupported profiles or missing project
+answers fail before any target write. Do not put credentials in configuration;
+setup neither discovers ambient access nor authorizes remote operations.
+
 Bind `TASK_TRACKER` and its `TRACKER` / `TRACKER_KEY` identity at setup. Every durable task/TODO mechanism
 required or configured by the selected harness MUST use that provider exclusively, including create, update,
 status, comment, checkpoint, phase handoff, and completion. Harness access (MCP, CLI, API, or task UI) does not
@@ -55,7 +68,7 @@ owned files drift.
 
 ## Step 4 - Verify
 
-Verify required placeholders, generated bindings (selected provider and tracker/board identity), CI jobs,
+Verify required placeholders, generated bindings (selected provider, tracker/board and documentation identity/capabilities), CI jobs,
 links, startup mode, and the configured base commands. A successful `apply` is not a substitute for
 `verify`; a provider handoff is reported separately from repository readiness.
 
