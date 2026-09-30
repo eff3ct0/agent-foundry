@@ -1026,17 +1026,18 @@ test("Git-only documentation authority is self-contained in a fresh project", as
   const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
   assert.match(agent, /family map in `docs\/bindings\.md`/u);
   assert.match(agent, /Task-triggered context routes/u);
-  for (const [trigger, required, destination] of [
-    ["Bug fix or implementation", "docs/engineering-handbook.md", ".factory/docs/engineering-handbook.md"],
-    ["Provider setup or binding failure", "docs/agent-init.md", ".factory/docs/agent-init.md"],
-    ["Release or deployment", "docs/workflow.md", ".factory/docs/workflow.md"],
+  for (const [trigger, destination] of [
+    ["Bug fix or implementation", ".factory/docs/engineering-handbook.md"],
+    ["Provider setup or binding failure", ".factory/docs/agent-init.md"],
+    ["Release or deployment", ".factory/docs/workflow.md"],
   ]) {
     const row = agent.split("\n").find((line) => line.startsWith(`| ${trigger} (`));
-    assert.ok(row?.includes(`\`${required}\` → \`${destination}\``), `${trigger} route is not navigable`);
+    assert.ok(row?.includes(`\`${destination}\``), `${trigger} route is not navigable`);
+    assert.doesNotMatch(row, / → /u);
     await stat(path.join(target, destination));
   }
   assert.match(agent, /configured external canonical source/u);
-  assert.match(agent, /missing or inaccessible/u);
+  assert.match(agent, /required local content is missing/u);
   assert.match(await readFile(path.join(target, "CLAUDE.md"), "utf8"), /mode\/task route/u);
   assert.match(bindings, /\| Business \|[^\n]*No detailed business source is assumed/u);
   assert.match(bindings, /external destination is not selected by this/u);
@@ -1057,6 +1058,61 @@ test("Git-only documentation authority is self-contained in a fresh project", as
   const sourceBindings = await readFile(path.join(root, "docs", "bindings.md"), "utf8");
   assert.match(sourceAgent, /Documentation authority is separate/u);
   assert.match(sourceBindings, /source-template guide/u);
+});
+
+test("fresh generated context routes use retained paths and reject stale or missing required topics", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-context-routes-"));
+  try {
+    const target = path.join(parent, "project");
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    assert.equal((await run(["apply", ...args])).code, 0);
+    const startup = async () => json(await run(["verify", ...args]));
+    const work = await execFileAsync(process.execPath, [path.join(target, "start.mjs"), "--json"], { cwd: target });
+    assert.equal(JSON.parse(work.stdout).mode, "WORK");
+    const context = await Promise.all(["CLAUDE.md", "AGENT.md", "docs/bindings.md", ".factory/docs/workflow.md", ".factory/docs/engineering-handbook.md", ".factory/templates/agent-runbook.md"]
+      .map(async (relative) => [relative, await readFile(path.join(target, relative), "utf8")]));
+    const files = new Map(context);
+    const requiredPaths = ["CLAUDE.md", "AGENT.md", "start.mjs", "docs/bindings.md", ".factory/docs/workflow.md", ".factory/docs/engineering-handbook.md", ".factory/templates/agent-runbook.md"];
+    for (const relative of requiredPaths) await stat(path.join(target, relative));
+    assert.match(files.get("AGENT.md"), /Required topic \(generated path\)/u);
+    assert.doesNotMatch(files.get("AGENT.md"), /\| Archetype maintenance \(`SELF`\)/u);
+    assert.doesNotMatch(files.get("AGENT.md"), /\(`SELF` or `WORK`\)/u);
+    assert.doesNotMatch(files.get("AGENT.md"), /source-only; not a generated-project action/u);
+    assert.match(files.get("AGENT.md").split("\n").find((line) => line.startsWith("| Release or deployment")), /`\.factory\/docs\/workflow\.md`/u);
+    assert.match(files.get("AGENT.md"), /`\.factory\/templates\/agent-runbook\.md`/u);
+    assert.match(files.get(".factory/docs/workflow.md"), /\[`\.factory\/templates\/agent-runbook\.md`\]\(\.\.\/templates\/agent-runbook\.md\)/u);
+    assert.match(files.get(".factory/docs/engineering-handbook.md"), /\[`\.factory\/templates\/adr\.md`\]\(\.\.\/templates\/adr\.md\)/u);
+    assert.match(files.get("CLAUDE.md"), /\[`AGENT\.md`\]\(AGENT\.md\)/u);
+    assert.match(files.get("docs/bindings.md"), /\[workflow\]\(\.\.\/\.factory\/docs\/workflow\.md\)/u);
+    const checkInlineRoute = (content) => {
+      assert.doesNotMatch(content, /`(?:docs\/(?:workflow|engineering-handbook)\.md|templates\/agent-runbook\.md)`(?! →)/u);
+    };
+    for (const [, content] of context) checkInlineRoute(content);
+    assert.equal((await startup()).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    const shim = path.join(target, "CLAUDE.md");
+    await writeFile(shim, `${files.get("CLAUDE.md")}\nFollow \`docs/workflow.md\`.\n`);
+    const staleContent = await readFile(shim, "utf8");
+    assert.throws(() => checkInlineRoute(staleContent), /expected to not match/u);
+    const stale = await run(["verify", ...args]);
+    assert.notEqual(stale.code, 0);
+    assert.ok(json(stale).operations.some(({ path: file }) => file === "CLAUDE.md"));
+    await writeFile(shim, files.get("CLAUDE.md"));
+    const required = path.join(target, ".factory/templates/agent-runbook.md");
+    const original = await readFile(required);
+    await rm(required);
+    const missing = await run(["verify", ...args]);
+    assert.notEqual(missing.code, 0);
+    assert.ok(json(missing).operations.some(({ path: file }) => file === ".factory/templates/agent-runbook.md"));
+    const failedStart = await execFileAsync(process.execPath, [path.join(target, "start.mjs"), "--json"], { cwd: target }).catch((error) => error);
+    assert.equal(JSON.parse(failedStart.stdout).diagnostics[0].path, ".factory/templates/agent-runbook.md");
+    assert.match(JSON.parse(failedStart.stdout).diagnostics[0].message, /restore the creator-owned file and run foundry verify/u);
+    await writeFile(required, original);
+    assert.equal((await startup()).status, "verified");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });
 
 test("documentation profiles compose exact authority and independent capabilities without remote transfer", async () => {
@@ -1116,6 +1172,9 @@ test("documentation profiles compose exact authority and independent capabilitie
     assert.equal(json(rerun).status, "noop", profile);
     if (profile === "external-contract" || profile === "website-readonly") {
       for (const url of Object.values(familySources)) assert.ok(bindings.includes(url));
+      await assert.rejects(stat(path.join(target, "docs/business.md")));
+      assert.match(bindings, /unavailable source is not replaced by a local export/u);
+      assert.doesNotMatch(agent, /`docs\/business\.md`/u);
     }
   }
 });
