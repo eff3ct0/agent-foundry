@@ -32,7 +32,7 @@ issue labels for this provider.
 **Rules and lifecycle:**
 - Statuses: *To Do* -> *In Progress* -> *Done* (map to the board's actual equivalents when different).
 - At start, move the issue to *In Progress* and comment the plan; at close, move it to *Done*.
-- After every completed phase, add the latest [`templates/handoff.md`](../../templates/handoff.md) state to the issue. The handoff records current phase/status, completed work, exact next action, branch/commit, verification evidence, and required evidence to resume.
+- After every completed phase, add the latest [handoff template](../../templates/handoff.md) state to the issue. The handoff records current phase/status, completed work, exact next action, branch/commit, verification evidence, and required evidence to resume.
 - Leave progress/checkpoint comments on the issue; durable state lives there, not in the session.
 - One issue = one unit of work (one session).
 - Every commit/PR references the issue key (`<TRACKER_KEY>-NNN`).

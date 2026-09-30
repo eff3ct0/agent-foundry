@@ -1242,6 +1242,27 @@ test("all task selections generate exclusive, readable provider-native bindings"
     const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
     assert.equal(applied.code, 0, `${provider}: ${applied.stderr}`);
     const bindings = await readFile(path.join(target, "docs", "bindings.md"), "utf8");
+    const labels = new Set(JSON.parse(await readFile(path.join(target, ".github", "labels.json"), "utf8")).labels.map(({ name }) => name));
+    const checkExamples = (text) => {
+      for (const [, label] of text.matchAll(/--label "([^"]+)"/gu)) {
+        assert.ok(labels.has(label), `${provider}: unknown example label ${label}`);
+      }
+      assert.doesNotMatch(text, /type:task|\[`templates\/handoff\.md`\]/u, provider);
+      if (provider === "custom") return;
+      const link = text.match(/\[handoff template\]\(([^)]+)\)/u);
+      assert.ok(link, `${provider}: expected a handoff template link`);
+      const destination = path.resolve(target, "docs", link[1]);
+      assert.equal(destination, path.join(target, ".factory", "templates", "handoff.md"), provider);
+      return destination;
+    };
+    const handoffExample = checkExamples(bindings);
+    if (handoffExample) await stat(handoffExample);
+    if (provider === "github-issues") {
+      assert.match(bindings, /--label "type:product"/u);
+      assert.match(bindings, /--label "type:bug"/u);
+      assert.throws(() => checkExamples(bindings.replace('--label "type:product"', '--label "type:task"')), /unknown example label type:task/u);
+      assert.throws(() => checkExamples(bindings.replace("../.factory/templates/handoff.md", "../templates/handoff.md")), /github-issues/u);
+    }
     assert.ok(bindings.includes(`Task provider (TASK_TRACKER): ${provider}`), provider);
     assert.ok(bindings.includes(`Tracker (TRACKER): ${tracker}`), provider);
     assert.ok(bindings.includes(`Project/board (TRACKER_KEY): ${key}`), provider);
