@@ -9,6 +9,7 @@ import {
   envelopeJson,
   errorEnvelope,
   launchSelectedAgent,
+  onboard,
   preparePlan,
   verify,
   type Command,
@@ -46,10 +47,11 @@ interface ParsedArgs extends Omit<CreatorOptions, "command" | "target"> {
   reducedMotion: boolean;
 }
 
-const usage = "Usage: foundry <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--factory-root <local-checkout> --factory-sha <trusted-full-commit-sha>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive] [--yes] [--no-color] [--reduced-motion] [--json]\n       foundry github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
+const usage = "Usage: foundry <plan|dry-run|apply|verify|doctor> --target <directory> [--config <file>] [--factory-root <local-checkout> --factory-sha <trusted-full-commit-sha>] [--agent <id>] [--agents <id,...>] [--launch-agent] [--non-interactive] [--yes] [--no-color] [--reduced-motion] [--json]\n       foundry onboard --complete --target <directory> [--yes] [--non-interactive] [--json]\n       foundry github-provision --org <organization> [--factory-repo <name>] [--visibility <public|internal|private>] [--plan|--no-create|--yes]";
 const errorStatuses = new Set(["error", "conflict", "failed", "not-created", "unhealthy", "cancelled", "verification-failed", "handoff-failed"]);
 
 const isProvisioningCommand = (value: string | undefined): boolean => value === "github-provision" || value === "provision-github";
+const isOnboardCommand = (value: string | undefined): boolean => value === "onboard";
 
 interface ParsedProvisioningArgs extends Omit<ProvisioningOptions, "client" | "confirm"> {
   help: boolean;
@@ -391,9 +393,40 @@ const runProvisioning = async (): Promise<void> => {
   }
 };
 
+const runOnboard = async (): Promise<void> => {
+  const args = [...process.argv.slice(3)];
+  let target = "";
+  let complete = false;
+  try {
+    if (args.includes("--help")) {
+      stdout.write(`${usage}\n`);
+      return;
+    }
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (arg === "--target" || arg === "-t") target = args[++index] ?? "";
+      else if (arg === "--complete") complete = true;
+      // Accepted for consistency with other commands; onboarding completion is non-interactive and machine-gated.
+      else if (arg === "--yes" || arg === "--non-interactive" || arg === "--no-prompt" || arg === "--json") continue;
+      else throw new CreatorError("invalid_arguments", `unknown argument: ${arg}`);
+    }
+    if (!target) throw new CreatorError("invalid_arguments", "--target is required");
+    if (!complete) throw new CreatorError("invalid_arguments", "foundry onboard requires --complete");
+    writeEnvelope(await onboard({ target }));
+  } catch (error) {
+    const creatorError = error instanceof CreatorError ? error : new CreatorError("unexpected_error", (error as Error).message);
+    stderr.write(`error[${creatorError.code}]: ${creatorError.message}\n`);
+    writeEnvelope(errorEnvelope("onboard", target, creatorError));
+  }
+};
+
 const main = async (): Promise<void> => {
   if (isProvisioningCommand(process.argv[2])) {
     await runProvisioning();
+    return;
+  }
+  if (isOnboardCommand(process.argv[2])) {
+    await runOnboard();
     return;
   }
   const parsed = parseArgs();

@@ -102,6 +102,9 @@ interface CreatorState {
   payload_digest: string;
   config_digest: string;
   owned_files: Array<Pick<PayloadFile, "path" | "mode" | "size" | "sha256">>;
+  // Optional onboarding gate. `false` => created-but-unconfigured (start.mjs routes ONBOARDING);
+  // `true` OR ABSENT => onboarded (routes WORK). Absent keeps pre-0.3.0 projects valid and routed to WORK.
+  onboarded?: boolean;
 }
 
 export interface CreatorConfig {
@@ -134,7 +137,7 @@ export interface HandoffResult {
   signal: NodeJS.Signals | null;
   message: string;
 }
-export type Command = "plan" | "dry-run" | "apply" | "verify" | "doctor";
+export type Command = "plan" | "dry-run" | "apply" | "verify" | "doctor" | "onboard";
 export type OperationAction = "create" | "update" | "remove" | "noop" | "conflict";
 
 export interface Diagnostic {
@@ -824,7 +827,7 @@ const renderGeneratedAgentRoutes = (text: string): string => {
     .join("\n")
     .replace("Required topic (S → G)", "Required topic (generated path)")
     .replace("Optional when relevant (S → G)", "Optional when relevant (generated path)");
-  return text.slice(0, start).replace("`S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. Do not apply the creator to this source repository.", "These routes use initialized-project paths. After setup, use the WORK paths shown below.") + table + text.slice(end);
+  return text.slice(0, start).replace("`S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. A created-but-unconfigured project routes `ONBOARDING` first: complete the runbook's first-session bootstrap and run `foundry onboard --complete` (the creator flips the gate; start.mjs stays read-only) before `WORK`. Do not apply the creator to this source repository.", "These routes use initialized-project paths. A created-but-unconfigured project routes `ONBOARDING` first: complete the runbook's first-session bootstrap and run `foundry onboard --complete` (the creator flips the gate; start.mjs stays read-only) before `WORK`.") + table + text.slice(end);
 };
 
 const renderConsumerAgent = (text: string, projectName: string): string => renderGeneratedAgentRoutes(text)
@@ -1238,6 +1241,7 @@ const readState = async (target: string, relativePath: string): Promise<CreatorS
     if (!isObject(value) || value.schema_version !== CREATOR_SCHEMA_VERSION || !Array.isArray(value.owned_files) ||
       typeof value.payload_version !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(value.payload_digest) ||
       !/^sha256:[0-9a-f]{64}$/u.test(value.config_digest) ||
+      (value.onboarded !== undefined && typeof value.onboarded !== "boolean") ||
       value.owned_files.some((file) => !isObject(file) || typeof file.path !== "string" ||
         !/^0[0-7]{3}$/u.test(file.mode) || !Number.isSafeInteger(file.size) || file.size < 0 ||
         typeof file.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(file.sha256))) {
@@ -1304,7 +1308,10 @@ const fileOperation = (file: PlannedFile, action: OperationAction, reason: strin
   reason,
 });
 
-const stateBytesFor = (manifest: PayloadManifest, config: CreatorConfig, files: PlannedFile[]): Buffer => canonicalJson({
+// `onboarded` is project-mutable state, not derived from the payload: a fresh create records `false`
+// (routes ONBOARDING); an existing state's value is preserved verbatim so re-apply/verify never undo a
+// completed onboarding and never add the field to a pre-0.3.0 state (absent stays absent => WORK).
+const stateBytesFor = (manifest: PayloadManifest, config: CreatorConfig, files: PlannedFile[], onboarded?: boolean): Buffer => canonicalJson({
   schema_version: CREATOR_SCHEMA_VERSION,
   payload_version: manifest.payload_version,
   payload_digest: manifest.payload_digest,
@@ -1315,6 +1322,7 @@ const stateBytesFor = (manifest: PayloadManifest, config: CreatorConfig, files: 
     size: file.size,
     sha256: file.sha256,
   })),
+  ...(onboarded === undefined ? {} : { onboarded }),
 });
 
 const expectedStateFile = (stateBytes: Buffer): PlannedFile => ({
@@ -1520,7 +1528,9 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   }
   if (legacyState && state) await removalOperation(LEGACY_STATE_FILE, "legacy-state-migration", sha256(await readFile(path.join(target.absolute, LEGACY_STATE_FILE))));
 
-  const stateBytes = stateBytesFor(manifest, config, files);
+  // Preserve an existing onboarding value (true/false/absent); only a fresh create seeds `false`.
+  const onboarded = state ? state.onboarded : false;
+  const stateBytes = stateBytesFor(manifest, config, files, onboarded);
   const stateFile = expectedStateFile(stateBytes);
   const existingState = await lstat(path.join(target.absolute, STATE_FILE)).catch(() => undefined);
   const stateSame = existingState?.isFile() && sha256(await readFile(path.join(target.absolute, STATE_FILE))) === stateFile.sha256;
@@ -1636,6 +1646,38 @@ export const applyPlan = async (prepared: PreparedPlan): Promise<CreatorEnvelope
     const wrapped = error instanceof CreatorError ? error : new CreatorError("apply_failed", (error as Error).message);
     throw new CreatorError(wrapped.code, wrapped.message, { plan: prepared, preserveStaging: !restored });
   }
+};
+
+// Flip the onboarding gate in the target's creator state. Keeps every state write inside the creator
+// (start.mjs stays read-only): re-read + validate, set `onboarded: true`, and rewrite canonically,
+// changing ONLY that field. Fails closed when state is missing/invalid; idempotent noop when already onboarded.
+export const onboard = async (options: { target: string }): Promise<CreatorEnvelope> => {
+  const target = await resolveTarget(options.target);
+  const state = await readState(target.absolute, STATE_FILE);
+  if (!state) {
+    throw new CreatorError("state_missing", "no creator state to complete onboarding; run foundry apply first", { path: STATE_FILE });
+  }
+  const envelope: CreatorEnvelope = {
+    schema_version: CREATOR_SCHEMA_VERSION,
+    command: "onboard",
+    status: "onboarded",
+    target: target.absolute,
+    payload: { version: state.payload_version, digest: state.payload_digest },
+    operations: [],
+    diagnostics: [],
+  };
+  if (state.onboarded !== false) {
+    // Already onboarded (`true` or field absent): never rewrite; report an idempotent noop.
+    return { ...envelope, status: "noop", diagnostics: [diagnostic("already_onboarded", "project is already onboarded; nothing to complete", STATE_FILE)] };
+  }
+  state.onboarded = true;
+  const bytes = canonicalJson(state);
+  const statePath = pathFor(target.absolute, STATE_FILE);
+  const temporary = `${statePath}.onboard-${process.pid}`;
+  await writeFile(temporary, bytes, { mode: 0o600 });
+  await chmod(temporary, 0o600);
+  await rename(temporary, statePath);
+  return { ...envelope, operations: [fileOperation(expectedStateFile(bytes), "update", "onboarding-complete")] };
 };
 
 export const doctor = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
