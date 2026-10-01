@@ -58,8 +58,15 @@ creator publishes and reads back before the initializer publishes and reads
 back. The tag-scoped workflow concurrency does not make two npm publishes
 atomic. Claim rejection, uncertainty, a failed publish, or readback mismatch
 stops without another claim or publish retry. The always-uploaded bounded
-identity/state evidence identifies the last attempted phase. Resolve the exact
-registry state and claim with a maintainer; immutable npm bytes require a new
+identity/state evidence identifies the last attempted phase. Failed pair evidence
+also retains a bounded diagnostic: the release classification, known npm operation,
+exit code (0–255), allowlisted system/npm code and signal, and boolean killed status
+when available. Unknown values are omitted or classified as unknown; termination
+alone does not establish a timeout or authentication cause. Raw subprocess messages,
+stacks, causes, output, arguments, environment, URLs and paths are never retained.
+The CLI prints only an allowlisted release classification on failure. These fields
+improve future diagnosis; they cannot recover an earlier discarded npm error.
+Resolve the exact registry state and claim with a maintainer; immutable npm bytes require a new
 version and roll-forward rather than republishing or unpublishing a failed
 pair. A local prerelease candidate does not authorize a
 GitHub Release, tag, dispatch, npm publication, or registry transfer. Keep
