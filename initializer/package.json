@@ -1,0 +1,21 @@
+{
+  "name": "@eff3ct/create-agent-foundry",
+  "version": "0.2.0-rc.0",
+  "description": "Positional npm create entrypoint for Agent Foundry.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eff3ct0/agent-foundry.git"
+  },
+  "type": "commonjs",
+  "bin": {
+    "create-agent-foundry": "bin/create-agent-foundry.cjs"
+  },
+  "files": ["bin"],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "@eff3ct/agent-foundry": "0.2.0-rc.0"
+  },
+  "license": "MIT"
+}

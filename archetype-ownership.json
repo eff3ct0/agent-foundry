@@ -162,6 +162,7 @@
         {"path": "tsconfig.json", "kind": "file"},
         {"path": "package", "kind": "directory"},
         {"path": "src", "kind": "directory"},
+        {"path": "initializer", "kind": "directory"},
         {"path": "test", "kind": "directory"},
         {"path": "docs/creator.md", "kind": "file"},
         {"path": "docs/installer-ux.md", "kind": "file"},

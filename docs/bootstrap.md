@@ -13,6 +13,14 @@ default branch. Do not use GitHub Template mode for normal creation.
 pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --non-interactive --yes
 ```
 
+After its separate authorized release, the interactive positional alternative is
+`npm create @eff3ct/agent-foundry@<EXACT_VERSION> ./new-project`. npm resolves
+this initializer name to `@eff3ct/create-agent-foundry@<EXACT_VERSION>`, which
+depends on the same exact creator version and runs `foundry apply`. It is not
+currently a published/verified entrypoint. For non-interactive explicit answers,
+pass `-- --config answers.json --non-interactive --json` after the target. A
+discoverable `@latest` is not an exact-version substitute.
+
 The package does not call GitHub or create a remote repository. Create the
 remote separately with the approved repository tooling, then apply the package
 to its checked-out working tree.
