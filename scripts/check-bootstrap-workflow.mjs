@@ -69,6 +69,18 @@ const checkBootstrap = (text) => {
   requireText(cleanup, [`actions/checkout@${bootstrapPinnedActions["actions/checkout"]}`, "ref: ${{ github.workflow_sha }}", "persist-credentials: false", 'import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";', "scripts/typed-runtime/resource-proof-cleanup.js", "bootstrap-e2e-proof-${{ github.run_id }}-${{ matrix.stack }}"], "cleanup must use the trusted proof-based policy");
   const bootstrap = section(text, "\n  bootstrap:\n", "\n  cleanup:\n");
   requireText(bootstrap, ['import { createHostedLifecycleMutationClient } from "./scripts/typed-runtime/hosted-lifecycle-mutation-client.js";', "./scripts/typed-runtime/resource-provision-and-proof.js"], "bootstrap must use the typed provisioning importer");
+  const prepare = section(text, "\n  prepare:\n", "\n  bootstrap:\n");
+  const prepareOutputs = section(prepare, "    outputs:\n", "    steps:\n");
+  const producer = prepare.split("\n      - name:").slice(1).find((step) => step.includes("matrix=${JSON.stringify"));
+  if (!producer) fail("bootstrap prepare job must emit the provisioning matrix");
+  const producerId = /\n        id: (\S+)/u.exec(producer)?.[1];
+  if (!producerId) fail("bootstrap prepare matrix producer step must declare an id");
+  for (const output of ["tag", "sha", "matrix"]) {
+    if (!prepareOutputs.includes(`${output}: \${{ steps.${producerId}.outputs.${output} }}`)) fail(`bootstrap prepare ${output} output must reference the emitting step id ${producerId}`);
+  }
+  for (const [name, job] of [["bootstrap", bootstrap], ["cleanup", cleanup]]) {
+    if (!job.includes("stack: ${{ fromJSON(needs.prepare.outputs.matrix) }}")) fail(`${name} matrix must consume the prepared recipes`);
+  }
   const triage = section(text, "\n  triage:\n", "\n  report:\n");
   const report = section(text, "\n  report:\n");
   if ([bootstrap, cleanup, report].some((job) => job.includes("OPENAI_API_KEY"))) fail("OPENAI_API_KEY must be isolated to triage");
