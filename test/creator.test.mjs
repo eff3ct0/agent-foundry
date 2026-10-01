@@ -659,6 +659,7 @@ test("interactive configuration prompts for missing required values through the 
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-prompt-"));
   const target = path.join(parent, "project");
   const prompted = [];
+  let agentsPlaceholder;
   const prepared = await preparePlan({
     command: "plan",
     target,
@@ -666,10 +667,14 @@ test("interactive configuration prompts for missing required values through the 
       prompted.push(placeholder.key);
       if (placeholder.key === "PROJECT_NAME") return "Prompted project";
       if (placeholder.key === "TASK_TRACKER") return "github-issues";
+      if (placeholder.key === "AGENTS") agentsPlaceholder = placeholder;
       return "none";
     },
   });
   assert.deepEqual(prompted, ["PROJECT_NAME", "TASK_TRACKER", "AGENTS"]);
+  // The AGENTS prompt offers the provider catalog ids as a navigable multi-select.
+  assert.equal(agentsPlaceholder.multi, true);
+  assert.deepEqual(agentsPlaceholder.enum, ["claude-code", "opencode", "codex", "pi"]);
   assert.equal(prepared.envelope.status, "planned");
   assert.ok(prepared.envelope.config_digest);
 

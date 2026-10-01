@@ -5,6 +5,7 @@ const {
   detectUiOptions,
   operationCounts,
   renderCompletion,
+  renderMultiSelection,
   renderReview,
   renderSelection,
   renderStep,
@@ -12,6 +13,31 @@ const {
 } = await import("../dist/installer-ui.js");
 
 const options = { color: false, unicode: false, reducedMotion: true, width: 40 };
+
+const agents = { key: "AGENTS", prompt: "Agent providers", default: "none", required: false, multi: true, enum: ["claude-code", "opencode", "codex", "pi"] };
+
+test("multi-select renders checkboxes, the focused cursor, and a toggle hint in ASCII", () => {
+  const frame = renderMultiSelection(agents, new Set([0, 2]), 1, options);
+  assert.equal(
+    frame,
+    "Agent providers (AGENTS)\nUse Up/Down, Space to toggle, Enter to confirm.\n  [x] claude-code\n> [ ] opencode\n  [x] codex\n  [ ] pi",
+  );
+  assert.doesNotMatch(frame, /\u001b/);
+});
+
+test("multi-select uses Unicode glyphs and marks the focused row with a filled or empty box", () => {
+  const frame = renderMultiSelection(agents, new Set([1]), 1, { ...options, unicode: true });
+  assert.match(frame, /Use ↑\/↓, Space to toggle, Enter to confirm\./);
+  assert.match(frame, /❯ ☑ opencode/);
+  assert.match(frame, /  ☐ claude-code/);
+  assert.match(frame, /  ☐ pi/);
+});
+
+test("multi-select paints only the focused row when color is enabled", () => {
+  const frame = renderMultiSelection(agents, new Set(), 2, { ...options, color: true });
+  assert.match(frame, /\u001b\[36mcodex\u001b\[0m/);
+  assert.doesNotMatch(frame, /\u001b\[36mclaude-code/);
+});
 
 test("welcome renders Agent Foundry without color and preserves its template description", () => {
   const welcome = renderWelcome(options);
