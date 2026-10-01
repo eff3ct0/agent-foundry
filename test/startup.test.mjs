@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { test } from "node:test";
-import { detectMode, route, SELF, SETUP, WORK } from "../start.mjs";
+import { detectMode, route, SELF, SETUP, ONBOARDING, WORK } from "../start.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -122,6 +122,47 @@ test("startup accepts both creator state generations but rejects ambiguous and l
     await mkdir(outside);
     await rm(path.join(project, ".factory"), { recursive: true });
     await symlink(outside, path.join(project, ".factory"));
+    assert.equal((await detectMode(project)).mode, "ERROR");
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("onboarding gate routes on creator state onboarded flag with backward-compatible absence", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "factory-startup-onboarding-"));
+  try {
+    const project = path.join(parent, "project");
+    await mkdir(project);
+    await writeWork(project);
+    const modern = path.join(project, ".factory/creator");
+    await mkdir(modern, { recursive: true });
+    const base = { schema_version: 1, payload_version: "test", payload_digest: "digest", config_digest: "config", owned_files: [] };
+    const writeState = async (extra) => {
+      await writeFile(path.join(modern, "state.json"), JSON.stringify({ ...base, ...extra }));
+      await chmod(path.join(modern, "state.json"), 0o600);
+    };
+
+    // onboarded:false => ONBOARDING, and the message names the bootstrap and completion command.
+    await writeState({ onboarded: false });
+    assert.equal((await detectMode(project)).mode, ONBOARDING);
+    const onboarding = await route(project);
+    assert.equal(onboarding.mode, ONBOARDING);
+    assert.equal(onboarding.status, "ready");
+    assert.match(onboarding.message, /ONBOARDING mode/u);
+    assert.match(onboarding.message, /foundry onboard --complete/u);
+    assert.match(onboarding.message, /Project bootstrap \(first session\)/u);
+    assert.match(onboarding.message, /agent-runbook\.md/u);
+
+    // onboarded:true => WORK.
+    await writeState({ onboarded: true });
+    assert.equal((await detectMode(project)).mode, WORK);
+    assert.match((await route(project)).message, /WORK mode/u);
+
+    // Field absent (pre-0.3.0 project) => WORK, and still validates.
+    await writeState({});
+    assert.equal((await detectMode(project)).mode, WORK);
+    assert.equal((await route(project)).status, "ready");
+
+    // Non-boolean onboarded is malformed and fails closed.
+    await writeState({ onboarded: "yes" });
     assert.equal((await detectMode(project)).mode, "ERROR");
   } finally { await rm(parent, { recursive: true, force: true }); }
 });
