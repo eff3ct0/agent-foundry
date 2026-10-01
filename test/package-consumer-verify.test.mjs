@@ -44,20 +44,20 @@ test("offline package consumers verify exact identity, apply/verify, noop, start
     const tarball = path.join(packages, (await readdir(packages)).find((entry) => entry.endsWith(".tgz")) ?? "");
     const result = await verifyPackageConsumers({
       packageName: "@eff3ct/agent-foundry",
-      packageVersion: "0.2.0-rc.0",
+      packageVersion: "0.2.0",
       tarballPath: tarball,
       sourceSha,
-      release: { status: "verified", tag: "v0.2.0-rc.0", sha: sourceSha },
+      release: { status: "verified", tag: "v0.2.0", sha: sourceSha },
       outputDirectory: path.join(parent, "evidence"),
     });
 
     assert.equal(result.status, "passed");
-    assert.deepEqual(result.package, { name: "@eff3ct/agent-foundry", version: "0.2.0-rc.0" });
-    assert.deepEqual(result.release, { status: "verified", tag: "v0.2.0-rc.0", sha: sourceSha });
+    assert.deepEqual(result.package, { name: "@eff3ct/agent-foundry", version: "0.2.0" });
+    assert.deepEqual(result.release, { status: "verified", tag: "v0.2.0", sha: sourceSha });
     assert.deepEqual(result.consumers.map(({ consumer }) => consumer), ["pnpm-dlx", "npx"]);
     for (const consumer of result.consumers) {
       assert.equal(consumer.mode, "local-tarball");
-      assert.equal(consumer.package_spec, "@eff3ct/agent-foundry@0.2.0-rc.0");
+      assert.equal(consumer.package_spec, "@eff3ct/agent-foundry@0.2.0");
       assert.equal(consumer.apply.status, "applied");
       assert.equal(consumer.verify.status, "verified");
       assert.equal(consumer.rerun.status, "noop");

@@ -619,19 +619,18 @@ test("journey assertion workflow rejects malformed pins and authority", async ()
   });
 });
 
-test("npm release workflow is explicit, immutable, and publish-once", async () => {
+test("npm release workflow stages both identities before the sole pair coordinator", async () => {
   await fixture(async (directory) => {
-    const releaseShaCheck = 'assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)';
-    await replace(directory, "npmRelease", releaseShaCheck, 'grep -q \'"source_sha"\' identity/local.json');
-    await reject(directory, `npm release workflow is missing ${releaseShaCheck}`);
+    await replace(directory, "npmRelease", "test -f initializer/package.json", "true");
+    await reject(directory, "npm release pair staging is missing test -f initializer/package.json");
   });
   await fixture(async (directory) => {
     await append(directory, "npmRelease", '\n# grep -q \'"source_sha"\' identity/local.json\n');
     await reject(directory, "npm release workflow checks a nonexistent root source_sha");
   });
   await fixture(async (directory) => {
-    await replace(directory, "npmRelease", "npm publish \"$TARBALL\" --provenance --access public", "npm publish \"$TARBALL\" --provenance --access public\nnpm publish \"$TARBALL\" --provenance --access public");
-    await reject(directory, "npm release must publish exactly once");
+    await append(directory, "npmRelease", "\n# npm publish --bypass\n");
+    await reject(directory, "npm release must publish only through the pair coordinator");
   });
   await fixture(async (directory) => {
     await replace(directory, "npmRelease", "release:\n    types: [published]", "push:\n    branches: [main]");
@@ -647,21 +646,17 @@ test("npm release workflow is explicit, immutable, and publish-once", async () =
   });
 });
 
-const gateMessage = "npm release publish step must gate npm publish behind the version probe and exclusive claim without bypass";
+const gateMessage = "npm release publish step must use the exact pair coordinator without bypass";
 
-test("npm release gated publish step cannot be weakened or bypassed", async () => {
+test("npm release pair step cannot be weakened or bypassed", async () => {
   const mutations = [
-    // Removing the read-only version probe breaks the immutable gated step.
-    ['          import { probeExactVersion } from "./scripts/npm-release.mjs";\n', ""],
-    // Removing the exclusive first-publish claim breaks the immutable gated step.
-    ['          import { claimPublishAttempt } from "./scripts/release-readback.mjs";\n', ""],
-    // Forcing an unconditional "publish" decision bypasses the probe and claim.
-    ["          process.stdout.write(await decide());\n", '          process.stdout.write("publish");\n'],
+    ["          node scripts/npm-release.mjs --command publish-pair\n", "          true\n"],
+    ["          test \"$(git rev-parse HEAD)\" = \"$RELEASE_SHA\"\n", "          true\n"],
   ];
   for (const [from, to] of mutations) {
     await fixture(async (directory) => {
       await replace(directory, "npmRelease", from, to);
-      await reject(directory, gateMessage);
+      await reject(directory, /git rev-parse/u.test(from) ? "npm release workflow is missing test \"$(git rev-parse HEAD)\" = \"$RELEASE_SHA\"" : "npm release workflow is missing publish-pair");
     });
   }
   for (const bypass of [
@@ -671,111 +666,33 @@ test("npm release gated publish step cannot be weakened or bypassed", async () =
     "    defaults:\n      run:\n        shell: sh\n",
   ]) {
     await fixture(async (directory) => {
-      await replaceFirst(directory, "npmRelease", "      - name: Publish the exact package with npm provenance\n",
-        `      - name: Publish the exact package with npm provenance\n${bypass}`);
+      await replaceFirst(directory, "npmRelease", "      - name: Publish and read back the exact pair with npm provenance\n",
+        `      - name: Publish and read back the exact pair with npm provenance\n${bypass}`);
       await reject(directory, gateMessage);
     });
   }
 });
 
-test("npm release gated publish step only runs npm publish on a granted decision with a token", async () => {
+test("npm release runner never embeds a second publish or claim command", async () => {
   await fixture(async (directory) => {
-    const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
-    const step = workflow.split("      - name: Publish the exact package with npm provenance\n")[1]
-      ?.split("      - name: Read back npm metadata, tarball, and payload identity\n")[0];
-    assert.ok(step);
-    const scriptText = step.split("        run: |\n")[1]?.split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
-    assert.ok(scriptText);
-    const bin = path.join(directory, "bin");
-    await mkdir(bin);
-    const marker = path.join(directory, "npm-called");
-    const fakeNpm = path.join(bin, "npm");
-    await writeFile(fakeNpm, '#!/bin/sh\n: > "$FAKE_NPM_MARKER"\nexit 0\n');
-    await chmod(fakeNpm, 0o755);
-    // A fake node stands in for the real probe+claim decision so the shell gate is exercised offline.
-    const fakeNode = path.join(bin, "node");
-    await writeFile(fakeNode, '#!/bin/sh\nprintf "%s" "$FAKE_NODE_DECISION"\nexit "${FAKE_NODE_EXIT:-0}"\n');
-    await chmod(fakeNode, 0o755);
-    const run = (env) => execFileAsync("bash", ["-eo", "pipefail", "-c", scriptText], {
-      cwd: directory, env: { PATH: `${bin}:${process.env.PATH}`, TARBALL: "not-a-package.tgz", FAKE_NPM_MARKER: marker, ...env },
-    });
-    // Granted decision with a token is the only path that reaches npm publish.
-    await rm(marker, { force: true });
-    await run({ FAKE_NODE_DECISION: "publish", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "offline-placeholder" });
-    await readFile(marker);
-    // An already-published version skips publication and exits 0 without invoking npm.
-    await rm(marker, { force: true });
-    const skipped = await run({ FAKE_NODE_DECISION: "skip", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "offline-placeholder" });
-    assert.equal(skipped.stdout.includes("publication skipped"), true);
-    await assert.rejects(readFile(marker), { code: "ENOENT" });
-    // Fail closed: an inconclusive/unknown or ungranted decision, or a missing token, never publishes.
-    for (const env of [
-      { FAKE_NODE_DECISION: "", FAKE_NODE_EXIT: "1", NODE_AUTH_TOKEN: "offline-placeholder" },
-      { FAKE_NODE_DECISION: "garbage", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "offline-placeholder" },
-      { FAKE_NODE_DECISION: "publish", FAKE_NODE_EXIT: "0", NODE_AUTH_TOKEN: "" },
-    ]) {
-      await rm(marker, { force: true });
-      await assert.rejects(run(env));
-      await assert.rejects(readFile(marker), { code: "ENOENT" });
-    }
+    await replace(directory, "npmRelease", "node scripts/npm-release.mjs --command publish-pair", "node scripts/npm-release.mjs --command publish-pair\n          npm publish ./package/other.tgz");
+    await reject(directory, "npm release must publish only through the pair coordinator");
   });
 });
 
-test("npm release retries only bounded metadata and tarball readback", async () => {
-  await fixture(async (directory) => {
-    const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
-    const step = workflow.split("      - name: Read back npm metadata, tarball, and payload identity\n")[1]
-      ?.split("      - name: Upload immutable release evidence\n")[0];
-    assert.ok(step);
-    const scriptText = step.split("        run: |\n")[1]?.split("\n          test \"$(find registry-package")[0]
-      ?.split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
-    assert.ok(scriptText);
-    const bin = path.join(directory, "bin");
-    await mkdir(bin);
-    const npmCalls = path.join(directory, "npm-calls");
-    const sleeps = path.join(directory, "sleeps");
-    const fakeNpm = path.join(bin, "npm");
-    await writeFile(fakeNpm, `#!/bin/sh
-count=$(cat "$FAKE_NPM_CALLS" 2>/dev/null || printf '0')
-count=$((count + 1))
-printf '%s' "$count" > "$FAKE_NPM_CALLS"
-if [ "$1" = "view" ] && [ "$count" -lt 3 ]; then exit 1; fi
-if [ "$FAKE_ALWAYS_FAIL" = "1" ]; then exit 1; fi
-if [ "$1" = "view" ]; then printf '%s' '{"name":"@eff3ct/agent-foundry","version":"0.1.0"}'; fi
-exit 0
-`);
-    const fakeSleep = path.join(bin, "sleep");
-    await writeFile(fakeSleep, '#!/bin/sh\nprintf "%s\\n" "$1" >> "$FAKE_SLEEPS"\n');
-    await chmod(fakeNpm, 0o755);
-    await chmod(fakeSleep, 0o755);
-    await mkdir(path.join(directory, "identity"));
-    await mkdir(path.join(directory, "registry-package"));
-    await execFileAsync("bash", ["-euo", "pipefail", "-c", scriptText], {
-      cwd: directory,
-      env: {
-        PATH: `${bin}:${process.env.PATH}`,
-        PACKAGE_SPEC: "@eff3ct/agent-foundry@0.1.0",
-        FAKE_NPM_CALLS: npmCalls,
-        FAKE_SLEEPS: sleeps,
-      },
+test("npm release coordinator retains claim, ordered readback, provenance and token gates", async () => {
+  for (const marker of [
+    'if (!process.env.NODE_AUTH_TOKEN) fail("token_missing")',
+    '"--provenance", "--access", "public"',
+    "await readback(identities[index]);",
+    "pair: identities.map",
+  ]) {
+    await fixture(async (directory) => {
+      await replaceScript(directory, "scripts/npm-release.mjs", marker, "unsafe");
+      if (marker === "await readback(identities[index]);") await replaceScript(directory, "scripts/npm-release.mjs", marker, "unsafe");
+      await reject(directory, `npm release coordinator safety contract is missing ${marker}`);
     });
-    assert.equal(await readFile(npmCalls, "utf8"), "4");
-    assert.equal(await readFile(sleeps, "utf8"), "5\n10\n");
-    await writeFile(npmCalls, "0");
-    await rm(sleeps, { force: true });
-    await assert.rejects(execFileAsync("bash", ["-euo", "pipefail", "-c", scriptText], {
-      cwd: directory,
-      env: {
-        PATH: `${bin}:${process.env.PATH}`,
-        PACKAGE_SPEC: "@eff3ct/agent-foundry@0.1.0",
-        FAKE_NPM_CALLS: npmCalls,
-        FAKE_SLEEPS: sleeps,
-        FAKE_ALWAYS_FAIL: "1",
-      },
-    }));
-    assert.equal(await readFile(npmCalls, "utf8"), "5");
-    assert.equal(await readFile(sleeps, "utf8"), "5\n10\n15\n20\n");
-  });
+  }
 });
 
 test("npm release rejects Corepack and unpinned or unchecked toolchains", async () => {
@@ -822,7 +739,7 @@ test("npm release workflow wires both event SHAs into the pre-publish guard", as
   await fixture(async (directory) => {
     const target = path.join(directory, workflows, files.npmRelease);
     const workflow = await readFile(target, "utf8");
-    const publish = workflow.match(/      - name: Publish the exact package with npm provenance\n[\s\S]*?(?=      - name: Read back npm metadata)/u)?.[0];
+    const publish = workflow.match(/      - name: Publish and read back the exact pair with npm provenance\n[\s\S]*?(?=      - name: Upload immutable release evidence)/u)?.[0];
     assert.ok(publish);
     await writeFile(target, workflow.replace(publish, "").replace("      - name: Resolve immutable release identity\n", `${publish}      - name: Resolve immutable release identity\n`));
     await reject(directory, "npm release must resolve identity before publishing");
@@ -834,21 +751,9 @@ test("npm release workflow wires both event SHAs into the pre-publish guard", as
   });
 });
 
-test("npm release workflow checks the local release SHA against the resolved source", async () => {
+test("npm release workflow checks the exact source before pair publication", async () => {
   await fixture(async (directory) => {
-    const workflow = await readFile(path.join(directory, workflows, files.npmRelease), "utf8");
-    const command = workflow.match(/node --input-type=module -e '([^']+)'/u);
-    assert.ok(command);
-    const identity = path.join(directory, "identity");
-    await mkdir(identity);
-    const localIdentity = path.join(identity, "local.json");
-    const expectedSha = "a".repeat(40);
-    await writeFile(localIdentity, JSON.stringify({ release: { tag: "v0.1.0", sha: expectedSha } }));
-    const run = () => execFileAsync(process.execPath, ["--input-type=module", "-e", command[1]], { cwd: directory, env: { RELEASE_SHA: expectedSha } });
-    await run();
-    await writeFile(localIdentity, JSON.stringify({ release: { tag: "v0.1.0", sha: "b".repeat(40) } }));
-    await assert.rejects(run(), /AssertionError/u);
-    await writeFile(localIdentity, JSON.stringify({ source_sha: expectedSha }));
-    await assert.rejects(run(), /Cannot read properties of undefined/u);
+    await replace(directory, "npmRelease", 'test "$(git rev-parse HEAD)" = "$RELEASE_SHA"', "true");
+    await reject(directory, "npm release workflow is missing test \"$(git rev-parse HEAD)\" = \"$RELEASE_SHA\"");
   });
 });

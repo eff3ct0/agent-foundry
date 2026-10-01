@@ -132,7 +132,7 @@ const uploadedAsset = (asset, name, size) => object(asset) && Number.isSafeInteg
 
 // Only call for a verified NEW release ID, under per-tag serialization. No previous claim grants a publish.
 // The caller supplies an authenticated transport; this module never reads credentials or retries writes.
-export const claimPublishAttempt = async ({ transport, downloadTransport, repository, releaseId, tag, sourceSha, packageName, version, runId, timeoutMs = CLAIM_TIMEOUT_MS }) => {
+export const claimPublishAttempt = async ({ transport, downloadTransport, repository, releaseId, tag, sourceSha, packageName, version, runId, pair, timeoutMs = CLAIM_TIMEOUT_MS }) => {
   if (typeof transport !== "function") throw new ReleaseReadbackError("invalid_client", "claim transport is required");
   repository = repositoryName(repository);
   tag = validateTag(tag);
@@ -143,7 +143,13 @@ export const claimPublishAttempt = async ({ transport, downloadTransport, reposi
     throw new ReleaseReadbackError("invalid_claim", "publish attempt identity is invalid");
   }
   const body = Buffer.from(JSON.stringify({ tag, source_sha: sourceSha, package: packageName, version, run_id: runId }));
-  if (body.length > CLAIM_MAX_BYTES) throw new ReleaseReadbackError("invalid_claim", "publish attempt identity is too large");
+  if (pair && (!Array.isArray(pair) || pair.length !== 2
+    || pair[0]?.name !== "@eff3ct/agent-foundry" || pair[1]?.name !== "@eff3ct/create-agent-foundry"
+    || pair.some((item) => item.version !== version || !/^sha256:[0-9a-f]{64}$/u.test(item.tarball_digest)))) {
+    throw new ReleaseReadbackError("invalid_claim", "publish pair identity is invalid");
+  }
+  const claimBody = pair ? Buffer.from(JSON.stringify({ tag, source_sha: sourceSha, package: packageName, version, run_id: runId, pair })) : body;
+  if (claimBody.length > CLAIM_MAX_BYTES) throw new ReleaseReadbackError("invalid_claim", "publish attempt identity is too large");
 
   const base = `/repos/${repository}/releases/${releaseId}`;
   const controller = new AbortController();
@@ -156,13 +162,13 @@ export const claimPublishAttempt = async ({ transport, downloadTransport, reposi
   const execute = async () => {
     try {
       const created = await request("POST", `https://uploads.github.com${base}/assets?name=${PUBLISH_CLAIM_ASSET}`, {
-        headers: { Accept: "application/vnd.github+json", "Content-Type": "application/json", "Content-Length": String(body.length) }, body,
+        headers: { Accept: "application/vnd.github+json", "Content-Type": "application/json", "Content-Length": String(claimBody.length) }, body: claimBody,
       });
       if (created.status === 422) return blocked("claim_exists");
       if (created.status !== 201) return blocked("claim_unknown");
       // GitHub's asset object (with its nested uploader) exceeds the 1 KiB claim-body cap; read it at the metadata bound.
       const asset = await claimJson(created, CLAIM_LIST_MAX_BYTES);
-      if (!uploadedAsset(asset, PUBLISH_CLAIM_ASSET, body.length)) return blocked("claim_unverified");
+      if (!uploadedAsset(asset, PUBLISH_CLAIM_ASSET, claimBody.length)) return blocked("claim_unverified");
 
       const listed = await request("GET", `https://api.github.com${base}/assets?per_page=100`, {
         headers: { Accept: "application/vnd.github+json" },
@@ -172,7 +178,7 @@ export const claimPublishAttempt = async ({ transport, downloadTransport, reposi
       // A full page might hide another same-name asset. Never assume uniqueness without exhaustive readback.
       if (!Array.isArray(assets) || assets.length >= 100) return blocked("claim_unverified");
       const matches = assets.filter((entry) => object(entry) && entry.name === PUBLISH_CLAIM_ASSET);
-      if (matches.length !== 1 || !uploadedAsset(matches[0], PUBLISH_CLAIM_ASSET, body.length)
+      if (matches.length !== 1 || !uploadedAsset(matches[0], PUBLISH_CLAIM_ASSET, claimBody.length)
         || matches[0].id !== asset.id) return blocked("claim_unverified");
 
       let downloaded = await request("GET", `https://api.github.com/repos/${repository}/releases/assets/${asset.id}`, {
@@ -183,7 +189,7 @@ export const claimPublishAttempt = async ({ transport, downloadTransport, reposi
         if (!url || typeof downloadTransport !== "function" || downloadTransport === transport) return blocked("claim_unverified");
         downloaded = await request("GET", url, { redirect: "manual", credentials: "omit" }, downloadTransport);
       }
-      if (downloaded.status !== 200 || !(await claimBytes(downloaded, CLAIM_MAX_BYTES)).equals(body)) return blocked("claim_unverified");
+      if (downloaded.status !== 200 || !(await claimBytes(downloaded, CLAIM_MAX_BYTES)).equals(claimBody)) return blocked("claim_unverified");
       if (controller.signal.aborted) return blocked("claim_unknown");
       return { status: "claimed", releaseId, assetId: asset.id };
     } catch {

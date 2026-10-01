@@ -216,12 +216,11 @@ const checkJourney = (text, projectRoot) => {
   for (const other of [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n")]) if (other.includes("OPENAI_API_KEY")) fail("agent API credentials crossed a stage boundary");
 };
 
-const checkNpmRelease = (text) => {
+const checkNpmRelease = (text, coordinator) => {
   checkPins(text, releasePinnedActions, "npm release action pin is missing");
   const resolve = section(text, "      - name: Resolve immutable release identity\n", "      - name: Check out the exact source revision\n");
-  const toolchain = section(text, "      - name: Activate pinned pnpm\n", "      - name: Build and pack the exact package once\n");
-  const publish = "      - name: Publish the exact package with npm provenance\n";
-  const readback = "      - name: Read back npm metadata, tarball, and payload identity\n";
+  const toolchain = section(text, "      - name: Activate pinned pnpm\n", "      - name: Build and pack both exact packages once\n");
+  const publish = "      - name: Publish and read back the exact pair with npm provenance\n";
   if (!text.includes(publish) || text.indexOf(publish) < text.indexOf("      - name: Check out the exact source revision\n")) fail("npm release must resolve identity before publishing");
   if (/\bcorepack\b/iu.test(toolchain) || text.includes("corepack install --global pnpm")) fail("npm release toolchain must not use Corepack");
   const commands = toolchain.split("\n").map((line) => line.trim());
@@ -239,22 +238,27 @@ const checkNpmRelease = (text) => {
   ], "npm release identity step is missing");
   requireText(text, [
     "release:\n    types: [published]", "workflow_dispatch:", "tag_name:", "permissions: {}", "id-token: write", "contents: write",
-    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0", 'PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"',
-    "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts", "npm publish \"$TARBALL\" --provenance --access public", "NODE_AUTH_TOKEN",
-    "scripts/npm-release.mjs", "verify-local", "verify-registry", "npm view", "npm pack", "payload", "tarball_digest",
-    'assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)',
+    `actions/setup-node@${releasePinnedActions["actions/setup-node"]}`, "node-version: 20.19.0",
+    "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts", "NODE_AUTH_TOKEN",
+    "scripts/npm-release.mjs", "verify-local", "publish-pair", "@eff3ct/create-agent-foundry",
+    'test "$(git rev-parse HEAD)" = "$RELEASE_SHA"', "identity/initializer.json", "identity/local.json",
   ], "npm release workflow is missing");
   if (text.includes('grep -q \'"source_sha"\' identity/local.json')) fail("npm release workflow checks a nonexistent root source_sha");
   if (resolve.includes("EXPECTED_SHA") || resolve.includes("resolvePublishedRelease")) fail("npm release identity step bypasses the event SHA guard");
-  if ((text.match(/npm publish /gu) ?? []).length !== 1) fail("npm release must publish exactly once");
-  const buildPack = section(text, "      - name: Build and pack the exact package once\n", publish);
+  if (text.includes("npm publish ")) fail("npm release must publish only through the pair coordinator");
+  const buildPack = section(text, "      - name: Build and pack both exact packages once\n", publish);
   if (!buildPack.includes('printf \'TARBALL=%s\\n\' "$TARBALL" >> "$GITHUB_ENV"')) {
     fail("npm release build step must export the packed tarball path as TARBALL for the publish step");
   }
   if (!buildPack.includes('TARBALL="./')) {
     fail("npm release must reference the packed tarball as a local ./ path so npm does not treat it as a git spec");
   }
-  const publishStep = section(text, publish, readback);
+  requireText(buildPack, [
+    "test -f initializer/package.json", "npm pack ./initializer --ignore-scripts --pack-destination package",
+    'INITIALIZER_TARBALL="./', "--package-name @eff3ct/create-agent-foundry",
+    'printf \'INITIALIZER_TARBALL=%s\\n\' "$INITIALIZER_TARBALL" >> "$GITHUB_ENV"',
+  ], "npm release pair staging is missing");
+  const publishStep = section(text, publish, "      - name: Upload immutable release evidence\n");
   const gatedStep = `        working-directory: release-source
         env:
           NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}
@@ -266,57 +270,23 @@ const checkNpmRelease = (text) => {
           VERSION: \${{ steps.release.outputs.version }}
           RUN_ID: \${{ github.run_id }}
         run: |
-          DECISION="$(node --input-type=module <<'NODE'
-          import { probeExactVersion } from "./scripts/npm-release.mjs";
-          import { claimPublishAttempt } from "./scripts/release-readback.mjs";
-          import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
-          const packageName = "@eff3ct/agent-foundry";
-          const version = process.env.VERSION;
-          const decide = async () => {
-            const probe = await probeExactVersion({ packageName, version, transport: (options) => fetch(options.url, { signal: options.signal, headers: options.headers, redirect: options.redirect }) });
-            if (probe.status === "present") { process.stderr.write(\`\${packageName}@\${version} is already published; skipping publication\\n\`); return "skip"; }
-            if (probe.status !== "absent") { process.stderr.write(\`registry probe was inconclusive (\${probe.status}); refusing to release\\n\`); process.exit(1); }
-            let releaseId = Number(process.env.RELEASE_ID);
-            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) {
-              const client = createHostedLifecycleReadClient({ token: process.env.GITHUB_TOKEN, transport: ({ url, headers, signal }) => fetch(url, { headers, signal }) });
-              const release = await client.get(\`/repos/\${process.env.REPOSITORY}/releases/tags/\${encodeURIComponent(process.env.RELEASE_TAG)}\`);
-              if (release.status !== "ok" || !Number.isSafeInteger(release.payload?.id)) { process.stderr.write(\`release id could not be resolved for \${process.env.RELEASE_TAG}\\n\`); process.exit(1); }
-              releaseId = release.payload.id;
-            }
-            const transport = (options) => fetch(options.url, { method: options.method, headers: { ...options.headers, Authorization: \`Bearer \${process.env.GITHUB_TOKEN}\`, "X-GitHub-Api-Version": "2022-11-28" }, body: options.body, redirect: options.redirect, signal: options.signal });
-            const downloadTransport = (options) => fetch(options.url, { method: options.method, headers: options.headers, body: options.body, redirect: options.redirect, credentials: "omit", signal: options.signal });
-            const claim = await claimPublishAttempt({ transport, downloadTransport, repository: process.env.REPOSITORY, releaseId, tag: process.env.RELEASE_TAG, sourceSha: process.env.RELEASE_SHA, packageName, version, runId: String(process.env.RUN_ID) });
-            if (claim.status !== "claimed") { process.stderr.write(\`exclusive publish claim was not granted (\${claim.code ?? claim.status}); refusing to release\\n\`); process.exit(1); }
-            process.stderr.write(\`exclusive publish claim granted for release \${claim.releaseId} asset \${claim.assetId}\\n\`);
-            return "publish";
-          };
-          process.stdout.write(await decide());
-          NODE
-          )"
-          case "$DECISION" in
-            skip) printf '%s\\n' "publication skipped: $VERSION is already present in the registry" ; exit 0 ;;
-            publish) : ;;
-            *) printf '%s\\n' "npm release refused: exclusive publish decision was not granted" >&2 ; exit 1 ;;
-          esac
-          test -n "$NODE_AUTH_TOKEN"
-          npm publish "$TARBALL" --provenance --access public
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          node scripts/npm-release.mjs --command publish-pair
 `;
   if ((text.split(publish).length !== 2) || publishStep !== gatedStep
-      || /(?:^|\n)\s*(?:continue-on-error|defaults):/u.test(text) || /(?:^|\n)\s*if:\s*always\(\)/u.test(text)) {
-    fail("npm release publish step must gate npm publish behind the version probe and exclusive claim without bypass");
+      || /(?:^|\n)\s*(?:continue-on-error|defaults):/u.test(text)
+      || (text.match(/(?:^|\n)\s*if:\s*always\(\)/gu) ?? []).length !== 1) {
+    fail("npm release publish step must use the exact pair coordinator without bypass");
   }
-  const readbackStep = section(text, readback, "      - name: Upload immutable release evidence\n");
-  requireText(readbackStep, [
-    "for attempt in 1 2 3 4 5; do",
-    "rm -f identity/registry-metadata.json registry-package/*.tgz",
-    'if npm view "$PACKAGE_SPEC" --json > identity/registry-metadata.json',
-    '&& npm pack "$PACKAGE_SPEC" --ignore-scripts --pack-destination registry-package; then',
-    'if [ "$attempt" -eq 5 ]; then',
-    'sleep "$((attempt * 5))"',
-  ], "npm release registry readback retry contract is missing");
-  if (readbackStep.includes("npm publish") || readbackStep.includes("claimPublishAttempt")) {
-    fail("npm release registry readback must not retry publication or the exclusive claim");
-  }
+  requireText(coordinator, [
+    "export const releasePair = async", "if (states.includes(\"absent\")) fail(\"partial_publication_manual_recovery\")",
+    "if (result.status !== \"claimed\") fail(\"claim_not_granted\")",
+    "await publish(identities[index]);", "await readback(identities[index]);",
+    "claimPublishAttempt({ repository, releaseId, tag, sourceSha: sha", "pair: identities.map",
+    'if (!process.env.NODE_AUTH_TOKEN) fail("token_missing")',
+    '"--provenance", "--access", "public"',
+    'const { NODE_AUTH_TOKEN, ...anonymous } = process.env',
+  ], "npm release coordinator safety contract is missing");
   if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
 };
 
@@ -382,7 +352,7 @@ export const check = async (projectRoot = root) => {
   if (bootstrap.includes("python3 scripts/report-bootstrap-failure.py") || template.includes("python3 scripts/report-bootstrap-failure.py")) fail("active reporter workflow consumers must invoke Node");
   checkJourney(journey, projectRoot);
   checkJourneyAssertions(assertions);
-  checkNpmRelease(npmRelease);
+  checkNpmRelease(npmRelease, await readFile(path.join(projectRoot, "scripts", "npm-release.mjs"), "utf8"));
   checkArchetypeNode20(archetypeNode20);
   return ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
 };

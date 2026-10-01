@@ -23,6 +23,24 @@ The package is `@eff3ct/agent-foundry` and requires Node.js 20.19 or newer.
 Always pin the exact version in onboarding and release verification:
 
 ```sh
+npm create @eff3ct/agent-foundry@<EXACT_VERSION> ./new-project
+```
+
+When the separately published initializer is available, npm maps that command
+to `@eff3ct/create-agent-foundry@<EXACT_VERSION>`. The initializer depends on
+the same exact version of `@eff3ct/agent-foundry` and delegates to `foundry apply`.
+It prompts for configuration and confirmation by default. For explicit answers
+in automation, pass flags after npm's `--` separator:
+
+```sh
+npm create @eff3ct/agent-foundry@<EXACT_VERSION> ./new-project -- --config answers.json --non-interactive --json
+```
+
+`@latest` may be useful for interactive discovery once published, but does not
+pin reproducible bytes. The initializer is not yet published or release-verified;
+until its separately authorized release, use the existing package-first commands:
+
+```sh
 pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./new-project --config answers.json --non-interactive
 pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --config answers.json --non-interactive --yes
 pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry verify --target ./new-project --config answers.json --non-interactive

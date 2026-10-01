@@ -68,7 +68,7 @@ jobs:
           test "$(node --version)" = "v20.19.0"
           npm install --global pnpm@12.4.2
           test "$(pnpm --version)" = "12.4.2"
-      - name: Build and pack the exact package once
+      - name: Build and pack both exact packages once
         working-directory: release-source
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
@@ -85,7 +85,17 @@ jobs:
           tar -xzf "$TARBALL" --strip-components=1 -C local-package
           node scripts/npm-release.mjs --command verify-local --package-root local-package --tarball "$TARBALL" --tag "$RELEASE_TAG" --source-sha "$RELEASE_SHA" --output identity/local.json
           printf 'TARBALL=%s\n' "$TARBALL" >> "$GITHUB_ENV"
-      - name: Publish the exact package with npm provenance
+          # Historical tags without the initializer are not eligible for this dual-package release.
+          test -f initializer/package.json
+          npm pack ./initializer --ignore-scripts --pack-destination package
+          test "$(find package -maxdepth 1 -name '*.tgz' -type f | wc -l)" = "2"
+          INITIALIZER_TARBALL="./$(find package -maxdepth 1 -name '*create-agent-foundry*.tgz' -type f -print -quit)"
+          test -f "$INITIALIZER_TARBALL"
+          mkdir -p local-initializer
+          tar -xzf "$INITIALIZER_TARBALL" --strip-components=1 -C local-initializer
+          node scripts/npm-release.mjs --command verify-local --package-name @eff3ct/create-agent-foundry --package-root local-initializer --tarball "$INITIALIZER_TARBALL" --tag "$RELEASE_TAG" --source-sha "$RELEASE_SHA" --output identity/initializer.json
+          printf 'INITIALIZER_TARBALL=%s\n' "$INITIALIZER_TARBALL" >> "$GITHUB_ENV"
+      - name: Publish and read back the exact pair with npm provenance
         working-directory: release-source
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -97,69 +107,10 @@ jobs:
           VERSION: ${{ steps.release.outputs.version }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          DECISION="$(node --input-type=module <<'NODE'
-          import { probeExactVersion } from "./scripts/npm-release.mjs";
-          import { claimPublishAttempt } from "./scripts/release-readback.mjs";
-          import { createHostedLifecycleReadClient } from "./scripts/hosted-lifecycle-read-client.mjs";
-          const packageName = "@eff3ct/agent-foundry";
-          const version = process.env.VERSION;
-          const decide = async () => {
-            const probe = await probeExactVersion({ packageName, version, transport: (options) => fetch(options.url, { signal: options.signal, headers: options.headers, redirect: options.redirect }) });
-            if (probe.status === "present") { process.stderr.write(`${packageName}@${version} is already published; skipping publication\n`); return "skip"; }
-            if (probe.status !== "absent") { process.stderr.write(`registry probe was inconclusive (${probe.status}); refusing to release\n`); process.exit(1); }
-            let releaseId = Number(process.env.RELEASE_ID);
-            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) {
-              const client = createHostedLifecycleReadClient({ token: process.env.GITHUB_TOKEN, transport: ({ url, headers, signal }) => fetch(url, { headers, signal }) });
-              const release = await client.get(`/repos/${process.env.REPOSITORY}/releases/tags/${encodeURIComponent(process.env.RELEASE_TAG)}`);
-              if (release.status !== "ok" || !Number.isSafeInteger(release.payload?.id)) { process.stderr.write(`release id could not be resolved for ${process.env.RELEASE_TAG}\n`); process.exit(1); }
-              releaseId = release.payload.id;
-            }
-            const transport = (options) => fetch(options.url, { method: options.method, headers: { ...options.headers, Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, "X-GitHub-Api-Version": "2022-11-28" }, body: options.body, redirect: options.redirect, signal: options.signal });
-            const downloadTransport = (options) => fetch(options.url, { method: options.method, headers: options.headers, body: options.body, redirect: options.redirect, credentials: "omit", signal: options.signal });
-            const claim = await claimPublishAttempt({ transport, downloadTransport, repository: process.env.REPOSITORY, releaseId, tag: process.env.RELEASE_TAG, sourceSha: process.env.RELEASE_SHA, packageName, version, runId: String(process.env.RUN_ID) });
-            if (claim.status !== "claimed") { process.stderr.write(`exclusive publish claim was not granted (${claim.code ?? claim.status}); refusing to release\n`); process.exit(1); }
-            process.stderr.write(`exclusive publish claim granted for release ${claim.releaseId} asset ${claim.assetId}\n`);
-            return "publish";
-          };
-          process.stdout.write(await decide());
-          NODE
-          )"
-          case "$DECISION" in
-            skip) printf '%s\n' "publication skipped: $VERSION is already present in the registry" ; exit 0 ;;
-            publish) : ;;
-            *) printf '%s\n' "npm release refused: exclusive publish decision was not granted" >&2 ; exit 1 ;;
-          esac
-          test -n "$NODE_AUTH_TOKEN"
-          npm publish "$TARBALL" --provenance --access public
-      - name: Read back npm metadata, tarball, and payload identity
-        working-directory: release-source
-        env:
-          PACKAGE_SPEC: "@eff3ct/agent-foundry@${{ steps.release.outputs.version }}"
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
-        run: |
-          test -n "$PACKAGE_SPEC"
-          for attempt in 1 2 3 4 5; do
-            rm -f identity/registry-metadata.json registry-package/*.tgz
-            if npm view "$PACKAGE_SPEC" --json > identity/registry-metadata.json \
-              && npm pack "$PACKAGE_SPEC" --ignore-scripts --pack-destination registry-package; then
-              break
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              printf '%s\n' "registry readback did not converge after $attempt attempts" >&2
-              exit 1
-            fi
-            sleep "$((attempt * 5))"
-          done
-          test "$(find registry-package -maxdepth 1 -name '*.tgz' -type f | wc -l)" = "1"
-          REGISTRY_TARBALL="$(find registry-package -maxdepth 1 -name '*.tgz' -type f -print -quit)"
-          mkdir -p registry-package/extracted
-          tar -xzf "$REGISTRY_TARBALL" --strip-components=1 -C registry-package/extracted
-          node scripts/npm-release.mjs --command verify-registry --package-root registry-package/extracted --tarball "$REGISTRY_TARBALL" --metadata identity/registry-metadata.json --identity identity/local.json --output identity/registry.json
-          grep -q '"tarball_digest"' identity/registry.json
-          grep -q '"payload"' identity/registry.json
-          node --input-type=module -e 'import assert from "node:assert/strict"; import { readFileSync } from "node:fs"; assert.equal(JSON.parse(readFileSync("identity/local.json", "utf8")).release.sha, process.env.RELEASE_SHA)'
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          node scripts/npm-release.mjs --command publish-pair
       - name: Upload immutable release evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: npm-release-${{ github.run_id }}

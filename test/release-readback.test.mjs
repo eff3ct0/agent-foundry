@@ -173,6 +173,24 @@ test("claims once on 201 only after scoped list and exact binary readback", asyn
   assert.equal(fixture.calls[2].redirect, "manual");
 });
 
+test("pair claim binds ordered names, exact versions and staged digests", async () => {
+  const pair = [
+    { name: "@eff3ct/agent-foundry", version: "1.2.3", tarball_digest: `sha256:${"a".repeat(64)}` },
+    { name: "@eff3ct/create-agent-foundry", version: "1.2.3", tarball_digest: `sha256:${"b".repeat(64)}` },
+  ];
+  const body = Buffer.from(JSON.stringify({ tag, source_sha: sha, package: claimInput.packageName, version: "1.2.3", run_id: "456", pair }));
+  const entry = asset({ size: body.length });
+  const fixture = claimFixture([binaryResponse(JSON.stringify(entry), 201), response([entry]), binaryResponse(body)]);
+  assert.equal((await fixture.attempt({ pair })).status, "claimed");
+  assert.deepEqual(JSON.parse(fixture.calls[0].body.toString()).pair, pair);
+  const rejected = claimFixture([]);
+  await assert.rejects(rejected.attempt({ pair: [pair[1], pair[0]] }), { code: "invalid_claim" });
+  assert.equal(rejected.calls.length, 0);
+  const stale = claimFixture([binaryResponse("exists", 422)]);
+  assert.deepEqual(await stale.attempt({ pair }), { status: "blocked", code: "claim_exists" });
+  assert.deepEqual(stale.calls.map((call) => call.method), ["POST"]);
+});
+
 test("claims on a single allowlisted 302 download with exact bytes and no forwarded API credentials", async () => {
   const fixture = claimFixture([claimedResponses()[0], claimedResponses()[1], redirectResponse()]);
   const apiTransport = (request) => fixture.transport({ ...request, headers: { ...request.headers, Authorization: "Bearer offline-api-token" } });
