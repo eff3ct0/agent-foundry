@@ -943,6 +943,47 @@ test("unknown files and symlink escapes fail without overwriting", async () => {
   await chmod(unwritable, 0o755);
 });
 
+test("apply ignores a pre-existing .git directory in the target but still rejects a stray .gitignore (#379)", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-git-target-"));
+  try {
+    // A VCS-initialized checkout is the documented primary apply target (README Quickstart),
+    // so a pre-existing .git directory must be ignored by the conflict walk.
+    const target = path.join(parent, "project");
+    const config = await configFile(parent);
+    await mkdir(path.join(target, ".git", "refs", "heads"), { recursive: true });
+    await writeFile(path.join(target, ".git", "HEAD"), "ref: refs/heads/main\n");
+    await writeFile(path.join(target, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n");
+
+    const planned = await run(["plan", "--target", target, "--config", config, "--non-interactive", "--yes"]);
+    assert.equal(planned.code, 0, planned.stderr);
+    const planDiagnostics = json(planned).diagnostics.map((item) => `${item.code} ${item.path ?? ""}`).join(" ");
+    assert.doesNotMatch(planDiagnostics, /unknown_file_conflict[^|]*\.git\b/u, planDiagnostics);
+
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive", "--yes"]);
+    assert.equal(applied.code, 0, applied.stderr);
+    assert.ok(!json(applied).diagnostics.some((item) => item.code === "unknown_file_conflict"), applied.stdout);
+    assert.equal(json(applied).status, "applied", applied.stdout);
+    assert.equal(json(applied).verification, "verified", applied.stdout);
+
+    // The target's own .git is never creator-owned and must be left byte-for-byte untouched.
+    assert.equal(await readFile(path.join(target, ".git", "HEAD"), "utf8"), "ref: refs/heads/main\n");
+    assert.equal(await readFile(path.join(target, ".git", "config"), "utf8"), "[core]\n\trepositoryformatversion = 0\n");
+    const state = JSON.parse(await readFile(path.join(target, ".factory/creator/state.json"), "utf8"));
+    assert.ok(!state.owned_files.some(({ path: entry }) => entry === ".git" || entry.startsWith(".git/")), "state must not claim .git");
+
+    // Segment-safe match: a stray .gitignore (not the .git VCS dir) is NOT swallowed; it is still rejected.
+    const strayTarget = path.join(parent, "stray");
+    await mkdir(strayTarget, { recursive: true });
+    await writeFile(path.join(strayTarget, ".gitignore"), "node_modules\n");
+    const stray = await run(["apply", "--target", strayTarget, "--config", config, "--non-interactive", "--yes"]);
+    assert.notEqual(stray.code, 0);
+    assert.ok(json(stray).diagnostics.some((item) => item.code === "unknown_file_conflict"), stray.stdout);
+    assert.equal(await readFile(path.join(strayTarget, ".gitignore"), "utf8"), "node_modules\n");
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("rejects a symlinked creator state directory without writing outside the target", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-state-link-"));
   const target = path.join(parent, "project");

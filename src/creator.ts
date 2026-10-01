@@ -1354,7 +1354,11 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   const creatorDirectory = await creatorDirectoryStatus(target.absolute, CREATOR_DIRECTORY);
   const legacyDirectory = await creatorDirectoryStatus(target.absolute, LEGACY_DIRECTORY);
   for (const directory of [creatorDirectory, legacyDirectory]) if (directory.diagnostic) diagnostics.push(directory.diagnostic);
-  const targetEntries = target.existed ? await collectEntries(target.absolute) : [];
+  // A VCS-initialized checkout is the documented primary apply target (README Quickstart), so the
+  // target's own `.git` directory is never creator-owned and must be ignored by every downstream check
+  // (staging/state/legacy/unknown-file). Segment-safe match keeps `.gitignore` (a creator payload file).
+  const targetEntries = (target.existed ? await collectEntries(target.absolute) : [])
+    .filter((entry) => entry.path !== ".git" && !entry.path.startsWith(".git/"));
   for (const staging of [STAGING_DIRECTORY, `${LEGACY_DIRECTORY}/.staging`]) {
     if (targetEntries.some((entry) => entry.path === staging || entry.path.startsWith(`${staging}/`))) {
       diagnostics.push(diagnostic("staging_interrupted", "an interrupted staging directory requires recovery", staging));
