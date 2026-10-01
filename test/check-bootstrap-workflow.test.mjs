@@ -680,6 +680,21 @@ test("npm release runner never embeds a second publish or claim command", async 
   });
 });
 
+test("npm release coordinator retains claim, ordered readback, provenance and token gates", async () => {
+  for (const marker of [
+    'if (!process.env.NODE_AUTH_TOKEN) fail("token_missing")',
+    '"--provenance", "--access", "public"',
+    "await readback(identities[index]);",
+    "pair: identities.map",
+  ]) {
+    await fixture(async (directory) => {
+      await replaceScript(directory, "scripts/npm-release.mjs", marker, "unsafe");
+      if (marker === "await readback(identities[index]);") await replaceScript(directory, "scripts/npm-release.mjs", marker, "unsafe");
+      await reject(directory, `npm release coordinator safety contract is missing ${marker}`);
+    });
+  }
+});
+
 test("npm release rejects Corepack and unpinned or unchecked toolchains", async () => {
   const pinned = "npm install --global pnpm@12.4.2";
   for (const replacement of [

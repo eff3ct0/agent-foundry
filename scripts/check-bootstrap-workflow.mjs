@@ -216,7 +216,7 @@ const checkJourney = (text, projectRoot) => {
   for (const other of [section(text, "\n  provision:\n", "\n  agent:\n"), section(text, "\n  assert:\n", "\n  cleanup:\n"), section(text, "\n  cleanup:\n", "\n  report:\n")]) if (other.includes("OPENAI_API_KEY")) fail("agent API credentials crossed a stage boundary");
 };
 
-const checkNpmRelease = (text) => {
+const checkNpmRelease = (text, coordinator) => {
   checkPins(text, releasePinnedActions, "npm release action pin is missing");
   const resolve = section(text, "      - name: Resolve immutable release identity\n", "      - name: Check out the exact source revision\n");
   const toolchain = section(text, "      - name: Activate pinned pnpm\n", "      - name: Build and pack both exact packages once\n");
@@ -278,6 +278,15 @@ const checkNpmRelease = (text) => {
       || (text.match(/(?:^|\n)\s*if:\s*always\(\)/gu) ?? []).length !== 1) {
     fail("npm release publish step must use the exact pair coordinator without bypass");
   }
+  requireText(coordinator, [
+    "export const releasePair = async", "if (states.includes(\"absent\")) fail(\"partial_publication_manual_recovery\")",
+    "if (result.status !== \"claimed\") fail(\"claim_not_granted\")",
+    "await publish(identities[index]);", "await readback(identities[index]);",
+    "claimPublishAttempt({ repository, releaseId, tag, sourceSha: sha", "pair: identities.map",
+    'if (!process.env.NODE_AUTH_TOKEN) fail("token_missing")',
+    '"--provenance", "--access", "public"',
+    'const { NODE_AUTH_TOKEN, ...anonymous } = process.env',
+  ], "npm release coordinator safety contract is missing");
   if (text.includes("push:") || text.includes("/generate") || text.includes("Template") || text.includes("github.settings")) fail("npm release workflow contains an unauthorized trigger or mutation");
 };
 
@@ -343,7 +352,7 @@ export const check = async (projectRoot = root) => {
   if (bootstrap.includes("python3 scripts/report-bootstrap-failure.py") || template.includes("python3 scripts/report-bootstrap-failure.py")) fail("active reporter workflow consumers must invoke Node");
   checkJourney(journey, projectRoot);
   checkJourneyAssertions(assertions);
-  checkNpmRelease(npmRelease);
+  checkNpmRelease(npmRelease, await readFile(path.join(projectRoot, "scripts", "npm-release.mjs"), "utf8"));
   checkArchetypeNode20(archetypeNode20);
   return ["bootstrap workflow static check OK", "template bootstrap workflow static check OK", "real-agent journey workflow static check OK", "real-agent journey assertion workflow static check OK", "npm release workflow static check OK", "archetype Node 20 PR workflow static check OK"];
 };
