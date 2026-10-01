@@ -96,7 +96,7 @@ test("local and registry identities require matching package, payload, and tarba
     await cp(path.join(root, "dist"), path.join(directory, "dist"), { recursive: true });
     const tarball = path.join(directory, "package.tgz");
     await writeFile(tarball, "exact-package-bytes\n");
-    const expected = await readPackageIdentity({ packageRoot: directory, tarballPath: tarball, tag: "v0.2.1", sourceSha });
+    const expected = await readPackageIdentity({ packageRoot: directory, tarballPath: tarball, tag: "v0.2.2", sourceSha });
     const registry = structuredClone(expected);
     const verified = validateRegistryReadback({ metadata: expected.package, registryIdentity: registry, expected });
     assert.equal(verified.status, "verified");
@@ -116,7 +116,7 @@ test("initializer staging and registry metadata bind the exact dependency and ta
     await mkdir(path.join(directory, "bin"));
     await cp(path.join(root, "initializer", "bin", "create-agent-foundry.cjs"), path.join(directory, "bin", "create-agent-foundry.cjs"));
     await writeFile(path.join(directory, "package.tgz"), "initializer bytes");
-    const options = { packageRoot: directory, tarballPath: path.join(directory, "package.tgz"), tag: "v0.2.1", sourceSha, packageName: INITIALIZER_NAME };
+    const options = { packageRoot: directory, tarballPath: path.join(directory, "package.tgz"), tag: "v0.2.2", sourceSha, packageName: INITIALIZER_NAME };
     const staged = await readPackageIdentity(options);
     const metadata = { ...staged.package, dependencies: staged.dependency };
     assert.equal(validateRegistryReadback({ metadata, registryIdentity: staged, expected: staged }).status, "verified");
@@ -126,7 +126,7 @@ test("initializer staging and registry metadata bind the exact dependency and ta
     manifest.dependencies[packageName] = "^0.2.1";
     await writeFile(path.join(directory, "package.json"), JSON.stringify(manifest));
     await assert.rejects(readPackageIdentity(options), /exact creator version/u);
-    manifest.dependencies[packageName] = "0.2.1";
+    manifest.dependencies[packageName] = "0.2.2";
     await writeFile(path.join(directory, "package.json"), JSON.stringify(manifest));
     await rm(path.join(directory, "bin", "create-agent-foundry.cjs"));
     await assert.rejects(readPackageIdentity(options), { code: "ENOENT" });
@@ -191,10 +191,10 @@ test("release runner refuses changed staged bytes before any registry or claim o
     for (const [name, folder, packageName] of [["local", "local-package", "@eff3ct/agent-foundry"], ["initializer", "local-initializer", INITIALIZER_NAME]]) {
       const tarball = `./package/${name}.tgz`;
       await writeFile(path.join(directory, tarball), `${name} bytes`);
-      const staged = await readPackageIdentity({ packageRoot: path.join(directory, folder), tarballPath: path.join(directory, tarball), tag: "v0.2.1", sourceSha, packageName });
+      const staged = await readPackageIdentity({ packageRoot: path.join(directory, folder), tarballPath: path.join(directory, tarball), tag: "v0.2.2", sourceSha, packageName });
       await writeFile(path.join(directory, "identity", `${name}.json`), JSON.stringify(staged));
     }
-    Object.assign(process.env, { RELEASE_TAG: "v0.2.1", RELEASE_SHA: sourceSha, VERSION: "0.2.1", TARBALL: "./package/local.tgz", INITIALIZER_TARBALL: "./package/initializer.tgz" });
+    Object.assign(process.env, { RELEASE_TAG: "v0.2.2", RELEASE_SHA: sourceSha, VERSION: "0.2.2", TARBALL: "./package/local.tgz", INITIALIZER_TARBALL: "./package/initializer.tgz" });
     await writeFile(path.join(directory, "package", "initializer.tgz"), "changed bytes");
     await assert.rejects(publishPair(directory), { code: "staged_bytes_changed" });
     await assert.rejects(readFile(path.join(directory, "identity", "pair-state.json")), { code: "ENOENT" });
@@ -214,7 +214,7 @@ test("initializer registry readback retries only bounded reads, then verifies im
     await cp(path.join(root, "initializer", "bin", "create-agent-foundry.cjs"), path.join(packageRoot, "bin", "create-agent-foundry.cjs"));
     const archive = path.join(directory, "initializer.tgz");
     await execFile("tar", ["-czf", archive, "-C", path.join(directory, "archive"), "package"]);
-    const expected = await readPackageIdentity({ packageRoot, tarballPath: archive, tag: "v0.2.1", sourceSha, packageName: INITIALIZER_NAME });
+    const expected = await readPackageIdentity({ packageRoot, tarballPath: archive, tag: "v0.2.2", sourceSha, packageName: INITIALIZER_NAME });
     const metadata = { ...expected.package, dependencies: expected.dependency };
     const waits = [];
     let views = 0;
@@ -321,7 +321,7 @@ test("npm diagnostic allowlists reject unknown, stringly and oversized output wi
 
 const stagedPair = async (callback) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "npm-diagnostic-pair-"));
-  const values = { RELEASE_TAG: "v0.2.1", RELEASE_SHA: sourceSha, VERSION: "0.2.1",
+  const values = { RELEASE_TAG: "v0.2.2", RELEASE_SHA: sourceSha, VERSION: "0.2.2",
     TARBALL: "./package/local.tgz", INITIALIZER_TARBALL: "./package/initializer.tgz" };
   const original = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
   try {
@@ -416,7 +416,7 @@ test("pair evidence revalidates mutated diagnostics and classifies unknown error
 test("npm release CLI reports only a trusted classification for raw filesystem failures", async () => {
   await assert.rejects(execFile(process.execPath, [path.join(root, "scripts/npm-release.mjs"),
     "--command", "verify-local", "--package-root", path.join(root, "npm_PRIVATE_SENTINEL-missing"),
-    "--tarball", privateText, "--tag", "v0.2.1", "--source-sha", sourceSha, "--output", privateText], { env: {} }), (error) => {
+    "--tarball", privateText, "--tag", "v0.2.2", "--source-sha", sourceSha, "--output", privateText], { env: {} }), (error) => {
     assert.equal(error.code, 1);
     assert.equal(error.stdout, "");
     assert.equal(error.stderr, "release_outcome_uncertain\n");
