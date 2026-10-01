@@ -231,12 +231,12 @@ test("initializer registry readback retries only bounded reads, then verifies im
     const verified = await registryReadback(expected, directory, directory, { npm, wait: async (ms) => { waits.push(ms); } });
     assert.equal(verified, undefined);
     assert.equal(views, 3);
-    assert.deepEqual(waits, [5000, 10000]);
+    assert.deepEqual(waits, [10000, 10000]);
     assert.equal(JSON.parse(await readFile(path.join(directory, "registry-initializer.json"), "utf8")).status, "verified");
     const missing = async () => { throw new NpmReleaseError("registry_read_unavailable"); };
     const delays = [];
     await assert.rejects(registryReadback(expected, directory, directory, { npm: missing, wait: async (ms) => { delays.push(ms); } }), { code: "registry_read_unavailable" });
-    assert.deepEqual(delays, [5000, 10000, 15000, 20000]);
+    assert.deepEqual(delays, Array(29).fill(10000));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -345,7 +345,7 @@ const stagedPair = async (callback) => {
   }
 };
 
-test("terminal view and pack diagnostics survive five reads, outer rethrow and pair-state persistence", async () => {
+test("terminal view and pack diagnostics survive the bounded readback poll, outer rethrow and pair-state persistence", async () => {
   for (const failedOperation of ["view", "pack"]) {
     await stagedPair(async (directory) => {
       let reads = 0;
@@ -357,7 +357,7 @@ test("terminal view and pack diagnostics survive five reads, outer rethrow and p
         reads += 1;
         try {
           return await npmCommand(args, cwd, false, { execute: () => execFile(process.execPath,
-            ["-e", `process.stdout.write(${JSON.stringify(privateText)}); process.stderr.write("npm error code ${reads === 5 ? "E404" : "E401"}\\n"); process.exit(1)`], { env: {} }) });
+            ["-e", `process.stdout.write(${JSON.stringify(privateText)}); process.stderr.write("npm error code ${reads === 30 ? "E404" : "E401"}\\n"); process.exit(1)`], { env: {} }) });
         } catch (error) { terminal = error; throw error; }
       };
       await assert.rejects(publishPair(directory, {
@@ -374,8 +374,8 @@ test("terminal view and pack diagnostics survive five reads, outer rethrow and p
         assertPrivate(error);
         return true;
       });
-      assert.equal(reads, 5);
-      assert.deepEqual(waits, [5000, 10000, 15000, 20000]);
+      assert.equal(reads, 30);
+      assert.deepEqual(waits, Array(29).fill(10000));
       assert.deepEqual(calls, ["claim", packageName]);
       const serialized = await readFile(path.join(directory, "identity", "pair-state.json"), "utf8");
       const evidence = JSON.parse(serialized);
