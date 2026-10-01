@@ -205,8 +205,12 @@ test("bootstrap rejects Python release execution and an unpinned package toolcha
     await reject(directory, "release bootstrap workflow must be Node-only");
   });
   await fixture(async (directory) => {
-    await replace(directory, "bootstrap", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", "corepack install --global pnpm@latest");
-    await reject(directory, "release package build must activate pinned Corepack pnpm");
+    await replace(directory, "bootstrap", "npm install --global pnpm@12.4.2", "corepack enable\n          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2");
+    await reject(directory, "release package build must not use Corepack");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "npm install --global pnpm@12.4.2", "npm install --global pnpm@latest");
+    await reject(directory, "release package build must activate pinned npm-install pnpm: npm install --global pnpm@12.4.2");
   });
 });
 
@@ -279,8 +283,12 @@ test("template workflow requires immutable package and pinned toolchain contract
     await reject(directory, "template workflow is missing node-version: 20.19.0");
   });
   await fixture(async (directory) => {
-    await replace(directory, "template", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", "corepack install --global pnpm@latest");
-    await reject(directory, "template workflow is missing COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2");
+    await replace(directory, "template", "npm install --global pnpm@12.4.2", "corepack enable\n          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2");
+    await reject(directory, "template bootstrap must not use Corepack");
+  });
+  await fixture(async (directory) => {
+    await replace(directory, "template", "npm install --global pnpm@12.4.2", "npm install --global pnpm@latest");
+    await reject(directory, "template workflow is missing npm install --global pnpm@12.4.2");
   });
   await fixture(async (directory) => {
     await replace(directory, "template", "ref: ${{ github.workflow_sha }}", "ref: main");

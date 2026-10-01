@@ -60,7 +60,10 @@ const checkBootstrap = (text) => {
   const uses = checkPins(text, bootstrapPinnedActions, "required action pin is missing");
   if (!text.includes("permissions: {}")) fail("workflow must default to no permissions");
   if (text.includes("python3 scripts/bootstrap-e2e.py")) fail("release bootstrap workflow must be Node-only");
-  if (!bootstrapPinnedActions["actions/setup-node"] || !text.includes("COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2")) fail("release package build must activate pinned Corepack pnpm");
+  if (/\bcorepack\b/iu.test(text)) fail("release package build must not use Corepack");
+  for (const command of ['test "$(node --version)" = "v20.19.0"', "npm install --global pnpm@12.4.2", 'test "$(pnpm --version)" = "12.4.2"']) {
+    if (!text.includes(command)) fail(`release package build must activate pinned npm-install pnpm: ${command}`);
+  }
   if (!text.includes("permission-administration: write") || !text.includes("permission-contents: write") || (text.match(/permission-workflows: write/gu) ?? []).length !== 1) fail("bootstrap App token must request administration, contents, and workflows write");
   if (uses.filter((reference) => reference.startsWith("actions/create-github-app-token@")).length !== 2) fail("bootstrap and cleanup must mint separate lifecycle tokens");
   if (!text.includes("group: bootstrap-e2e-report-${{ github.repository }}-${{ needs.prepare.outputs.sha ||")) fail("report must serialize by resolved SHA");
@@ -93,11 +96,12 @@ const checkBootstrap = (text) => {
 const checkTemplateBootstrap = (text) => {
   const uses = actionReferences(text);
   if (uses.length === 0 || uses.some((reference) => !/^[^@]+@[0-9a-f]{40}$/u.test(reference))) fail("template bootstrap action is not pinned to a full commit SHA");
+  if (/\bcorepack\b/iu.test(text)) fail("template bootstrap must not use Corepack");
   requireText(text, [
     "workflow_dispatch:", "permissions: {}", "fail-fast: false", "ref: ${{ github.workflow_sha }}", "WORKFLOW_SHA: ${{ github.workflow_sha }}",
     `actions/download-artifact@${pinnedActions["actions/download-artifact"]}`,
     `actions/setup-node@${bootstrapPinnedActions["actions/setup-node"]}`,
-    "node-version: 20.19.0", "COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2", "test \"$(pnpm --version)\" = \"12.4.2\"",
+    "node-version: 20.19.0", "test \"$(node --version)\" = \"v20.19.0\"", "npm install --global pnpm@12.4.2", "test \"$(pnpm --version)\" = \"12.4.2\"",
     "pnpm install --frozen-lockfile", "pnpm pack --ignore-scripts --pack-destination package", "template-bootstrap-package-${{ github.run_id }}",
     "release_sha: process.env.WORKFLOW_SHA", "tarball_path: path.join(\"package\", tarballs[0])", "node scripts/report-bootstrap-failure.mjs",
   ], "template workflow is missing");
