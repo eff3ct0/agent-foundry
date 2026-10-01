@@ -235,7 +235,7 @@ test("fresh consumer guidance is concrete, routed, and creator-owned without cha
         await stat(path.resolve(target, path.dirname(name), relative));
       }
     }
-    assert.equal((await execFileAsync(process.execPath, [path.join(target, "start.mjs")], { cwd: target })).stdout.includes("WORK mode"), true);
+    assert.equal((await execFileAsync(process.execPath, [path.join(target, "start.mjs")], { cwd: target })).stdout.includes("ONBOARDING mode"), true);
     assert.equal(json(await run(["verify", ...args])).status, "verified");
     assert.equal(json(await run(["doctor", ...args])).status, "healthy");
     assert.equal(json(await run(["apply", ...args])).status, "noop");
@@ -245,6 +245,79 @@ test("fresh consumer guidance is concrete, routed, and creator-owned without cha
     const drift = await run(["apply", ...args]);
     assert.notEqual(drift.code, 0);
     assert.ok(json(drift).diagnostics.some(({ code }) => code === "owned_file_drift"));
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test("onboard --complete flips the gate once, preserves every other state byte, and fails closed", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-onboard-"));
+  try {
+    const target = path.join(parent, "project");
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    assert.equal(json(await run(["apply", ...args])).status, "applied");
+
+    const statePath = path.join(target, ".factory/creator/state.json");
+    const applied = await readFile(statePath, "utf8");
+    const before = JSON.parse(applied);
+    assert.equal(before.onboarded, false);
+
+    const completed = await run(["onboard", "--complete", "--target", target, "--non-interactive"]);
+    assert.equal(completed.code, 0, completed.stderr);
+    assert.equal(json(completed).command, "onboard");
+    assert.equal(json(completed).status, "onboarded");
+    assert.ok(json(completed).operations.some((op) => op.path === ".factory/creator/state.json" && op.action === "update"));
+
+    const flippedRaw = await readFile(statePath, "utf8");
+    const flipped = JSON.parse(flippedRaw);
+    assert.equal(flipped.onboarded, true);
+    // Only the `onboarded` value changed; everything else is byte-identical to the applied state.
+    assert.equal(flippedRaw, applied.replace('"onboarded": false', '"onboarded": true'));
+    assert.deepEqual(flipped.owned_files, before.owned_files);
+    assert.equal(flipped.payload_digest, before.payload_digest);
+    assert.equal(flipped.config_digest, before.config_digest);
+    assert.equal(flipped.schema_version, before.schema_version);
+    assert.equal((await stat(statePath)).mode & 0o7777, 0o600);
+
+    // Re-apply and verify never undo a completed onboarding.
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    assert.equal(JSON.parse(await readFile(statePath, "utf8")).onboarded, true);
+
+    // Idempotent: a second completion is a no-op and never rewrites.
+    const again = await run(["onboard", "--complete", "--target", target, "--non-interactive"]);
+    assert.equal(again.code, 0, again.stderr);
+    assert.equal(json(again).status, "noop");
+    assert.ok(json(again).diagnostics.some((d) => d.code === "already_onboarded"));
+
+    // Backward compatibility: a state.json WITHOUT the field validates and onboard treats it as onboarded.
+    const legacy = { ...before };
+    delete legacy.onboarded;
+    await writeFile(statePath, `${JSON.stringify(legacy, null, 2)}\n`);
+    await chmod(statePath, 0o600);
+    assert.equal(json(await run(["verify", ...args])).status, "verified");
+    assert.equal(json(await run(["apply", ...args])).status, "noop");
+    const legacyOnboard = await run(["onboard", "--complete", "--target", target, "--non-interactive"]);
+    assert.equal(json(legacyOnboard).status, "noop");
+    assert.equal(JSON.parse(await readFile(statePath, "utf8")).onboarded, undefined);
+
+    // Fail closed: missing state.
+    const bare = path.join(parent, "bare");
+    await mkdir(bare, { recursive: true });
+    const missing = await run(["onboard", "--complete", "--target", bare, "--non-interactive"]);
+    assert.notEqual(missing.code, 0);
+    assert.equal(json(missing).status, "error");
+    assert.ok(json(missing).diagnostics.some((d) => d.code === "state_missing"));
+
+    // Fail closed: invalid state.
+    await writeFile(statePath, "{ not json");
+    await chmod(statePath, 0o600);
+    const invalid = await run(["onboard", "--complete", "--target", target, "--non-interactive"]);
+    assert.notEqual(invalid.code, 0);
+    assert.equal(json(invalid).status, "error");
+
+    // --complete is required.
+    const noFlag = await run(["onboard", "--target", target, "--non-interactive"]);
+    assert.notEqual(noFlag.code, 0);
   } finally { await rm(parent, { recursive: true, force: true }); }
 });
 
@@ -1247,7 +1320,7 @@ test("fresh generated context routes use retained paths and reject stale or miss
     assert.equal((await run(["apply", ...args])).code, 0);
     const startup = async () => json(await run(["verify", ...args]));
     const work = await execFileAsync(process.execPath, [path.join(target, "start.mjs"), "--json"], { cwd: target });
-    assert.equal(JSON.parse(work.stdout).mode, "WORK");
+    assert.equal(JSON.parse(work.stdout).mode, "ONBOARDING");
     const context = await Promise.all(["CLAUDE.md", "AGENT.md", "docs/bindings.md", ".factory/docs/workflow.md", ".factory/docs/engineering-handbook.md", ".factory/templates/agent-runbook.md"]
       .map(async (relative) => [relative, await readFile(path.join(target, relative), "utf8")]));
     const files = new Map(context);

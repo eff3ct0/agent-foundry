@@ -625,7 +625,7 @@ test("packed package preserves npm transport and startup handoff", async (contex
 
     const startup = await execFileAsync(process.execPath, [path.join(target, "start.mjs"), "--cwd", target, "--json"]);
     const startupEnvelope = JSON.parse(startup.stdout);
-    assert.equal(startupEnvelope.mode, "WORK");
+    assert.equal(startupEnvelope.mode, "ONBOARDING");
     assert.equal(startupEnvelope.status, "ready");
   } finally {
     await rm(parent, { recursive: true, force: true });
@@ -652,8 +652,14 @@ test("packed generated governance self-check uses its relocated template and fai
     assert.equal((await create("apply")).status, "applied");
     assert.equal((await create("verify")).status, "verified");
     assert.equal((await create("apply")).status, "noop");
+    const startupMode = async () => JSON.parse((await execFileAsync(process.execPath,
+      [path.join(target, "start.mjs"), "--cwd", target, "--json"])).stdout).mode;
+    assert.equal(await startupMode(), "ONBOARDING");
     assert.equal(JSON.parse((await execFileAsync(process.execPath,
-      [path.join(target, "start.mjs"), "--cwd", target, "--json"])).stdout).mode, "WORK");
+      [cli, "onboard", "--complete", "--target", target, "--non-interactive"], { cwd: root })).stdout).status, "onboarded");
+    assert.equal(await startupMode(), "WORK");
+    assert.equal(JSON.parse((await execFileAsync(process.execPath,
+      [cli, "onboard", "--complete", "--target", target, "--non-interactive"], { cwd: root })).stdout).status, "noop");
     const inheritedPaths = [
       "scripts/typed-inherited/check-delivery-contract.mts",
       "scripts/typed-inherited-runtime/check-delivery-contract.js",

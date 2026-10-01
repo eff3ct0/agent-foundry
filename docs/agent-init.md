@@ -79,6 +79,18 @@ preserve the diagnostic envelope and run `doctor`; do not manually delete
 unknown or user-managed files. Restore local state from version control when
 needed.
 
+## Step 6 - First session (onboarding)
+
+`apply` records `onboarded: false` in `.factory/creator/state.json`, so the new
+project's first `node start.mjs` reports `ONBOARDING`, not `WORK`. In that
+session, follow the "Project bootstrap (first session)" procedure in the
+generated `templates/agent-runbook.md`: resolve the `TASK_TRACKER` /
+`TRACKER_KEY` bindings and real repository in `bindings.md`, capture the project
+goal, seed the first actionable tickets, optionally scaffold the stack, then run
+`foundry onboard --complete --target <project>`. The creator flips the gate to
+`onboarded: true` (start.mjs never writes it), after which startup reports
+`WORK`. This step belongs to the generated project, not to this template.
+
 ## Rollback and Template mode
 
 GitHub Template mode is not a normal creation path. It remains enabled only as

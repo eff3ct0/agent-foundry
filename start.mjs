@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 export const STARTUP_SCHEMA_VERSION = 1;
 export const SELF = "SELF";
 export const SETUP = "SETUP";
+export const ONBOARDING = "ONBOARDING";
 export const WORK = "WORK";
 export const SOURCE_MARKER = "MAINTAINERS.md";
 
@@ -35,6 +36,15 @@ const messages = {
     "  - Use the exact-version creator package; consult docs/creator.md only when that source guide exists.",
     "  - Review the plan, then apply and verify with the package CLI.",
     "  - No outward action without explicit approval.",
+  ].join("\n"),
+  [ONBOARDING]: [
+    "ONBOARDING mode - created project awaiting its first-session bootstrap (state.onboarded is false).",
+    "  - Follow the 'Project bootstrap (first session)' procedure in templates/agent-runbook.md.",
+    "  - Resolve bindings in docs/bindings.md (TASK_TRACKER + TRACKER_KEY and the real repository),",
+    "    capture the project goal, and seed the first actionable tickets; optional stack scaffold.",
+    "  - Then run the completion command (the creator writes state; start.mjs does not):",
+    "    foundry onboard --complete --target <this project>",
+    "  - After it completes, node start.mjs reports WORK.",
   ].join("\n"),
   [WORK]: [
     "WORK mode - initialized project (placeholders.json is absent).",
@@ -94,6 +104,13 @@ const workMessage = async (root) => {
   return message;
 };
 
+const onboardingMessage = async (root) => {
+  let message = messages[ONBOARDING];
+  message = message.replaceAll("templates/agent-runbook.md", await layoutPath(root, "templates/agent-runbook.md"));
+  message = message.replaceAll("docs/bindings.md", await layoutPath(root, "docs/bindings.md"));
+  return message;
+};
+
 const validatePlaceholders = async (root) => {
   const value = await readJson(path.join(root, "placeholders.json"), "placeholders.json");
   if (!value || typeof value !== "object" || !Array.isArray(value.placeholders)) {
@@ -116,10 +133,11 @@ const validateCreatorState = async (root) => {
   const statePath = path.join(directory, "state.json");
   if (!(await exists(statePath))) return { present: true, incomplete: true };
   const state = await readJson(statePath, "creator state");
-  if (!state || typeof state !== "object" || state.schema_version !== 1 || typeof state.payload_version !== "string" || typeof state.payload_digest !== "string" || typeof state.config_digest !== "string" || !Array.isArray(state.owned_files)) {
+  if (!state || typeof state !== "object" || state.schema_version !== 1 || typeof state.payload_version !== "string" || typeof state.payload_digest !== "string" || typeof state.config_digest !== "string" || !Array.isArray(state.owned_files) || (state.onboarded !== undefined && typeof state.onboarded !== "boolean")) {
     throw new Error("creator state is malformed");
   }
-  return { present: true, incomplete: false, directory: newEntry ? ".factory/creator" : ".factory-template-creator" };
+  // onboarded === false => not yet onboarded (ONBOARDING); true OR absent => onboarded (WORK).
+  return { present: true, incomplete: false, directory: newEntry ? ".factory/creator" : ".factory-template-creator", onboarded: state.onboarded };
 };
 
 const workFiles = async (root) => {
@@ -155,7 +173,12 @@ export const detectMode = async (root) => {
     if (state.incomplete) {
       return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("creator_incomplete", "creator state exists without a completed state file", state.directory ?? ".factory/creator")] };
     }
-    if (present.every(Boolean)) return { mode: WORK, status: "ready", diagnostics: [] };
+    if (present.every(Boolean)) {
+      // Created-but-unconfigured gate: only an explicit `onboarded: false` routes ONBOARDING.
+      // `true` or an absent field (pre-0.3.0 projects) routes WORK as before.
+      if (state.onboarded === false) return { mode: ONBOARDING, status: "ready", diagnostics: [] };
+      return { mode: WORK, status: "ready", diagnostics: [] };
+    }
     if (present.every((value) => !value)) {
       return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("project_incomplete", "generated project contracts are not present")] };
     }
@@ -171,7 +194,7 @@ export const route = async (root) => {
   const result = await detectMode(resolved);
   const message = result.mode === SELF ? messages[SELF] : result.mode === SETUP && result.diagnostics[0]?.code === "context_missing"
     ? `SETUP incomplete - ${result.diagnostics[0].message}`
-    : result.mode === SETUP ? await setupMessage(resolved) : result.mode === WORK ? await workMessage(resolved) : "Startup routing failed closed; inspect diagnostics and repair the workspace before continuing.";
+    : result.mode === SETUP ? await setupMessage(resolved) : result.mode === ONBOARDING ? await onboardingMessage(resolved) : result.mode === WORK ? await workMessage(resolved) : "Startup routing failed closed; inspect diagnostics and repair the workspace before continuing.";
   return {
     schema_version: STARTUP_SCHEMA_VERSION,
     root: resolved,
@@ -198,6 +221,16 @@ const selfCheck = async () => {
       await writeFile(path.join(directory, relative), "generated\n");
     }
     assert((await detectMode(directory, undefined)).mode === WORK, "work fixture is not WORK");
+    const stateDirectory = path.join(directory, ".factory/creator");
+    await mkdir(stateDirectory, { recursive: true });
+    const baseState = { schema_version: 1, payload_version: "selfcheck", payload_digest: "digest", config_digest: "config", owned_files: [] };
+    await writeFile(path.join(stateDirectory, "state.json"), JSON.stringify({ ...baseState, onboarded: false }));
+    assert((await detectMode(directory, undefined)).mode === ONBOARDING, "onboarded:false fixture is not ONBOARDING");
+    await writeFile(path.join(stateDirectory, "state.json"), JSON.stringify({ ...baseState, onboarded: true }));
+    assert((await detectMode(directory, undefined)).mode === WORK, "onboarded:true fixture is not WORK");
+    await writeFile(path.join(stateDirectory, "state.json"), JSON.stringify(baseState));
+    assert((await detectMode(directory, undefined)).mode === WORK, "absent-onboarded fixture is not WORK");
+    await rm(path.join(directory, ".factory"), { recursive: true, force: true });
     await writeFile(path.join(directory, "placeholders.json"), "{");
     assert((await detectMode(directory, undefined)).status === "error", "malformed fixture did not fail closed");
   } finally {
