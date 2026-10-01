@@ -4,6 +4,32 @@ How an agent executes a ticket in `<PROJECT_NAME>`. Load for WORK ticket executi
 the source SELF mode also uses this loop. `AGENT.md` owns the entry safety rules,
 and `docs/bindings.md` identifies the provider. Neutral and language-agnostic.
 
+## Project bootstrap (first session)
+Runs once, before the WORK loop. A freshly created project carries valid contracts but no seeded work and
+an unresolved binding, so `node start.mjs` reports `ONBOARDING` (the creator recorded `onboarded: false` in
+`.factory/creator/state.json`). Complete this bootstrap before taking any ticket; do not enter the session
+cycle below while startup still reports `ONBOARDING`.
+
+1. **Resolve bindings.** In `docs/bindings.md` confirm the task provider (`<TASK_TRACKER>`), the tracker/board
+   identity (`<TRACKER>` / `<TRACKER_KEY>`), and the real repository coordinates. Replace any placeholder or
+   `not configured` value with the concrete binding for this project; never invent one.
+2. **Capture the project goal.** With the owner, state what `<PROJECT_NAME>` delivers in one or two sentences so
+   the first tickets are grounded.
+3. **Seed the first actionable tickets.** Create the initial backlog through the bound provider only, using its
+   mandatory issue template where one applies. Confirm and read back each created item; an empty tracker is not
+   a dead end during onboarding, it is the thing this step fixes.
+4. **Optional stack scaffold.** If the chosen stack needs an initial skeleton, scaffold the minimum that the
+   first ticket requires. Keep it lazy; later tickets scaffold the rest.
+5. **Complete onboarding.** Run the completion command so the creator flips the gate (start.mjs never writes):
+
+   ```sh
+   foundry onboard --complete --target <this project>
+   ```
+
+   It re-validates the creator state, sets `onboarded: true`, and rewrites `state.json` canonically, changing
+   only that field. Afterwards `node start.mjs` reports `WORK` and the session cycle below applies. The command
+   is idempotent: an already-onboarded project reports a no-op.
+
 ## Why this is a contract, not a runner
 The agent harness executes the loop (`/loop`, a `while` loop, cron, or an
 orchestrator). This document contains the RULES that make a nondeterministic

@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 12576,
-      "sha256": "14a7499d7f422ede053db1cd4eda97e43100c9cd34281d3e63adb9da7ed54d46"
+      "size": 13276,
+      "sha256": "99d65047abce06aaaef14e69d8e558ca4a79cd8a09476cf3777bb7988948d896"
     },
     {
       "path": "CLAUDE.md",
@@ -103,8 +103,8 @@
     {
       "path": "docs/agent-init.md",
       "mode": "100644",
-      "size": 5165,
-      "sha256": "d2bc00b0ec0be66581a555aee705d05ecacc0520dbb6c4985d3fb291db5fb435"
+      "size": 5893,
+      "sha256": "3c4b2c79d09d2b84c253ad5e3602099c4e6b0cf145d902e5f9be745318f4861a"
     },
     {
       "path": "docs/bootstrap.md",
@@ -373,8 +373,8 @@
     {
       "path": "start.mjs",
       "mode": "100644",
-      "size": 12330,
-      "sha256": "0ac21a721e2ad3d0ed3b6561c16cdd0991886b7ce350c05e54546331bdfdf6d6"
+      "size": 14890,
+      "sha256": "cda423ff6d18767bdafa67bb5efa373dff789d2874072b1276d6f6c9ea1bcafe"
     },
     {
       "path": "templates/adr.md",
@@ -385,8 +385,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 7699,
-      "sha256": "c0bb1e7951a2a70cce2773590add2d2261316ad40f7da2a64e9693a3fbbbea20"
+      "size": 9510,
+      "sha256": "534be37cb6927868ca99dbb646d7edd63e02a4e920173cfdff9f0ecdb7a6695f"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:42e7dbe24af47a8f7326c973b629230db8910048b9fee839bbfee6264dfb2604"
+  "payload_digest": "sha256:487f1fd4a05daa40ba56912b42e5bfd7a88dd0e0b3b6e8ba5c1dc0871116f530"
 }
