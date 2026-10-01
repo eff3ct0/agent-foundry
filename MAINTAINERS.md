@@ -43,19 +43,32 @@ not this repo's configuration.
 ## Release bootstrap E2E configuration
 
 The immutable npm release contract is `.github/workflows/npm-release.yml`. It
-has only the published-release and explicit tag-dispatch paths. The workflow
-resolves the tag to one full commit SHA, requires `v<package-version>`, builds
-and packs that checkout with Node 20.19.0 and npm-installed pnpm 12.4.2.
-The shared publish step has no unconditional stop: when the exact version is
-absent from npm, an exclusive GitHub release asset claim can permit the token
-check and `npm publish`. A local prerelease candidate does not authorize a
+has only the published-release and explicit tag-dispatch paths. Publishing a
+GitHub Release TRIGGERS this workflow; do not publish one to test locally. The
+workflow resolves the tag to one full commit SHA, requires `v<package-version>`,
+and builds that checkout with Node 20.19.0 and npm-installed pnpm 12.4.2.
+For a future source tag containing the initializer, both `@eff3ct/agent-foundry` and
+`@eff3ct/create-agent-foundry` must stage with the same source SHA and exact
+version; the initializer depends on precisely that creator version. Historical
+source tags without the initializer fail closed, not silently release just the
+creator. Both exact versions are probed before the single pair-bound release
+asset claim. A present version must match staged npm metadata and tarball bytes;
+a partially present pair stops for manual recovery. After a verified claim, the
+creator publishes and reads back before the initializer publishes and reads
+back. The tag-scoped workflow concurrency does not make two npm publishes
+atomic. Claim rejection, uncertainty, a failed publish, or readback mismatch
+stops without another claim or publish retry. The always-uploaded bounded
+identity/state evidence identifies the last attempted phase. Resolve the exact
+registry state and claim with a maintainer; immutable npm bytes require a new
+version and roll-forward rather than republishing or unpublishing a failed
+pair. A local prerelease candidate does not authorize a
 GitHub Release, tag, dispatch, npm publication, or registry transfer. Keep
 those outward steps blocked pending separate maintainer approval; this workflow
 never changes GitHub repository settings or Template mode.
 
 Before a maintainer authorizes a release, retain the workflow evidence artifact
-with the release tag, source SHA, package/version, payload digest, tarball
-digest, and rollback decision. npm versions are immutable: a bad release is
+with the release tag, source SHA, both package versions and tarball digests,
+creator payload digest, initializer exact dependency, and rollback decision. npm versions are immutable: a bad release is
 rolled forward with a new version, while Template mode remains the separate
 rollback safety valve until the published-consumer checks pass.
 
