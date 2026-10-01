@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 "use strict";
 
-const usage = "Usage: create-agent-foundry <directory> [--config <file>] [--non-interactive] [--yes] [--json] [--no-color] [--reduced-motion]";
+const usage = "Usage: create-agent-foundry [directory] [--config <file>] [--non-interactive] [--yes] [--json] [--no-color] [--reduced-motion]";
 const flags = new Set(["--non-interactive", "--yes", "--json", "--no-color", "--reduced-motion"]);
 const args = process.argv.slice(2);
 const forwarded = [];
-let valid = Boolean(args[0] && !args[0].startsWith("-"));
-for (let index = 1; index < args.length; index += 1) {
+const hasDirectory = Boolean(args[0] && !args[0].startsWith("-"));
+const directory = hasDirectory ? args[0] : ".";
+let valid = true;
+for (let index = hasDirectory ? 1 : 0; index < args.length; index += 1) {
   const arg = args[index];
   if (arg === "--config") {
     const value = args[++index];
@@ -25,6 +27,6 @@ if (args[0] === "--help" && args.length === 1) {
   process.exitCode = 1;
 } else {
   const foundry = require.resolve("@eff3ct/agent-foundry/dist/index.js");
-  process.argv = [process.argv[0], foundry, "apply", "--target", args[0], ...forwarded];
+  process.argv = [process.argv[0], foundry, "apply", "--target", directory, ...forwarded];
   require(foundry);
 }

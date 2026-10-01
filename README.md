@@ -46,6 +46,22 @@ the archetype itself has no Python maintainer automation.
 
 ---
 
+## Quick start
+
+| Stage | Do this |
+|-------|---------|
+| 1. Create | `npm create @eff3ct/agent-foundry@<EXACT_VERSION> .` — scaffolds into the current directory |
+| 2. Open the agent | Launch your coding agent (Claude Code, Codex, OpenCode, or Pi) **in that directory** |
+| 3. Prompt it | Paste the starter prompt below — it carries the project from onboarding to work |
+
+Starter prompt for the agent:
+
+> Run `node start.mjs` and follow its output. If it reports ONBOARDING, do the first-session bootstrap: confirm the bindings in `docs/bindings.md` (task tracker + the real repository), ask me for the project goal, seed the first actionable tickets, then run `foundry onboard --complete`. Once `node start.mjs` reports WORK, take the next ticket from the bound tracker and deliver it following `AGENT.md`.
+
+From there the agent is driven by `AGENT.md` and `.factory/templates/agent-runbook.md` — one ticket per session.
+
+---
+
 ## Getting started
 
 A new project moves through three stages: **Install** the archetype, run the

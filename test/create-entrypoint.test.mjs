@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -110,6 +110,43 @@ test("packed initializer delegates to the locally installed exact creator", { ti
     assert.equal(accepted.code, 0, accepted.stderr);
     assert.equal(JSON.parse(accepted.stdout).status, "applied");
     assert.doesNotMatch(accepted.stderr, /Apply these changes/);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("initializer defaults the target directory to the current directory and forwards only allowlisted flags", { timeout: 30_000 }, async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "foundry-create-args-"));
+  try {
+    const dist = path.join(temporary, "node_modules/@eff3ct/agent-foundry/dist");
+    await mkdir(dist, { recursive: true });
+    await writeFile(path.join(temporary, "node_modules/@eff3ct/agent-foundry/package.json"),
+      JSON.stringify({ name: "@eff3ct/agent-foundry", version: "0.0.0", main: "dist/index.js" }));
+    // Probe creator: echo the forwarded argv so the delegated command can be asserted exactly, offline.
+    await writeFile(path.join(dist, "index.js"), "process.stdout.write(JSON.stringify(process.argv.slice(2)));\n");
+    const bin = path.join(temporary, "bin/create-agent-foundry.cjs");
+    await mkdir(path.dirname(bin));
+    await copyFile(path.join(root, "initializer/bin/create-agent-foundry.cjs"), bin);
+    const forwarded = async (...args) => JSON.parse((await run(process.execPath, [bin, ...args], temporary)).stdout);
+
+    assert.deepEqual(await forwarded(), ["apply", "--target", "."]);
+    assert.deepEqual(await forwarded("./proj"), ["apply", "--target", "./proj"]);
+    assert.deepEqual(await forwarded("--yes"), ["apply", "--target", ".", "--yes"]);
+    assert.deepEqual(await forwarded("proj", "--config", "answers.json", "--json"),
+      ["apply", "--target", "proj", "--config", "answers.json", "--json"]);
+    assert.deepEqual(await forwarded("--config", "answers.json"), ["apply", "--target", ".", "--config", "answers.json"]);
+
+    const help = await run(process.execPath, [bin, "--help"], temporary);
+    assert.equal(help.code, 0, help.stderr);
+    assert.match(help.stdout, /^Usage: create-agent-foundry/);
+
+    const unknown = await run(process.execPath, [bin, "proj", "--launch-agent"], temporary);
+    assert.equal(unknown.code, 1);
+    assert.match(unknown.stderr, /invalid_arguments/);
+
+    const missingConfig = await run(process.execPath, [bin, "--config"], temporary);
+    assert.equal(missingConfig.code, 1);
+    assert.match(missingConfig.stderr, /invalid_arguments/);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
