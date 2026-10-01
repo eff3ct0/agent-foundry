@@ -149,18 +149,21 @@ class InstallerCancelled extends Error {
   }
 }
 
-// Redraw a selection frame in place: the first call lays down a one-time spacer,
-// every later call moves the cursor up over the previous frame and clears to the
-// end of the screen before repainting, so navigating never stacks copies.
-// ponytail: assumes rendered frame lines do not wrap; a terminal narrower than the
-// longest line would under-clear (upgrade: count wrapped rows instead of "\n").
+// Redraw a selection frame in place with save/restore cursor: the first call lays down a
+// one-time spacer then saves the cursor position (ESC 7) at the frame's top, every later call
+// restores that saved position (ESC 8) and clears to the end of the screen before repainting.
+// A restored screen position is wrap-proof where counting logical lines was not: a terminal
+// narrower than the longest line wraps it into extra physical rows, which the old "\n"-count
+// cursor-up undershot (corrupting the header). Callers emit a trailing newline when the prompt
+// settles (see `finish`) so later output starts below the frame, since no "\n" follows the frame.
+// ponytail: if the frame is taller than the terminal the screen scrolls and the saved position
+// scrolls off the top, so restore lands wrong (upgrade: alt-screen buffer or a scroll region).
 const createInPlaceDraw = (): ((frame: string) => void) => {
   let drawn = false;
   return (frame: string): void => {
-    const frameLineCount = frame.split("\n").length;
-    stderr.write(drawn ? `\u001b[${frameLineCount}A\u001b[0J` : "\n");
+    stderr.write(drawn ? "\u001b8\u001b[0J" : "\n\u001b7");
     drawn = true;
-    stderr.write(`${frame}\n`);
+    stderr.write(frame);
   };
 };
 
@@ -206,6 +209,7 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
     return new Promise((resolve, reject) => {
       const wasRaw = stdin.isRaw;
       const finish = (callback: () => void, continueReading = false): void => {
+        stderr.write("\n"); // settle below the frame (createInPlaceDraw leaves no trailing newline)
         stdin.off("data", onData);
         if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
         if (!continueReading) stdin.pause();
@@ -254,6 +258,7 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
     return new Promise((resolve, reject) => {
       const wasRaw = stdin.isRaw;
       const finish = (callback: () => void, continueReading = false): void => {
+        stderr.write("\n"); // settle below the frame (createInPlaceDraw leaves no trailing newline)
         stdin.off("data", onData);
         if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
         if (!continueReading) stdin.pause();
