@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "package_name": "@eff3ct/agent-foundry",
-  "package_version": "0.3.0",
+  "package_version": "0.3.1",
   "payload_version": "1.0.0",
   "files": [
     {
@@ -79,8 +79,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 11761,
-      "sha256": "1b825ffff8fb8dacfc71bd0f30d0b514e97ef435fa6694c1ab9193a4a7ee0089"
+      "size": 12696,
+      "sha256": "1ebaed942ce77c9814d369438f4f8a9145d1709e9b9d1a75a96f6982a2ce4fd1"
     },
     {
       "path": "archetype-ownership.json",
@@ -419,5 +419,5 @@
       "sha256": "c1b40f6ed275378858e2058b96f2771e43e07208137d48ab121ab4fb71b81e9b"
     }
   ],
-  "payload_digest": "sha256:2bce87fa6e14df1030f692f4ca2f7876db80f8ec20b0e989f052b91093e2a5df"
+  "payload_digest": "sha256:baa7ca4f2d2b7f13b0f2c4a63298ff47d03bd4a21202b68bd8102ece5b6c5be2"
 }
