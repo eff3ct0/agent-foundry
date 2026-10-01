@@ -232,6 +232,17 @@ test("bootstrap rejects OpenAI credentials outside triage", async () => {
   });
 });
 
+test("bootstrap rejects a matrix output wired to a non-emitting step and a dropped consumer", async () => {
+  await fixture(async (directory) => {
+    await replace(directory, "bootstrap", "matrix: ${{ steps.release.outputs.matrix }}", "matrix: ${{ steps.matrix.outputs.matrix }}");
+    await reject(directory, "bootstrap prepare matrix output must reference the emitting step id release");
+  });
+  await fixture(async (directory) => {
+    await replaceFirst(directory, "bootstrap", "stack: ${{ fromJSON(needs.prepare.outputs.matrix) }}", "stack: '[\"none\"]'");
+    await reject(directory, "bootstrap matrix must consume the prepared recipes");
+  });
+});
+
 test("template workflow rejects absent contract inputs, pins, and crossed credentials", async () => {
   await fixture(async (directory) => {
     await replace(directory, "template", "workflow_dispatch:", "workflow_call:");
