@@ -79,8 +79,8 @@
     {
       "path": "README.md",
       "mode": "100644",
-      "size": 5266,
-      "sha256": "ad1d70086196ce19dd72d0931366fdf0016375841de70c6149b6a79bf93c99a9"
+      "size": 11761,
+      "sha256": "1b825ffff8fb8dacfc71bd0f30d0b514e97ef435fa6694c1ab9193a4a7ee0089"
     },
     {
       "path": "archetype-ownership.json",
@@ -419,5 +419,5 @@
       "sha256": "c1b40f6ed275378858e2058b96f2771e43e07208137d48ab121ab4fb71b81e9b"
     }
   ],
-  "payload_digest": "sha256:a25533f99e7f9157d997e90bed0d43c91b670a52978d926fcb987761cef2782f"
+  "payload_digest": "sha256:2bce87fa6e14df1030f692f4ca2f7876db80f8ec20b0e989f052b91093e2a5df"
 }
