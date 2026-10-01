@@ -1915,3 +1915,136 @@ test("cold generated project explains pinned/local interaction rules without a n
     await rm(parent, { recursive: true, force: true });
   }
 });
+
+test("generated project guards every phase transition with provider-confirmed evidence", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-transition-guard-"));
+  const target = path.join(parent, "project");
+  try {
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stderr);
+    const flat = (value) => value.replace(/\s+/gu, " ");
+    const read = async (name) => flat(await readFile(path.join(target, name), "utf8"));
+    const agent = await read("AGENT.md");
+    const runbook = await read(".factory/templates/agent-runbook.md");
+    const handoff = await read(".factory/templates/handoff.md");
+    const handoffRaw = await readFile(path.join(target, ".factory/templates/handoff.md"), "utf8");
+
+    // The SAME guard is stated in the entry contract and the generated runbook.
+    for (const [label, text] of [["AGENT.md", agent], ["runbook", runbook]]) {
+      assert.match(text, /guards?[\s\S]*?every[\s\S]*?adjacent[\s\S]*?transition|gates each adjacent transition/iu, label);
+      assert.match(text, /BLOCKED[\s\S]*?DONE/u, label);
+      assert.match(text, /skip[\s\S]*?(?:missing|failed)[\s\S]*?cannot advance/iu, label);
+      assert.match(text, /write acknowledgment[\s\S]*?before a fresh matching[\s\S]*?readback[\s\S]*?unconfirmed/iu, label);
+      assert.match(text, /(?:mismatch|malformed|unknown)[\s\S]*?never becomes `DONE`/iu, label);
+      assert.match(text, /rejection names the missing phase-specific evidence[\s\S]*?runnable continuation/iu, label);
+      assert.match(text, /no new phase, state machine, task store, or human gate/iu, label);
+    }
+    assert.match(handoffRaw, /^- Transition evidence:/mu);
+    assert.match(handoff, /never reaches `DONE`/u);
+
+    // Documentary contract fixture: the guard logic the text describes, exercised over each path.
+    // No phase machine is implemented here; the booleans classify the documented decision.
+    const guard = (t) => {
+      if (t.skipped) return { advance: false, reason: "skip" };
+      if (t.requiredCheck !== "passed") return { advance: false, reason: "failing verification" };
+      if (t.blocker === "unresolved") return { advance: false, reason: "unresolved blocker" };
+      if (t.approval === "missing") return { advance: false, reason: "missing approval" };
+      if (t.readback !== "fresh-match") return { advance: false, reason: "missing readback" };
+      return { advance: true, reason: "complete" };
+    };
+    const complete = { skipped: false, requiredCheck: "passed", blocker: "none", approval: "granted", readback: "fresh-match" };
+    const scenarios = [
+      { name: "valid complete", transition: complete, advance: true, evidence: /phase-specific required evidence exists and the matching bound-provider operation is confirmed and freshly read back/iu },
+      { name: "skip", transition: { ...complete, skipped: true }, advance: false, evidence: /a skipped phase, or a missing or failed required check, cannot advance/iu },
+      { name: "failing verification", transition: { ...complete, requiredCheck: "failed" }, advance: false, evidence: /missing or failed required check, cannot advance/iu },
+      { name: "unresolved blocker", transition: { ...complete, blocker: "unresolved" }, advance: false, evidence: /resolve and record the blocker/iu },
+      { name: "missing approval", transition: { ...complete, approval: "missing" }, advance: false, evidence: /obtain the gated approval|or a required approval/iu },
+      { name: "missing readback", transition: { ...complete, readback: "ack-only" }, advance: false, evidence: /before a fresh matching provider readback stays \*\*unconfirmed\*\*/iu },
+      { name: "mismatched readback", transition: { ...complete, readback: "mismatched" }, advance: false, evidence: /a mismatched task identity[\s\S]*?never becomes `DONE`/iu },
+    ];
+    const observed = { advanced: [], rejected: [] };
+    for (const scenario of scenarios) {
+      const result = guard(scenario.transition);
+      assert.equal(result.advance, scenario.advance, scenario.name);
+      assert.match(agent, scenario.evidence, `${scenario.name} evidence`);
+      (result.advance ? observed.advanced : observed.rejected).push(scenario.name);
+    }
+    assert.deepEqual(observed, {
+      advanced: ["valid complete"],
+      rejected: ["skip", "failing verification", "unresolved blocker", "missing approval", "missing readback", "mismatched readback"],
+    });
+
+    // Rejected advances do not persist as successful handoffs: each reject keeps the current phase.
+    assert.match(agent, /leaves the task in its current phase/iu);
+    const contract = await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/typed-inherited-runtime/check-delivery-contract.js"), "--self-check"], { cwd: target });
+    assert.match(contract.stdout, /self-check OK/u);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("generated project reconciles same-ticket intent before advancing", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-intent-reconcile-"));
+  const target = path.join(parent, "project");
+  try {
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stderr);
+    const read = async (name) => (await readFile(path.join(target, name), "utf8")).replace(/\s+/gu, " ");
+    const files = {
+      "AGENT.md": await read("AGENT.md"),
+      "workflow": await read(".factory/docs/workflow.md"),
+      "ticket": await read(".factory/templates/ticket.md"),
+      "runbook": await read(".factory/templates/agent-runbook.md"),
+      "handoff": await read(".factory/templates/handoff.md"),
+    };
+    // The reconciliation contract is present in every generated surface the issue names.
+    for (const [label, text] of Object.entries(files)) {
+      assert.match(text, /criterion-to-check mapping/iu, label);
+      assert.match(text, /authorized scope/iu, label);
+      assert.match(text, /read\s+(?:it|them)?\s*back/iu, label);
+      assert.match(text, /authoritative (?:task )?intent/iu, label);
+      assert.match(text, /stable provider task ID/iu, label);
+      assert.match(text, /(?:real|genuine) product or business-scope decision stays with the human/iu, label);
+      assert.match(text, /implementation-only discovery/iu, label);
+    }
+    // Does not duplicate #244's guard, #245's interaction policy, or #177-#180 persistence; no SDD mandate.
+    assert.match(files["AGENT.md"], /no second task store, new phase, or SDD mandate/iu);
+    assert.match(files["runbook"], /no second task store or SDD mandate/iu);
+    assert.match(files["AGENT.md"], /a local-only edit never establishes authoritative task intent/iu);
+
+    // Documentary contract fixture: the reconciliation decision the text describes.
+    const reconcile = (s) => {
+      if (!s.intentChanged) return { outcome: "proceed-normally", newApproval: false };
+      if (s.decision === "product") return { outcome: "human-decision", phasePreserved: true, durable: false };
+      if (s.update === "confirmed-readback") return { outcome: "advance-with-revised-criterion", durable: true };
+      return { outcome: "blocked-not-durable", durable: false };
+    };
+    const scenarios = [
+      { name: "stale plan, changed criterion (updated + read back)", input: { intentChanged: true, decision: "within-scope", update: "confirmed-readback" }, expect: "advance-with-revised-criterion", evidence: /update the same bound ticket's definition and its criterion-to-check mapping, then confirm and freshly read it back/iu },
+      { name: "code-only discovery, intent intact", input: { intentChanged: false }, expect: "proceed-normally", evidence: /implementation-only discovery that leaves the agreed behavior and its checks intact proceeds with no new approval or artifact/iu },
+      { name: "product-scope change", input: { intentChanged: true, decision: "product" }, expect: "human-decision", evidence: /real product or business-scope decision stays with the human: preserve the current phase and request that decision/iu },
+      { name: "update unsupported/failed/ambiguous", input: { intentChanged: true, decision: "within-scope", update: "ambiguous" }, expect: "blocked-not-durable", evidence: /unsupported, fails, or is ambiguous, no revised interpretation is durable: keep the current phase/iu },
+    ];
+    const observed = {};
+    for (const scenario of scenarios) {
+      const result = reconcile(scenario.input);
+      assert.equal(result.outcome, scenario.expect, scenario.name);
+      assert.match(files["AGENT.md"], scenario.evidence, `${scenario.name} evidence`);
+      observed[scenario.name] = result.outcome;
+    }
+    assert.deepEqual(observed, {
+      "stale plan, changed criterion (updated + read back)": "advance-with-revised-criterion",
+      "code-only discovery, intent intact": "proceed-normally",
+      "product-scope change": "human-decision",
+      "update unsupported/failed/ambiguous": "blocked-not-durable",
+    });
+    // One work unit per session is preserved; no new task store is introduced.
+    assert.match(files["runbook"], /One work unit per session still holds/iu);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});

@@ -47,6 +47,7 @@ Fill `<UPPER_SNAKE>` during bootstrap.
 
 ## 8. Handoff / checkpoint
 - Before ending or compacting, follow the runbook handoff fields and confirm/read back the bound-provider state. VCS holds work artifacts, not task authority.
+- **Reconcile same-ticket intent** at a phase handoff or cold resume: compare the provider-native task definition, the latest confirmed handoff, and the actual work before using a changed scope or acceptance criterion to advance. A changed product outcome or acceptance criterion cannot silently authorize new work or `DONE` - update the same bound ticket's definition and criterion-to-check mapping within authorized scope, then confirm and read it back from the provider; a local projection never changes authoritative intent. A real product or business-scope decision stays with the human and preserves the current phase. An implementation-only discovery that leaves the agreed behavior and checks intact proceeds without new approval, retaining the stable provider task ID and unaffected completed work. If the update or readback is unsupported, failed, or ambiguous, record the exact missing decision/operation and a runnable continuation; no revised interpretation is durable. The runbook owns the transition guard that enforces this at each phase boundary.
 
 ## 9. Integration and deployment
 - `<INTEGRATION_BRANCH>` -> `<ENVIRONMENTS>` (dev -> staging -> prod).

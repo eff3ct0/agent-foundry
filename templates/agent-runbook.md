@@ -91,6 +91,9 @@ evidence is recorded.
 - `BLOCKED ->` the recorded prior phase requires the blocker to be resolved and the new evidence to be recorded.
 - No transition skips a phase, and no transition reaches `DONE` with pending or failed verification or review.
 
+### Phase transition evidence guard
+`AGENT.md` owns this guard; the runbook applies it at every transition above. The same contract gates each adjacent transition, including `BLOCKED` entry/resume and `DONE`: advance only when the phase-specific required evidence exists and the matching bound-provider operation is confirmed and freshly read back. A skip, or a missing or failed required check, cannot advance; a transition claimed after a write acknowledgment but before a fresh matching readback stays unconfirmed, and a mismatched identity, malformed readback, or unknown outcome never becomes `DONE`. Each rejection names the missing phase-specific evidence and a runnable continuation through the bound provider, leaving the task in its current phase. No new phase, state machine, task store, or human gate is added.
+
 ## Session cycle
 1. **Read and choose** from the bound provider first: first *In Progress*, then *To Do* in its native order. Read the latest handoff and native state before inspecting local task lists or code, especially after an interruption. Announce `Working <TICKET_ID>`.
 2. **Move** the task to *In Progress* and comment the plan through the bound provider; confirm and read back both. If a task must be created, use the applicable provider-native template when one is required; never create a free-form issue where an issue template is mandatory.
@@ -101,6 +104,9 @@ evidence is recorded.
 7. **Deliver** the routine result without pausing for confirmation: create a conventional commit referencing `<TICKET_ID>`, push the ticket branch, open the PR with `.github/pull_request_template.md`, and update the ticket with the commit, PR, and verification evidence.
 8. **Close** only after the [Definition of Done](definition-of-done.md) passes; move the task to *Done* and read back the intended state and evidence from the bound provider. Opening a PR is not merging it.
 9. **Finish** the session (one task = one session).
+
+### Same-ticket intent reconciliation
+At a phase handoff or cold resume, reconcile the provider-native task definition, the latest provider-confirmed handoff, and the actual work before using a changed scope or acceptance criterion to advance. A changed product outcome or acceptance criterion cannot silently authorize new work or `DONE`: within authorized scope update the same bound ticket's definition and criterion-to-check mapping, then confirm and read it back from the provider; a local projection never changes authoritative task intent. A genuine product or business-scope decision stays with the human - preserve the current phase and request it. An implementation-only discovery that leaves the agreed behavior and checks intact proceeds with no new approval or artifact, retaining the stable provider task ID and unaffected completed work. If the update or readback is unsupported, failed, or ambiguous, record the exact missing decision or operation and a runnable continuation in the current phase; no revised interpretation is durable. One work unit per session still holds, and no second task store or SDD mandate is introduced.
 
 ## Durable handoff and interruption
 Use [`handoff.md`](handoff.md) for every phase completion and checkpoint. The provider-confirmed latest handoff
