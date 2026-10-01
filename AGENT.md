@@ -22,7 +22,16 @@ It is not tied to any language or stack.
 - Branching strategy: `<BRANCHING_MODEL>` (e.g. trunk-based / GitHub flow) - integration branch `<INTEGRATION_BRANCH>`
 - Base commands: build `<BUILD_CMD>` - test `<TEST_CMD>` - lint `<LINT_CMD>` - typecheck `<TYPECHECK_CMD>` - run `<RUN_CMD>`
 - Environments: `<ENVIRONMENTS>` (dev / staging / prod and how each is deployed)
-- Organization baseline (Factory OS): `<FACTORY_SPEC>` - organization spec governing this repo; local content overrides it. See [`docs/org-factory.md`](docs/org-factory.md).
+- Organization baseline (Factory OS): `<FACTORY_SPEC>` - organization spec governing this repo; local content overrides it per interaction rule. See [`docs/org-factory.md`](docs/org-factory.md).
+
+### Effective interaction rules
+Before relying on a factory rule, identify the exact `FACTORY_SPEC` above and a locally available copy of
+that pinned revision. Follow the offline comparison in [`docs/org-factory.md`](docs/org-factory.md): record the
+resolved commit SHA, baseline file and rule text, and this repository's file and rule text. For the same rule,
+the local text takes precedence; nonconflicting baseline rules remain in force. Do not erase either source
+from the explanation. If the required pin or baseline cannot be verified, or local rules contradict each
+other without a clear resolution, do not assume an effective factory rule or perform the disputed action;
+follow the local recovery steps there. This procedure does not alter provider bindings or approval rules.
 
 ## Archetype documents
 
@@ -59,6 +68,11 @@ Review targets, not limits: about 50–200 lines for an entry and 50–150 for a
 12. **Pull request template:** when opening a PR, it is MANDATORY to use `.github/pull_request_template.md`; PRs without that structure are prohibited. With GitHub, fill the template and use `gh pr create --body-file`.
 13. **Persistence language:** the agent's conversational language is independent from the repository's persistence language. ALL persisted work (specs, docs, issues, tasks, code, comments, commits, and PRs) MUST use `<REPO_LANGUAGE>` (default: English).
 14. **Delegated delivery:** when a human delegates a specific task, that delegation authorizes the routine delivery flow for that task: tracker updates, implementation, verification, commit, push, pull request, and evidence updates. Do not ask for intermediate confirmation. It does not authorize merge, production deployment, destructive operations, release publication, or other human approval decisions.
+15. **Candidate-bound review:** retained review results belong to the exact reviewed base and head commit and complete diff (file bytes, paths, and modes), with reviewed scope and disposition. Recheck identity before citing a result in a delivery handoff: a changed candidate needs a new review; absent, unreadable, or unmatched evidence is unverified, not an approval. GitHub PR protection is a separate control; do not claim its settings were audited without independent evidence.
+16. **Integration outcome handoff:** PR creation is routine delivery, not merge or deployment. Record the PR identity and open/unmerged state with the next owner and action. Only independently confirmed authorized merge with target-branch readback establishes integration; merge does not establish deployment. Claim deployment only after independent environment readback identifies the deployed revision and environment. Consent to merge or deploy is distinct from evidence that either occurred. For an unknown or failed remote mutation, name the exact target and missing proof, stop with no blind retry and no success claim. Use the bound-provider handoff, not a new task status, tracker, or automated production gate.
+
+### Pre-action execution boundary
+Before a consequential action, identify the selected repository/workspace, where the tool actually executes (or that this is unknown), relevant path/network/credential reach, and whether the user authorized this destination and action. A sandbox label does not establish isolation: a mounted host path reaches the host, and a custom tool may execute on an outer server. Local work does not authorize remote execution or transfer. Do not probe or disclose credentials to resolve uncertainty. If execution is unknown or authorization is missing, defer the affected remote, write, or destructive action; a read-only request permits only authorized reads. Name the missing fact and next step in the existing plan or handoff; continue unrelated authorized reads. Apply the existing approval rules to actions that require them; this instruction is not a runtime permission guard.
 
 ## Ordered phase model
 The detailed phase transitions, retry rule, and handoff shape are authoritative in [`templates/agent-runbook.md`](templates/agent-runbook.md), loaded for ticket execution. No phase is skipped; `BLOCKED` records the phase to resume, and `DONE` requires the Definition of Done and review gates. Do not claim a provider checkpoint without confirmation and fresh readback.

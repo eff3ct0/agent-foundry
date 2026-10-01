@@ -4,6 +4,81 @@ The reusable workflow `.github/workflows/real-agent-journey-assertions.yml`
 contains only independent readback and reporting. Provisioning and agent
 invocation remain upstream responsibilities.
 
+## Isolated baseline comparison (source protocol, #246)
+
+Use this checklist **before** either run. It compares two harness configurations
+on the same scripted task, using the existing #87 parent and #90 assertion
+signals. It does not start agents, add a workflow, or establish a performance
+gain. The offline fixture exercise is in
+`test/real-agent-journey-report.test.mjs` (`comparison fixture`).
+
+1. Record the baseline and candidate harness input (immutable revision or
+   digest), the **one** intended harness change, and the expected behavioral
+   checks below. Freeze the exact task prompt bytes (record a digest; do not
+   publish the prompt), scripted user decisions, model identifier/version,
+   runtime adapter/version, published creator package/version and source SHA,
+   test command, check names, and timeout/limits. Keep these identical in both
+   runs; do not substitute another package build, model alias, or prompt paraphrase.
+   If changing harness bytes also changes task inputs, the pair is not comparable.
+2. Run baseline then candidate **sequentially**, in independent disposable
+   environments with distinct run IDs, repositories/checkouts, agent homes,
+   workspaces, outputs, and credentials scoped to each run. Verify before each
+   launch that the workspace is empty except for the pinned package/task inputs;
+   the agent cannot read sibling artifacts, caches, transcripts, or repositories.
+   Record the isolation check, not just an asserted isolation label. Clean up
+   each run by its exact identity; failed cleanup is a recorded limitation and
+   must never become a readable input to the next run. If isolation cannot be
+   established, do not launch or compare.
+3. Collect the bounded #87 stage envelopes (`provision`, `agent`, `assert`,
+   `cleanup`), and independently inspect the #90 readback: source/package
+   identity, issue acceptance checkboxes, implementation branch/commit and
+   checkout HEAD, documented check statuses, executed test command and exit
+   status, and exact cleanup identity/status. A launch acknowledgment or agent
+   statement of completion is **never** an observed behavioral check. Treat
+   a passed stage envelope as a claim until its required readbacks are checked.
+4. Apply the predeclared outcome rules and fill the record below for **each**
+   run. Compare only when both records are complete, compatible, and isolated.
+
+| Predeclared outcome | Rule (apply in this order) |
+| --- | --- |
+| Contaminated / reject pair | Sibling artifacts were readable, isolation cannot be proved, run identities overlap, or the prompt/model/runtime/package/source inputs differ. Do not infer a winner; rerun with clean, pinned inputs. |
+| Failure | Isolation and inputs are valid, but an independently executed required behavior check fails or the independently read-back checkout/issue/cleanup contradicts the required result. Record which check failed. |
+| Inconclusive | Inputs and isolation are valid, but any required independent check, readback, or evidence reference is missing, timed out, malformed, or cannot be verified. A self-reported completion with no independent check is inconclusive, not success. |
+| Success | Inputs and isolation are valid and **all** predeclared checks have independent passing evidence, including readback, test and cleanup. |
+
+If a known failed check and missing evidence coexist, report the observed
+failure and list the missing evidence as a limitation; do not turn missing
+evidence into success. A contaminated pair takes precedence over either run's
+apparent result. Only compare success/failure outcomes from both complete runs;
+otherwise the comparison itself is `rejected` (contamination/mismatch) or
+`inconclusive` (missing verification). State what was observed, not that a
+candidate "improved" on the basis of one pair. A repeat with identical pins
+and fresh isolation is required to discuss reproducibility.
+
+### Bounded comparison record (one row per run)
+
+Record this **before** launch for the input/check fields, then append observed
+fields after readback. Use the same shape for both rows; store no raw prompts,
+model output, transcripts, secrets, private paths, or credential-bearing URLs.
+
+| Field | Required content |
+| --- | --- |
+| Role / run identity | `baseline` or `candidate`; distinct run ID and exact disposable repository/checkout identity. |
+| Pinned inputs | Prompt digest, scripted-decision digest, model ID/version, runtime adapter/package/version, creator package/version/source SHA, test command, check names, limits. |
+| Controlled change | Baseline and candidate harness revision/digest, with one named changed harness input; no other changed task inputs. |
+| Isolation | Independent empty-workspace/readability check, distinct agent home/cache/output and credential scope, sequential order, cleanup readback. Note any sibling access as contamination. |
+| Observations | #87 stage statuses and #90 independent GitHub/checkout readback, documented checks, executed test exit/result, and exact cleanup status; differentiate agent claims from independently observed values. |
+| Outcome / evidence / limits | Apply the table above; cite only bounded redacted run-scoped stage/assertion artifact refs and check IDs (e.g. `real-agent-journey-evidence-<run-id>#assert/checkout_head`), with explicit missing signals, timeouts, and other limitations. Existing journey artifacts are capped at 64 KiB and retained for seven days; a ref is not proof without readback. |
+
+Fixture rehearsal (offline): keep the inputs pinned and simulate independent
+checks for both runs, then separately expose a sibling artifact, change the
+model and prompt, and remove independent verification while leaving an agent
+completion claim. The related Node test exercises these decisions without
+running an agent or asserting any measured benefit. The local file check only
+rehearses artifact detection; it does not prove OS-level isolation for a live
+agent. Operators must review this checklist and the expected outcomes
+**before** executing a real pair.
+
 ## Runtime Adapter Contract
 
 [`scripts/real-agent-runtime-catalog.json`](../scripts/real-agent-runtime-catalog.json)

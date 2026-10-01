@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -214,4 +214,114 @@ test("missing canonical comment is posted and read back", async () => {
   assert.equal(await reportFailure(report, sourceRepository, "secret-token", request), "commented canonical issue #46");
   assert.equal(calls.at(-1).endpoint, `repos/${sourceRepository}/issues/comments/90`);
   assert.equal(calls.find(({ method }) => method === "POST").options.payload.body, report.body);
+});
+
+// Offline rehearsal of the #246 protocol: agent claims are deliberately not a check.
+const comparisonInputs = {
+  prompt_digest: "sha256:task-fixture",
+  decisions_digest: "sha256:decisions-fixture",
+  model: "model-fixture@version-1",
+  runtime: "codex-cli@0.148.0",
+  package: "@eff3ct/agent-foundry@0.1.0",
+  source_sha: revision,
+  test_command: "pnpm test",
+  checks: ["issue", "checkout", "test", "cleanup"],
+  limits: "fixture-timeout",
+};
+
+const fixtureRun = (role, runId, harness) => ({
+  role, run_id: runId, repository: `acme/real-agent-journey-${runId}`,
+  inputs: structuredClone(comparisonInputs), harness,
+  isolated: true, sibling_readable: false,
+  agent_claim: "completed",
+  // These are observer results, not values copied from the agent envelope.
+  observed: {
+    issue: "passed", checkout: "passed", test: "passed", cleanup: "passed",
+  },
+  evidence: Object.fromEntries(comparisonInputs.checks.map((check) =>
+    [check, `real-agent-journey-evidence-${runId}#assert/${check}`])),
+});
+
+const rehearseComparison = (baseline, candidate) => {
+  const pins = Object.keys(comparisonInputs);
+  const contaminated = baseline.run_id === candidate.run_id
+    || baseline.repository === candidate.repository
+    || [baseline, candidate].some((run) => !run.isolated || run.sibling_readable)
+    || pins.some((key) => JSON.stringify(baseline.inputs[key]) !== JSON.stringify(candidate.inputs[key]))
+    || pins.some((key) => JSON.stringify(baseline.inputs[key]) !== JSON.stringify(comparisonInputs[key]));
+  if (contaminated) return "rejected";
+  const classify = (run) => {
+    if (comparisonInputs.checks.some((check) => run.observed?.[check] === "failed")) return "failure";
+    if (comparisonInputs.checks.some((check) => run.observed?.[check] !== "passed" || !run.evidence?.[check])) return "inconclusive";
+    return "success";
+  };
+  const outcomes = [classify(baseline), classify(candidate)];
+  return outcomes.includes("inconclusive") ? "inconclusive" : outcomes;
+};
+
+test("comparison fixture accepts only two isolated pinned runs with independent evidence", () => {
+  const baseline = fixtureRun("baseline", "201", "harness-baseline");
+  const candidate = fixtureRun("candidate", "202", "harness-candidate");
+  assert.deepEqual(rehearseComparison(baseline, candidate), ["success", "success"]);
+  const failed = structuredClone(candidate);
+  failed.observed.test = "failed";
+  assert.deepEqual(rehearseComparison(baseline, failed), ["success", "failure"]);
+});
+
+test("comparison fixture rejects readable sibling artifacts and changed pins", () => {
+  const baseline = fixtureRun("baseline", "201", "harness-baseline");
+  const candidate = fixtureRun("candidate", "202", "harness-candidate");
+  const contaminated = structuredClone(candidate);
+  contaminated.sibling_readable = true;
+  assert.equal(rehearseComparison(baseline, contaminated), "rejected");
+  const changedModel = structuredClone(candidate);
+  changedModel.inputs.model = "model-fixture@version-2";
+  assert.equal(rehearseComparison(baseline, changedModel), "rejected");
+  const changedPrompt = structuredClone(candidate);
+  changedPrompt.inputs.prompt_digest = "sha256:different-task";
+  assert.equal(rehearseComparison(baseline, changedPrompt), "rejected");
+});
+
+test("comparison fixture marks claimed but unverified completion inconclusive", () => {
+  const baseline = fixtureRun("baseline", "201", "harness-baseline");
+  const candidate = fixtureRun("candidate", "202", "harness-candidate");
+  delete candidate.observed.checkout;
+  assert.equal(candidate.agent_claim, "completed");
+  assert.equal(rehearseComparison(baseline, candidate), "inconclusive");
+  const missingEvidence = fixtureRun("candidate", "203", "harness-candidate");
+  delete missingEvidence.evidence.test;
+  assert.equal(rehearseComparison(baseline, missingEvidence), "inconclusive");
+});
+
+test("comparison fixture independently reads local result and detects a sibling artifact", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "journey-comparison-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const baselineDir = path.join(root, "baseline");
+  const candidateDir = path.join(root, "candidate");
+  await mkdir(baselineDir);
+  await mkdir(candidateDir);
+  await writeFile(path.join(baselineDir, "local-check.txt"), "passed");
+  await writeFile(path.join(candidateDir, "local-check.txt"), "passed");
+
+  const baseline = fixtureRun("baseline", "201", "harness-baseline");
+  const candidate = fixtureRun("candidate", "202", "harness-candidate");
+  const inspect = async (directory, run) => {
+    const entries = await readdir(directory);
+    run.sibling_readable = entries.includes("baseline-artifact.txt");
+    run.observed.test = entries.includes("local-check.txt")
+      ? (await readFile(path.join(directory, "local-check.txt"), "utf8")).trim()
+      : undefined;
+  };
+  await inspect(baselineDir, baseline);
+  await inspect(candidateDir, candidate);
+  assert.deepEqual(rehearseComparison(baseline, candidate), ["success", "success"]);
+
+  await writeFile(path.join(candidateDir, "baseline-artifact.txt"), "sibling fixture");
+  await inspect(candidateDir, candidate);
+  assert.equal(rehearseComparison(baseline, candidate), "rejected");
+
+  await rm(path.join(candidateDir, "baseline-artifact.txt"));
+  await rm(path.join(candidateDir, "local-check.txt"));
+  await inspect(candidateDir, candidate);
+  assert.equal(rehearseComparison(baseline, candidate), "inconclusive");
 });

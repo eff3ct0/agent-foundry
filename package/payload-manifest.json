@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 13276,
-      "sha256": "99d65047abce06aaaef14e69d8e558ca4a79cd8a09476cf3777bb7988948d896"
+      "size": 16195,
+      "sha256": "a367094d3beafa7c5777ec42e18d2d5805f9e1ad03a33c5bbc879d4b56871f79"
     },
     {
       "path": "CLAUDE.md",
@@ -85,20 +85,20 @@
     {
       "path": "archetype-ownership.json",
       "mode": "100644",
-      "size": 11352,
-      "sha256": "b8a5cddf734bc11d8fd1fd330a8ca1738011eadaecf1ba494fd656cf42633078"
+      "size": 11576,
+      "sha256": "ed0fdfac170256d5471382e9ba85639bc6b26c66887c0d42a230e13b5c93863c"
     },
     {
       "path": "ci/_contract.md",
       "mode": "100644",
-      "size": 1157,
-      "sha256": "4559bcd9d63fcbb099071fe3569d80bdb4bb7e254e8ea0ebc93ef423fb30a9d0"
+      "size": 2254,
+      "sha256": "fe721574051167e0c40b72c3cb92858fb1bd4e232c4585f9739e4bdc6e4aa782"
     },
     {
       "path": "ci/recipes.json",
       "mode": "100644",
-      "size": 1985,
-      "sha256": "efde2c315256d9bc5ac18b798e4a1d534e24bb838d84ed7a8267856ba24543d5"
+      "size": 3088,
+      "sha256": "4991d1dfe09a7c83b15edb1816a474a3ce87e3a19b65586c2b388f9f96023987"
     },
     {
       "path": "docs/agent-init.md",
@@ -139,14 +139,14 @@
     {
       "path": "docs/org-factory.md",
       "mode": "100644",
-      "size": 6140,
-      "sha256": "9951502535e9dd5e37df8fac5dcdaccdf6d978b67f4a2ebf018f40e23621fd5c"
+      "size": 10672,
+      "sha256": "0291d3bb133ddc6e522ba1f2fe80402ad765d396d5ec0baca47f8246d29559f2"
     },
     {
       "path": "docs/workflow.md",
       "mode": "100644",
-      "size": 3626,
-      "sha256": "6e164d6572504ad7aa27c9bf9528e5764ff78f6d5a55dcce294482f317bdd94c"
+      "size": 6412,
+      "sha256": "812d3e3b1732a1086b7d36eab34d4106369cdf0d52acd725f56a6f4ba1e09f27"
     },
     {
       "path": "hooks/README.md",
@@ -385,8 +385,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 9510,
-      "sha256": "534be37cb6927868ca99dbb646d7edd63e02a4e920173cfdff9f0ecdb7a6695f"
+      "size": 12877,
+      "sha256": "00af2e9a88484d99e2ae9385fe3733b000ece4be142529b9b6438c76465f3cf3"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -397,8 +397,8 @@
     {
       "path": "templates/handoff.md",
       "mode": "100644",
-      "size": 2054,
-      "sha256": "dd92bf7ebe0826a370b474c3ff95a55e966bf1db48ef3c605ea47f3e9d2a78eb"
+      "size": 6095,
+      "sha256": "8ba625f9fe9f0269fe20bb53553ce4beb66345b82c7b0bbd94bc3c3cde04a2ef"
     },
     {
       "path": "templates/pull-request.md",
@@ -419,5 +419,5 @@
       "sha256": "08f6cda5ce8e591f9ba427c0512805759ecc810dd530b3850287da33ab2acd89"
     }
   ],
-  "payload_digest": "sha256:487f1fd4a05daa40ba56912b42e5bfd7a88dd0e0b3b6e8ba5c1dc0871116f530"
+  "payload_digest": "sha256:3bea24b817da0f860229ddd84cba7e970de8134f1b04268154e0b5a4ea1067ed"
 }
