@@ -96,7 +96,7 @@ test("local and registry identities require matching package, payload, and tarba
     await cp(path.join(root, "dist"), path.join(directory, "dist"), { recursive: true });
     const tarball = path.join(directory, "package.tgz");
     await writeFile(tarball, "exact-package-bytes\n");
-    const expected = await readPackageIdentity({ packageRoot: directory, tarballPath: tarball, tag: "v0.2.0-rc.0", sourceSha });
+    const expected = await readPackageIdentity({ packageRoot: directory, tarballPath: tarball, tag: "v0.2.0", sourceSha });
     const registry = structuredClone(expected);
     const verified = validateRegistryReadback({ metadata: expected.package, registryIdentity: registry, expected });
     assert.equal(verified.status, "verified");
@@ -116,17 +116,17 @@ test("initializer staging and registry metadata bind the exact dependency and ta
     await mkdir(path.join(directory, "bin"));
     await cp(path.join(root, "initializer", "bin", "create-agent-foundry.cjs"), path.join(directory, "bin", "create-agent-foundry.cjs"));
     await writeFile(path.join(directory, "package.tgz"), "initializer bytes");
-    const options = { packageRoot: directory, tarballPath: path.join(directory, "package.tgz"), tag: "v0.2.0-rc.0", sourceSha, packageName: INITIALIZER_NAME };
+    const options = { packageRoot: directory, tarballPath: path.join(directory, "package.tgz"), tag: "v0.2.0", sourceSha, packageName: INITIALIZER_NAME };
     const staged = await readPackageIdentity(options);
     const metadata = { ...staged.package, dependencies: staged.dependency };
     assert.equal(validateRegistryReadback({ metadata, registryIdentity: staged, expected: staged }).status, "verified");
-    assert.throws(() => validateRegistryReadback({ metadata: { ...metadata, dependencies: { [packageName]: "0.2.0" } }, registryIdentity: staged, expected: staged }), /initializer dependency/u);
+    assert.throws(() => validateRegistryReadback({ metadata: { ...metadata, dependencies: { [packageName]: "0.2.0-rc.0" } }, registryIdentity: staged, expected: staged }), /initializer dependency/u);
     assert.throws(() => validateRegistryReadback({ metadata, registryIdentity: { ...staged, tarball_digest: "sha256:" + "0".repeat(64) }, expected: staged }), /tarball identity/u);
     const manifest = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
-    manifest.dependencies[packageName] = "^0.2.0-rc.0";
+    manifest.dependencies[packageName] = "^0.2.0";
     await writeFile(path.join(directory, "package.json"), JSON.stringify(manifest));
     await assert.rejects(readPackageIdentity(options), /exact creator version/u);
-    manifest.dependencies[packageName] = "0.2.0-rc.0";
+    manifest.dependencies[packageName] = "0.2.0";
     await writeFile(path.join(directory, "package.json"), JSON.stringify(manifest));
     await rm(path.join(directory, "bin", "create-agent-foundry.cjs"));
     await assert.rejects(readPackageIdentity(options), { code: "ENOENT" });
@@ -191,10 +191,10 @@ test("release runner refuses changed staged bytes before any registry or claim o
     for (const [name, folder, packageName] of [["local", "local-package", "@eff3ct/agent-foundry"], ["initializer", "local-initializer", INITIALIZER_NAME]]) {
       const tarball = `./package/${name}.tgz`;
       await writeFile(path.join(directory, tarball), `${name} bytes`);
-      const staged = await readPackageIdentity({ packageRoot: path.join(directory, folder), tarballPath: path.join(directory, tarball), tag: "v0.2.0-rc.0", sourceSha, packageName });
+      const staged = await readPackageIdentity({ packageRoot: path.join(directory, folder), tarballPath: path.join(directory, tarball), tag: "v0.2.0", sourceSha, packageName });
       await writeFile(path.join(directory, "identity", `${name}.json`), JSON.stringify(staged));
     }
-    Object.assign(process.env, { RELEASE_TAG: "v0.2.0-rc.0", RELEASE_SHA: sourceSha, VERSION: "0.2.0-rc.0", TARBALL: "./package/local.tgz", INITIALIZER_TARBALL: "./package/initializer.tgz" });
+    Object.assign(process.env, { RELEASE_TAG: "v0.2.0", RELEASE_SHA: sourceSha, VERSION: "0.2.0", TARBALL: "./package/local.tgz", INITIALIZER_TARBALL: "./package/initializer.tgz" });
     await writeFile(path.join(directory, "package", "initializer.tgz"), "changed bytes");
     await assert.rejects(publishPair(directory), { code: "staged_bytes_changed" });
     await assert.rejects(readFile(path.join(directory, "identity", "pair-state.json")), { code: "ENOENT" });
@@ -214,7 +214,7 @@ test("initializer registry readback retries only bounded reads, then verifies im
     await cp(path.join(root, "initializer", "bin", "create-agent-foundry.cjs"), path.join(packageRoot, "bin", "create-agent-foundry.cjs"));
     const archive = path.join(directory, "initializer.tgz");
     await execFile("tar", ["-czf", archive, "-C", path.join(directory, "archive"), "package"]);
-    const expected = await readPackageIdentity({ packageRoot, tarballPath: archive, tag: "v0.2.0-rc.0", sourceSha, packageName: INITIALIZER_NAME });
+    const expected = await readPackageIdentity({ packageRoot, tarballPath: archive, tag: "v0.2.0", sourceSha, packageName: INITIALIZER_NAME });
     const metadata = { ...expected.package, dependencies: expected.dependency };
     const waits = [];
     let views = 0;
