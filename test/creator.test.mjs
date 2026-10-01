@@ -86,6 +86,61 @@ const walkFiles = async (directory, result = []) => {
   return result.sort();
 };
 
+test("generated project describes actual execution boundaries before consequential actions", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-action-boundary-"));
+  const target = path.join(parent, "project");
+  try {
+    const config = await configFile(parent);
+    const args = ["--target", target, "--config", config, "--non-interactive"];
+    const applied = await run(["apply", ...args]);
+    assert.equal(applied.code, 0, applied.stderr);
+    const docs = Object.fromEntries(await Promise.all([
+      "AGENT.md", ".factory/templates/agent-runbook.md", ".factory/docs/workflow.md", ".factory/templates/handoff.md",
+    ].map(async (name) => [name, await readFile(path.join(target, name), "utf8")])));
+    const agent = docs["AGENT.md"];
+    const runbook = docs[".factory/templates/agent-runbook.md"];
+    assert.match(agent, /Before a consequential action.*selected repository\/workspace.*tool actually executes.*relevant path\/network\/credential reach.*authorized this destination and action/u);
+    assert.match(agent, /sandbox label does not establish isolation/u);
+    assert.match(agent, /Do not probe or disclose credentials/u);
+    assert.match(agent, /defer the affected remote, write, or destructive action.*read-only request permits only authorized reads/u);
+    assert.match(agent, /Name the missing fact and next step.*continue unrelated authorized reads/u);
+    assert.match(agent, /not a runtime permission guard/u);
+    assert.match(runbook, /pre-action execution boundary in `AGENT\.md`/u);
+    assert.match(runbook, /does not enforce tool isolation/u);
+    assert.match(docs[".factory/docs/workflow.md"], /Before planning a consequential tool action/u);
+    assert.match(docs[".factory/templates/handoff.md"], /Record only the affected action as blocked; unrelated authorized reads continue/u);
+
+    // Documentary scenario fixture: no sandbox or permission enforcement is implemented here.
+    const scenarios = [
+      { boundary: "direct local", evidence: /selected repository\/workspace/u, authorized: true, readOnly: false },
+      { boundary: "remote", evidence: /Local work does not authorize remote execution or transfer/u, authorized: false, readOnly: false },
+      { boundary: "mounted host", evidence: /mounted host path reaches the host/u, authorized: false, readOnly: false },
+      { boundary: "outer-server custom tool", evidence: /custom tool may execute on an outer server/u, authorized: false, readOnly: false },
+      { boundary: "unknown", evidence: /execution is unknown or authorization is missing/u, authorized: false, readOnly: false },
+      { boundary: "read-only local", evidence: /read-only request permits only authorized reads.*continue unrelated authorized reads/u, authorized: true, readOnly: true },
+    ];
+    const observed = { directLocal: 0, authorizedReads: 0, blocked: [] };
+    for (const scenario of scenarios) {
+      assert.match(agent, scenario.evidence, scenario.boundary);
+      if (scenario.authorized && !scenario.readOnly) observed.directLocal += 1;
+      else if (scenario.authorized && scenario.readOnly) observed.authorizedReads += 1;
+      else observed.blocked.push(scenario.boundary); // No outward tool is invoked.
+    }
+    assert.deepEqual(observed, {
+      directLocal: 1,
+      authorizedReads: 1,
+      blocked: ["remote", "mounted host", "outer-server custom tool", "unknown"],
+    });
+    const verified = await run(["verify", ...args]);
+    assert.equal(verified.code, 0, verified.stderr);
+    assert.equal(json(verified).status, "verified");
+    const contract = await execFileAsync(process.execPath, [path.join(target, ".factory/scripts/typed-inherited-runtime/check-delivery-contract.js"), "--self-check"], { cwd: target });
+    assert.match(contract.stdout, /self-check OK/u);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("generated module inventory uses the composed creator plan, not application paths or state declarations", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-module-policy-"));
   const target = path.join(parent, "project");
@@ -1399,6 +1454,93 @@ test("fresh generated context routes use retained paths and reject stale or miss
   }
 });
 
+test("generated CI executes applicable npm checks, omits absent lint, and preserves Go gates", async (t) => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-ci-applicability-"));
+  const target = path.join(parent, "project");
+  try {
+    const config = await configFile(parent, { CI_SYSTEM: "GitHub Actions", CI_STACKS: "typescript,go" });
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, applied.stderr);
+    const workflow = await readFile(path.join(target, ".github/workflows/ci.yml"), "utf8");
+    assert.doesNotMatch(workflow, /--if-present/u);
+    const install = workflow.match(/      - name: install\n        run: ([^\n]+)/u)?.[1];
+    const verifyBlock = workflow.match(/      - name: verify configured checks\n        run: \|\n((?:          .*\n)+)/u)?.[1];
+    assert.equal(install, "npm ci");
+    assert.ok(verifyBlock, "generated TypeScript verification command must be present");
+    const verifyCommand = verifyBlock.replace(/^          /gmu, "");
+    // A nested node --test must not inherit the parent test runner's recursion guard.
+    const { NODE_TEST_CONTEXT: _parentTestContext, ...fixtureEnvironment } = process.env;
+    const shell = async (command) => {
+      try {
+        const { stdout, stderr } = await execFileAsync("sh", ["-e", "-c", command], {
+          cwd: target,
+          env: { ...fixtureEnvironment, npm_config_offline: "true", npm_config_audit: "false", GOTOOLCHAIN: "local" },
+        });
+        return { code: 0, output: stdout + stderr };
+      } catch (error) {
+        return { code: error.code, output: (error.stdout ?? "") + (error.stderr ?? "") };
+      }
+    };
+    const packageFile = path.join(target, "package.json");
+    await writeFile(packageFile, JSON.stringify({ name: "ci-applicability-fixture", version: "1.0.0", scripts: {} }));
+    await writeFile(path.join(target, "package-lock.json"), JSON.stringify({
+      name: "ci-applicability-fixture", version: "1.0.0", lockfileVersion: 3,
+      packages: { "": { name: "ci-applicability-fixture", version: "1.0.0" } },
+    }));
+    await writeFile(path.join(target, "ci-pass.test.mjs"), 'import { test } from "node:test";\ntest("passes", () => {});\n');
+    assert.equal((await shell(install)).code, 0, "generated npm install must execute");
+
+    const missing = await shell(verifyCommand);
+    assert.notEqual(missing.code, 0, missing.output);
+    assert.match(missing.output, /test: unavailable \(required npm script missing or invalid\)/u);
+    t.diagnostic(`missing test: node -e verifier exit=${missing.code}; test unavailable`);
+    const continuation = missing.output.match(/npm pkg set scripts\.test="node --test" && npm test/u)?.[0];
+    assert.ok(continuation, "the missing-runner diagnostic must name a runnable exit");
+    const resumed = await shell(continuation);
+    assert.equal(resumed.code, 0, resumed.output);
+    t.diagnostic(`printed continuation: ${continuation} exit=${resumed.code}`);
+    const optional = await shell(verifyCommand);
+    assert.equal(optional.code, 0, optional.output);
+    assert.match(optional.output, /lint: not applicable \(no npm script; runner omitted\)/u);
+    assert.doesNotMatch(optional.output, /lint: runner=/u);
+    assert.match(optional.output, /test: runner=npm run test exit=0 result=passed/u);
+    t.diagnostic(`optional lint: node -e verifier exit=${optional.code}; lint not applicable; npm run test exit=0 passed`);
+
+    await writeFile(packageFile, JSON.stringify({
+      name: "ci-applicability-fixture", version: "1.0.0",
+      scripts: { lint: 'node -e "process.exit(1)"', test: "node --test ci-pass.test.mjs" },
+    }));
+    const lintFailure = await shell(verifyCommand);
+    assert.notEqual(lintFailure.code, 0, lintFailure.output);
+    assert.match(lintFailure.output, /lint: runner=npm run lint exit=1 result=failed/u);
+    assert.match(lintFailure.output, /test: runner=npm run test exit=0 result=passed/u);
+    t.diagnostic(`configured lint: node -e verifier exit=${lintFailure.code}; npm run lint exit=1 failed`);
+
+    await writeFile(path.join(target, "ci-fail.test.mjs"), 'import { test } from "node:test";\ntest("fails", () => { throw new Error("expected failure"); });\n');
+    await writeFile(packageFile, JSON.stringify({
+      name: "ci-applicability-fixture", version: "1.0.0", scripts: { test: "node --test ci-fail.test.mjs" },
+    }));
+    const failing = await shell(verifyCommand);
+    assert.notEqual(failing.code, 0, failing.output);
+    assert.match(failing.output, /test: runner=npm run test exit=[1-9][0-9]* result=failed/u);
+    t.diagnostic(`failing test: node -e verifier exit=${failing.code}; npm run test failed`);
+
+    const goJob = workflow.split("  go:\n")[1];
+    assert.ok(goJob, "selected Go recipe must be present");
+    await writeFile(path.join(target, "go.mod"), "module example.com/ci-fixture\n\ngo 1.20\n");
+    await writeFile(path.join(target, "example.go"), "package example\n\nfunc Answer() int { return 42 }\n");
+    const goCommands = [...goJob.matchAll(/^        run: (.+)$/gmu)].map((match) => match[1]);
+    assert.deepEqual(goCommands, ['test -z "$(gofmt -l .)"', "go vet ./...", "go test ./...", "go build ./..."]);
+    for (const command of goCommands) {
+      const result = await shell(command);
+      assert.equal(result.code, 0, `${command}: ${result.output}`);
+      t.diagnostic(`go: ${command} exit=${result.code} passed`);
+    }
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test("documentation profiles compose exact authority and independent capabilities without remote transfer", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-doc-profiles-"));
   const base = "https://docs.example.invalid/project";
@@ -1689,4 +1831,87 @@ test("ownership cleanup removes unchanged source inputs and preserves changed ap
   const protectedResult = await run(["apply", "--target", protectedTarget, "--config", config, "--non-interactive"]);
   assert.notEqual(protectedResult.code, 0);
   assert.equal(await readFile(path.join(protectedTarget, "placeholders.json"), "utf8"), "application-owned\n");
+});
+
+test("cold generated project explains pinned/local interaction rules without a network dependency", async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-policy-"));
+  try {
+    const target = path.join(parent, "project");
+    const config = await configFile(parent, {
+      FACTORY_REQUIRED: "true",
+      FACTORY_SPEC: "acme/factory@v1",
+    });
+    const applied = await run(["apply", "--target", target, "--config", config, "--non-interactive"]);
+    assert.equal(applied.code, 0, applied.stderr);
+
+    const startup = await execFileAsync(process.execPath, ["start.mjs"], { cwd: target });
+    assert.match(startup.stdout, /ONBOARDING mode/u);
+    const agent = await readFile(path.join(target, "AGENT.md"), "utf8");
+    const factory = await readFile(path.join(target, ".factory/docs/org-factory.md"), "utf8");
+    const runbook = await readFile(path.join(target, ".factory/templates/agent-runbook.md"), "utf8");
+
+    // These assertions inspect the shipped cold entrypoints, not source-only documentation.
+    assert.match(agent, /acme\/factory@v1/u);
+    assert.match(agent, /effective interaction rules[\s\S]*?org-factory\.md/iu);
+    assert.match(runbook, /effective interaction rules[\s\S]*?AGENT\.md/iu);
+    assert.match(factory, /refs\/tags\/v1\^\{commit\}/u);
+    assert.match(factory, /commit SHA/iu);
+    assert.match(factory, /AGENT\.md[\s\S]*?templates\/agent-runbook\.md/u);
+    assert.match(factory, /per rule[\s\S]*?local[\s\S]*?pinned/iu);
+    const rootAgentLink = factory.match(/\[`?AGENT\.md`?\]\(([^)]+)\)/u);
+    const factoryGuideLink = runbook.match(/\[`?\.factory\/docs\/org-factory\.md`?\]\(([^)]+)\)/u);
+    assert.ok(rootAgentLink && factoryGuideLink, "cold entrypoints must link to the actual generated files");
+    assert.ok((await stat(path.resolve(target, ".factory/docs", rootAgentLink[1]))).isFile());
+    assert.ok((await stat(path.resolve(target, ".factory/templates", factoryGuideLink[1]))).isFile());
+
+    // A separate local factory checkout models a pin without fetching any remote state.
+    const baseline = path.join(parent, "factory");
+    await mkdir(baseline);
+    const git = (args) => execFileAsync("git", ["-C", baseline, ...args]);
+    await git(["init", "-q"]);
+    await writeFile(path.join(baseline, "AGENT.md"), "Review cadence: weekly\n");
+    await git(["add", "AGENT.md"]);
+    await git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "pinned rules"]);
+    await git(["tag", "v1"]);
+    const { stdout: pinnedSha } = await git(["rev-parse", "--verify", "refs/tags/v1^{commit}"]);
+    assert.match(pinnedSha.trim(), /^[0-9a-f]{40}$/u);
+    const { stdout: pinnedText } = await git(["show", `${pinnedSha.trim()}:AGENT.md`]);
+    assert.match(pinnedText, /Review cadence: weekly/u);
+    await assert.rejects(git(["rev-parse", "--verify", "refs/tags/missing^{commit}"]));
+
+    const localRulePath = path.join(target, "AGENT.md");
+    await writeFile(localRulePath, `${agent}\nIncident response: daily\nReview cadence: daily\n`);
+    const localText = await readFile(localRulePath, "utf8");
+    assert.match(localText, /Review cadence: daily/u); // overrides the pinned Review rule
+    assert.match(localText, /Incident response: daily/u); // nonconflicting local rule remains
+    await writeFile(localRulePath, `${localText}Review cadence: monthly\n`);
+    assert.match(await readFile(localRulePath, "utf8"), /Review cadence: daily\nReview cadence: monthly/u);
+
+    const unpinnedTarget = path.join(parent, "unpinned");
+    const unpinnedConfig = await configFile(parent, { FACTORY_REQUIRED: "true", FACTORY_SPEC: "" });
+    const unpinned = await run(["apply", "--target", unpinnedTarget, "--config", unpinnedConfig, "--non-interactive"]);
+    assert.notEqual(unpinned.code, 0, "required membership must not silently accept a missing pin");
+    await assert.rejects(stat(unpinnedTarget));
+
+    const scenarios = [
+      { name: "nonconflict", baseline: "Review cadence: weekly", local: "Incident response: daily", effective: "both", provenance: "both" },
+      { name: "local override", baseline: "Review cadence: weekly", local: "Review cadence: daily", effective: "daily", provenance: "both" },
+      { name: "missing pin", baseline: "Review cadence: weekly", local: "FACTORY_SPEC: missing", effective: "stop", provenance: "missing" },
+      { name: "unavailable baseline", baseline: "no local checkout at pinned ref", local: "Review cadence: daily", effective: "stop", provenance: "unavailable" },
+      { name: "ambiguous provenance", baseline: "Review cadence: weekly", local: ["Review cadence: daily", "Review cadence: monthly"], effective: "stop", provenance: "ambiguous" },
+    ];
+    for (const scenario of scenarios) {
+      const row = factory.split("\n").find((line) => line.startsWith(`| ${scenario.name} |`));
+      assert.ok(row, `${scenario.name}: cold agent needs an explicit example`);
+      for (const value of [scenario.baseline, ...[scenario.local].flat(), scenario.effective, scenario.provenance]) {
+        assert.ok(row.includes(value), `${scenario.name}: expected ${value} in shipped example`);
+      }
+    }
+    assert.match(factory, /no implicit fetch/iu);
+    assert.match(factory, /local checkout[\s\S]*?offline/iu);
+    assert.match(factory, /do not execute[\s\S]*?reconcile/iu);
+    assert.match(factory, /do not change[\s\S]*?provider/iu);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });

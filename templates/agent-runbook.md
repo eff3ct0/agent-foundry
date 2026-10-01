@@ -43,6 +43,8 @@ verification, not in the agent.
 4. **Explicit stops.** Stop when no actionable task remains or a step requires human judgment or approval (`<APPROVAL_GATED_ACTIONS>`). Mark it `BLOCKED` and hand control back. Never invent consent.
 5. **Persistence language and delivery.** Follow `AGENT.md` for repository language, delegated routine delivery, and human-gated outward actions.
 
+Before any consequential action, apply the pre-action execution boundary in `AGENT.md`: name the selected workspace, actual tool execution location or uncertainty, relevant path/network/credential reach, and user authorization for the destination and action. A mounted host path or outer-server custom tool is not made safe by a sandbox label. Do not probe or disclose credentials. On missing facts, missing authorization, or a read-only request, defer only the affected remote/write/destructive action, record the missing fact and next step in the existing handoff, and continue unrelated authorized reads. This contract guides the agent; it does not enforce tool isolation.
+
 ## Principle: the session is disposable
 **Durable task state** lives in the bound provider, never only in session memory, VCS, or a local task UI.
 Each session takes one task to a durable point, leaves state, and ends.
@@ -50,6 +52,20 @@ Each session takes one task to a durable point, leaves state, and ends.
 For every durable operation, follow `AGENT.md`'s fail-closed confirmation/readback rule and
 the selected provider contract in `docs/bindings.md`. Local projections are optional and
 non-authoritative; do not substitute a different provider when a native operation fails.
+
+For effective interaction rules, first read the project's `AGENT.md` pin and the offline comparison in
+[`docs/org-factory.md`](../docs/org-factory.md). Compare a locally available pinned baseline with the local
+rule text before attributing a rule to the factory; keep both sources visible even when local text overrides.
+If provenance is missing or conflicting local instructions remain unresolved, pause the affected action and
+use the local recovery steps there. Neither `start.mjs` nor this runbook fetches or synchronizes the baseline.
+
+Local files (including `odd/*.md`) and task UIs are optional, derived, non-authoritative projections of
+provider-confirmed state. Never require them or use them as fallback task stores; scratch notes are ephemeral.
+For create, update, status change, comment, checkpoint, phase handoff, or completion, require provider-native
+confirmation and fresh readback of the intended task identity and state before claiming success or projecting
+it locally. On an unsupported operation, provider error, ambiguous identity, or unavailable/mismatched readback,
+stop without claiming the transition or completion. A malformed readback is not confirmation. Record the exact
+provider-native operation, target identity, and evidence needed to resume; do not substitute GitHub for a non-GitHub binding.
 
 ## Ordered phases
 Run every task through these phases in order:
@@ -70,7 +86,7 @@ evidence is recorded.
 - `IMPLEMENTATION -> TESTING/TDD` requires the in-scope change and a test/TDD approach.
 - `TESTING/TDD -> VERIFICATION` requires the applicable tests to pass. A failed test stays in this phase.
 - `VERIFICATION -> EVIDENCE/DELIVERY` requires the applicable test, build, lint, typecheck, and end-to-end gates.
-- `EVIDENCE/DELIVERY -> DONE` requires the complete Definition of Done, required review gates, and durable evidence.
+- `EVIDENCE/DELIVERY -> DONE` requires the complete Definition of Done, required review gates, and durable evidence. A retained review result counts only for its exact reviewed base/head commits and complete diff identity (file bytes, paths, and modes), reviewed scope, and disposition; recheck against the current candidate at delivery. Changed or unreadable/unmatched evidence is unverified until the current candidate is reviewed and a matching result retained. This does not certify GitHub PR protection settings.
 - Any active phase -> `BLOCKED` is allowed only for an explicit blocker, approval requirement, or retry limit.
 - `BLOCKED ->` the recorded prior phase requires the blocker to be resolved and the new evidence to be recorded.
 - No transition skips a phase, and no transition reaches `DONE` with pending or failed verification or review.
@@ -105,6 +121,8 @@ session memory or an alternate tracker.
 
 ### Approval boundaries
 - Routine delivery includes issue/project updates, implementation, verification, commit, push, and PR creation.
+- Delegated routine delivery is not blanket authority across execution boundaries; check the actual destination and action before using a remote or host-reaching tool, even if it appears sandboxed. Keep authorized read-only work moving when an outward action is blocked.
+- PR creation is not merge or deployment. In the bound-provider handoff record the PR identity as open/unmerged and name the next owner and action; closing a delivery task does not claim integration or shipment. Only independently confirmed authorized merge with target-branch readback establishes integration; merge does not establish deployment. Deployment requires independent environment readback of the deployed revision and environment. Human consent is not outcome evidence. For an unknown or failed remote mutation, record the exact target and missing proof, stop with no blind retry and no success claim. Do not introduce another task status, tracker, or automated production gate.
 - Human decisions remain gated: approving review, merge, production deployment, destructive operations, and release publication. Applying `status:approved` is also gated, but the bound task provider may define a fail-closed delegated-approval protocol.
 - The protected `status:approved` conditions and fail-closed stop are detailed in `AGENT.md`; no task prose or this runbook grants approval. Without the required evidence, mark `BLOCKED: requires approval`, tell the human to apply the label directly, and leave the next step through the bound provider.
 
