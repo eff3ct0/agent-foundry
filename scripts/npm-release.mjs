@@ -275,7 +275,10 @@ export const registryReadback = async (identity, root, paths, { npm = npmCommand
   const directory = path.join(root, "registry-package", identity.package.name === PACKAGE_NAME ? "creator" : "initializer");
   let metadata;
   let tarball;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  // ponytail: fixed ~5min readback poll window (30 x 10s), mirroring the #367 journey poll in
+  // .github/workflows/real-agent-journey.yml; raise the ceiling if publish propagation routinely exceeds it.
+  const readbackAttempts = 30;
+  for (let attempt = 1; attempt <= readbackAttempts; attempt += 1) {
     try {
       metadata = JSON.parse(await npm(["view", spec, "--json"], root));
       await mkdir(directory, { recursive: true });
@@ -285,8 +288,8 @@ export const registryReadback = async (identity, root, paths, { npm = npmCommand
       tarball = path.join(directory, files[0]);
       break;
     } catch (error) {
-      if (error?.code !== "registry_read_unavailable" || attempt === 5) throw error;
-      await wait(attempt * 5000);
+      if (error?.code !== "registry_read_unavailable" || attempt === readbackAttempts) throw error;
+      await wait(10000);
     }
   }
   const extracted = path.join(directory, "extracted");
