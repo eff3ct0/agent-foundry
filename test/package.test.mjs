@@ -62,7 +62,7 @@ test("manifest covers the bundled payload exactly once", async () => {
 
 test("version output exposes the package and payload identity", async () => {
   const human = await execFileAsync(process.execPath, ["dist/index.js", "--version"], { cwd: root });
-  assert.match(human.stdout, /@eff3ct\/agent-foundry 0\.2\.2/);
+  assert.match(human.stdout, /@eff3ct\/agent-foundry 0\.2\.3/);
   assert.match(human.stdout, new RegExp(manifest.payload_digest));
 
   const json = await execFileAsync(process.execPath, ["dist/index.js", "--version", "--json"], { cwd: root });
