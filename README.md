@@ -26,19 +26,27 @@ Always pin the exact version in onboarding and release verification:
 npm create @eff3ct/agent-foundry@<EXACT_VERSION> ./new-project
 ```
 
-When the separately published initializer is available, npm maps that command
-to `@eff3ct/create-agent-foundry@<EXACT_VERSION>`. The initializer depends on
-the same exact version of `@eff3ct/agent-foundry` and delegates to `foundry apply`.
-It prompts for configuration and confirmation by default. For explicit answers
-in automation, pass flags after npm's `--` separator:
+npm maps that command to `@eff3ct/create-agent-foundry@<EXACT_VERSION>`. The
+initializer depends on the same exact version of `@eff3ct/agent-foundry` and
+delegates to `foundry apply`. It prompts for configuration and confirmation by
+default. For explicit answers in automation, pass flags after npm's `--`
+separator:
 
 ```sh
 npm create @eff3ct/agent-foundry@<EXACT_VERSION> ./new-project -- --config answers.json --non-interactive --json
 ```
 
-`@latest` may be useful for interactive discovery once published, but does not
-pin reproducible bytes. The initializer is not yet published or release-verified;
-until its separately authorized release, use the existing package-first commands:
+`@latest` may be useful for interactive discovery but does not pin reproducible
+bytes. To drive the creator's `foundry` bin directly, invoke the same exact
+creator package with `npx --package` or `pnpm dlx --package`. These are
+equivalent alternatives to `npm create`, not fallbacks:
+
+```sh
+npx --yes --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./new-project --config answers.json --non-interactive
+npx --yes --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --config answers.json --non-interactive --yes
+npx --yes --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry verify --target ./new-project --config answers.json --non-interactive
+npx --yes --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry doctor --target ./new-project --non-interactive
+```
 
 ```sh
 pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry plan --target ./new-project --config answers.json --non-interactive
@@ -48,9 +56,10 @@ pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry doctor --target
 ```
 
 Maintainers publish only through `.github/workflows/npm-release.yml`. The
-workflow binds `v<EXACT_VERSION>` to one source revision, publishes once with
-provenance, and records npm metadata, payload, tarball, and source identity
-readback. Contributors must record that evidence in the pull request.
+workflow binds `v<EXACT_VERSION>` to one source revision and publishes the
+creator and initializer pair once with provenance, recording npm metadata,
+payload, tarball, and source identity readback for each package. Contributors
+must record that evidence in the pull request.
 
 The package applies the immutable payload locally and offline. It emits a
 versioned JSON envelope, protects unknown files, rolls back failed writes, and
@@ -77,13 +86,13 @@ The transparent plan/apply/verify path remains canonical. It keeps local writes,
 remote repository creation, and package publication as separate approval and
 recovery boundaries. Do not hide a remote mutation behind project creation.
 
-## Rollback and final cutover
+## Recovery
 
-The source repository retains GitHub Template mode as a rollback safety valve
-until local and published-consumer verification passes. If the package path
-fails, repair it before changing the creation path; using Template mode for
-recovery requires a separate decision. Published npm bytes are immutable, so
-publish a correcting version rather than replacing an existing version.
+GitHub Template mode exists only as a recovery valve; it is not the creation
+path. If the package path fails, repair it before changing the creation path;
+using Template mode for recovery requires a separate decision. Published npm
+bytes are immutable, so publish a correcting version rather than replacing an
+existing version.
 
 ## Governance
 

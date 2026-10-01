@@ -18,13 +18,58 @@ const PROBE_MAX_BYTES = 64 * 1024;
 const PROBE_TIMEOUT_MS = 5000;
 const execFile = promisify(execFileCallback);
 
+const RELEASE_ERROR_CODES = new Set([
+  "identity_malformed", "source_identity_mismatch", "version_malformed", "release_version_mismatch",
+  "package_identity_mismatch", "payload_identity_mismatch", "initializer_dependency_mismatch",
+  "registry_metadata_mismatch", "registry_dependency_mismatch", "registry_release_mismatch",
+  "registry_identity_mismatch", "registry_payload_mismatch", "registry_tarball_mismatch",
+  "pair_identity_mismatch", "probe_inconclusive", "partial_publication_manual_recovery",
+  "claim_not_granted", "token_missing", "publish_outcome_uncertain", "registry_read_unavailable",
+  "registry_tarball_ambiguous", "pair_source_mismatch", "staged_bytes_changed",
+  "release_id_unavailable", "release_outcome_uncertain", "invalid_arguments",
+]);
+const SYSTEM_ERROR_CODES = new Set([
+  "ENOENT", "EACCES", "EPERM", "ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "ECONNREFUSED",
+  "ETIMEDOUT", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+]);
+const NPM_ERROR_CODES = new Set([
+  "E401", "E403", "E404", "E429", "E500", "E502", "E503", "E504", "ENEEDAUTH",
+  "ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EACCES",
+  "EPERM", "ENOENT", "EJSONPARSE", "EINTEGRITY", "CERT_HAS_EXPIRED",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "SELF_SIGNED_CERT_IN_CHAIN",
+]);
+const SIGNALS = new Set(["SIGTERM", "SIGKILL", "SIGINT", "SIGHUP", "SIGABRT", "SIGSEGV", "SIGPIPE", "SIGQUIT"]);
+
+// Rebuild fixed fields at both error construction and persistence; never copy error objects.
+const safeDiagnostic = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const result = { operation: ["view", "pack", "publish"].includes(value.operation) ? value.operation : "unknown" };
+  if (Number.isInteger(value.exit_code) && value.exit_code >= 0 && value.exit_code <= 255) result.exit_code = value.exit_code;
+  if (SYSTEM_ERROR_CODES.has(value.system_code)) result.system_code = value.system_code;
+  if (NPM_ERROR_CODES.has(value.npm_code)) result.npm_code = value.npm_code;
+  if (SIGNALS.has(value.signal)) result.signal = value.signal;
+  if (typeof value.killed === "boolean") result.killed = value.killed;
+  return result;
+};
+
+const npmErrorCode = (stderr) => {
+  if (typeof stderr !== "string") return undefined;
+  const lines = stderr.slice(0, 64 * 1024).matchAll(/(?:^|\n)npm (?:ERR!|error) code ([A-Z0-9_]{1,40})(?=\r?\n|$)/gu);
+  for (const [, code] of lines) if (NPM_ERROR_CODES.has(code)) return code;
+  return undefined;
+};
+
 export class NpmReleaseError extends Error {
-  constructor(code, message) {
+  constructor(code, message, diagnostic) {
     super(message);
     this.code = code;
+    const safe = safeDiagnostic(diagnostic);
+    if (safe) this.diagnostic = safe;
   }
 }
 
+const safeReleaseCode = (error) => error instanceof NpmReleaseError && RELEASE_ERROR_CODES.has(error.code)
+  ? error.code : "release_outcome_uncertain";
 const fail = (code, message = code) => { throw new NpmReleaseError(code, message); };
 const object = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const required = (value, name) => {
@@ -211,13 +256,17 @@ export const releasePair = async ({ identities, probe, claim, publish, readback,
   return "verified_new_pair";
 };
 
-const npmCommand = async (args, cwd, publish = false) => {
+export const npmCommand = async (args, cwd, publish = false, { execute = execFile } = {}) => {
   const { NODE_AUTH_TOKEN, ...anonymous } = process.env;
   if (publish && !NODE_AUTH_TOKEN) fail("token_missing");
   try {
-    return (await execFile("npm", args, { cwd, env: publish ? process.env : anonymous, timeout: 30000, maxBuffer: 64 * 1024 })).stdout;
-  } catch {
-    fail(publish ? "publish_outcome_uncertain" : "registry_read_unavailable");
+    return (await execute("npm", args, { cwd, env: publish ? process.env : anonymous, timeout: 30000, maxBuffer: 64 * 1024 })).stdout;
+  } catch (error) {
+    const code = publish ? "publish_outcome_uncertain" : "registry_read_unavailable";
+    throw new NpmReleaseError(code, code, {
+      operation: args[0], exit_code: error?.code, system_code: error?.code,
+      npm_code: npmErrorCode(error?.stderr), signal: error?.signal, killed: error?.killed,
+    });
   }
 };
 
@@ -236,7 +285,7 @@ export const registryReadback = async (identity, root, paths, { npm = npmCommand
       tarball = path.join(directory, files[0]);
       break;
     } catch (error) {
-      if (error.code !== "registry_read_unavailable" || attempt === 5) throw error;
+      if (error?.code !== "registry_read_unavailable" || attempt === 5) throw error;
       await wait(attempt * 5000);
     }
   }
@@ -249,7 +298,7 @@ export const registryReadback = async (identity, root, paths, { npm = npmCommand
   await writeFile(path.join(paths, `registry-${identity.package.name === PACKAGE_NAME ? "creator" : "initializer"}.json`), `${JSON.stringify(verified, null, 2)}\n`);
 };
 
-export const publishPair = async (root = process.cwd()) => {
+export const publishPair = async (root = process.cwd(), { probe, claim, publish, readback } = {}) => {
   const evidence = path.join(root, "identity");
   const identities = await Promise.all(["local", "initializer"].map(async (name) => JSON.parse(await readFile(path.join(evidence, `${name}.json`), "utf8"))));
   const [creator, initializer] = identities;
@@ -271,16 +320,18 @@ export const publishPair = async (root = process.cwd()) => {
     if (JSON.stringify(fresh) !== JSON.stringify(identities[index])) fail("staged_bytes_changed");
   }
   let phase = "preflight";
-  const record = async (next) => {
+  const record = async (next, failure) => {
     phase = next;
-    await writeFile(path.join(evidence, "pair-state.json"), `${JSON.stringify({ tag, sha, version, packages: identities.map((item) => ({ ...item.package, tarball_digest: item.tarball_digest })), phase }, null, 2)}\n`);
+    await writeFile(path.join(evidence, "pair-state.json"), `${JSON.stringify({ tag, sha, version, packages: identities.map((item) => ({ ...item.package, tarball_digest: item.tarball_digest })), phase,
+      ...(failure ? { diagnostic: { code: safeReleaseCode(failure), ...safeDiagnostic(failure.diagnostic) } } : {}),
+    }, null, 2)}\n`);
   };
   try {
     const result = await releasePair({ identities,
       record,
-      probe: (identity) => probeExactVersion({ packageName: identity.package.name, version,
-        transport: (options) => fetch(options.url, { signal: options.signal, headers: options.headers, redirect: options.redirect }) }),
-      claim: async () => {
+      probe: probe ?? ((identity) => probeExactVersion({ packageName: identity.package.name, version,
+        transport: (options) => fetch(options.url, { signal: options.signal, headers: options.headers, redirect: options.redirect }) })),
+      claim: claim ?? (async () => {
         if (!process.env.NODE_AUTH_TOKEN) fail("token_missing");
         let releaseId = Number(process.env.RELEASE_ID);
         if (!Number.isSafeInteger(releaseId) || releaseId <= 0) {
@@ -294,15 +345,17 @@ export const publishPair = async (root = process.cwd()) => {
           transport: (options) => fetch(options.url, { method: options.method, headers: { ...options.headers, Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28" }, body: options.body, redirect: options.redirect, signal: options.signal }),
           downloadTransport: (options) => fetch(options.url, { method: options.method, headers: options.headers, redirect: options.redirect, credentials: "omit", signal: options.signal }),
         });
-      },
-      publish: (identity) => npmCommand(["publish", identity.package.name === PACKAGE_NAME ? process.env.TARBALL : process.env.INITIALIZER_TARBALL,
-        "--provenance", "--access", "public"], root, true),
-      readback: (identity) => registryReadback(identity, root, evidence),
+      }),
+      publish: publish ?? ((identity) => npmCommand(["publish", identity.package.name === PACKAGE_NAME ? process.env.TARBALL : process.env.INITIALIZER_TARBALL,
+        "--provenance", "--access", "public"], root, true)),
+      readback: readback ?? ((identity) => registryReadback(identity, root, evidence)),
     });
     await record(result);
   } catch (error) {
-    await record(`stopped_after_${phase}`);
-    fail(error instanceof NpmReleaseError ? error.code : "release_outcome_uncertain");
+    const code = safeReleaseCode(error);
+    const failure = new NpmReleaseError(code, code, error instanceof NpmReleaseError ? error.diagnostic : undefined);
+    await record(`stopped_after_${phase}`, failure);
+    throw failure;
   }
 };
 
@@ -349,7 +402,7 @@ export const main = async (values = process.argv.slice(2)) => {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   main().catch((error) => {
-    process.stderr.write(`${error.message}\n`);
+    process.stderr.write(`${safeReleaseCode(error)}\n`);
     process.exitCode = 1;
   });
 }
