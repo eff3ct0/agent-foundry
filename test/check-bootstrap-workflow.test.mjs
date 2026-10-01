@@ -375,7 +375,7 @@ test("real-agent journey maps JOURNEY_TOKEN to AGENT_GITHUB_TOKEN only in the co
 test("real-agent journey rejects the inherited run-block YAML indentation defects", async () => {
   for (const [line, number] of [
     ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(\"stage-input/provision.json\", \"utf8\")).identifiers.default_branch)')", 185],
-    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 325],
+    ["          branch=$(node -e 'console.log(JSON.parse(require(\"fs\").readFileSync(process.env.AGENT_EVIDENCE, \"utf8\")).identifiers.branch)')", 335],
   ]) {
     await fixture(async (directory) => {
       await replaceFirst(directory, "journey", line, ` ${line}`);
@@ -437,7 +437,8 @@ test("real-agent journey executes its isolated scoped package guard with exact o
   await fixture(async (directory) => {
     const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
     const applyCommand = '          npm exec --yes --prefix journey-runner --package "$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers.json --non-interactive --yes';
-    const validationMatch = workflow.match(/          npm view "\$JOURNEY_PACKAGE_SPEC" --json > package-metadata\.json\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          npm exec --yes --prefix journey-runner --package "\$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers\.json --non-interactive --yes/u);
+    assert.match(workflow, /          until npm view "\$JOURNEY_PACKAGE_SPEC" --json > package-metadata\.json 2> npm-view-error\.log; do\n[\s\S]*?          done\n/u, "the registry read must be wrapped in a bounded retry loop");
+    const validationMatch = workflow.match(/          done\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          npm exec --yes --prefix journey-runner --package "\$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers\.json --non-interactive --yes/u);
     assert.ok(validationMatch, "the metadata validation heredoc must run immediately before package apply");
     const writerMatch = workflow.match(/          npm exec --yes --prefix journey-runner --package "\$JOURNEY_PACKAGE_SPEC" -- foundry apply --target generated --config answers\.json --non-interactive --yes\n          node --input-type=module <<'NODE'\n([\s\S]*?)          NODE\n          git -C generated init -b main/u);
     assert.ok(writerMatch, "the source identity writer must run immediately after package apply");
@@ -477,6 +478,42 @@ test("real-agent journey executes its isolated scoped package guard with exact o
     await assert.rejects(run(`${name}@0.1.0`, { name: "agent-foundry", version: "0.1.0" }), /published package metadata does not match/u);
     await assert.rejects(run(`${name}@0.1.0`, { name, version: "0.2.0" }), /published package metadata does not match/u);
     await assert.rejects(run(`${name}@0.1.0`, { name, version: "0.1.0" }, "@other/agent-foundry"), /journey package spec must identify/u);
+  });
+});
+
+test("real-agent journey polls the registry read until the exact version propagates then fails closed on timeout", async () => {
+  await fixture(async (directory) => {
+    const workflow = await readFile(path.join(directory, workflows, files.journey), "utf8");
+    const pollMatch = workflow.match(/(          # ponytail: fixed ~5min poll window[\s\S]*?          done)\n/u);
+    assert.ok(pollMatch, "the bounded registry poll must exist in the creation step");
+    const pollScript = pollMatch[1].split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+    const runPoll = async (failTimes) => {
+      const workdir = await mkdtemp(path.join(os.tmpdir(), "journey-poll-"));
+      const binDir = path.join(workdir, "bin");
+      await mkdir(binDir);
+      const counter = path.join(workdir, "attempts");
+      // Mock npm: E404 for the first failTimes calls, then emit the exact metadata JSON to stdout.
+      await writeFile(path.join(binDir, "npm"), `#!/usr/bin/env bash\ncount=$(( $(cat "${counter}" 2>/dev/null || echo 0) + 1 ))\necho "$count" > "${counter}"\nif [ "$count" -le ${failTimes} ]; then\n  echo "npm error code E404" >&2\n  exit 1\nfi\nprintf '{"name":"@eff3ct/agent-foundry","version":"0.2.0"}\\n'\n`);
+      await writeFile(path.join(binDir, "sleep"), "#!/usr/bin/env bash\nexit 0\n"); // no real waiting in the test
+      await chmod(path.join(binDir, "npm"), 0o755);
+      await chmod(path.join(binDir, "sleep"), 0o755);
+      const result = await execFileAsync("bash", ["-euo", "pipefail", "-c", pollScript], {
+        cwd: workdir,
+        env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, JOURNEY_PACKAGE_SPEC: "@eff3ct/agent-foundry@0.2.0" },
+      }).then((value) => ({ ...value, code: 0 }), (error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code ?? 1 }));
+      const attempts = Number((await readFile(counter, "utf8")).trim());
+      const metadata = await readFile(path.join(workdir, "package-metadata.json"), "utf8").catch(() => "");
+      await rm(workdir, { recursive: true, force: true });
+      return { ...result, attempts, metadata };
+    };
+    const succeeded = await runPoll(3);
+    assert.equal(succeeded.code, 0, "the poll must proceed once the registry read succeeds");
+    assert.equal(succeeded.attempts, 4, "the poll must retry the failed reads then succeed");
+    assert.deepEqual(JSON.parse(succeeded.metadata), { name: "@eff3ct/agent-foundry", version: "0.2.0" }, "the successful read must land valid JSON for the guard");
+    const timeout = await runPoll(999);
+    assert.notEqual(timeout.code, 0, "the poll must fail closed when the registry never propagates");
+    assert.equal(timeout.attempts, 30, "the poll must exhaust its fixed ceiling before failing");
+    assert.match(timeout.stderr, /E404/u, "the final failure must surface the last npm error");
   });
 });
 
