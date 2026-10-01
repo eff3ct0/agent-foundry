@@ -93,9 +93,9 @@ test("release commit collection uses an offline, bounded Git range", async () =>
 
 test("CLI reads package version and emits only local generated notes", async () => {
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
-  assert.equal(packageJson.version, "0.2.4");
+  assert.equal(packageJson.version, "0.3.0");
   await assert.rejects(main(["--version", "0.1.2", "--source-sha", sha, "--previous-tag", "v0.1.0"]), (error) => error.code === "package_version_mismatch");
-  const result = await promisify(execFile)(process.execPath, [script, "--version", "0.2.4", "--source-sha", "c153a0b358c65a3983c32e2febd225dd02b5f9fd", "--previous-tag", "v0.1.0"], { cwd: root });
-  assert.match(result.stdout, /^# @eff3ct\/agent-foundry v0\.2\.4\n/u);
+  const result = await promisify(execFile)(process.execPath, [script, "--version", "0.3.0", "--source-sha", "c153a0b358c65a3983c32e2febd225dd02b5f9fd", "--previous-tag", "v0.1.0"], { cwd: root });
+  assert.match(result.stdout, /^# @eff3ct\/agent-foundry v0\.3\.0\n/u);
   assert.equal(result.stderr, "");
 });
