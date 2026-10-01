@@ -209,7 +209,17 @@ jobs:
           import { deterministicConfiguration } from "./scripts/package-consumer-verify.mjs";
           await writeFile("answers.json", `${JSON.stringify(deterministicConfiguration, null, 2)}\n`);
           NODE
-          npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json
+          # ponytail: fixed ~5min poll window; raise if publish propagation routinely exceeds it
+          attempt=1
+          until npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json 2> npm-view-error.log; do
+            if [ "$attempt" -ge 30 ]; then
+              echo "npm view failed for $JOURNEY_PACKAGE_SPEC after $attempt attempts (~5min)" >&2
+              cat npm-view-error.log >&2
+              exit 1
+            fi
+            attempt=$((attempt + 1))
+            sleep 10
+          done
           node --input-type=module <<'NODE'
           import { readFile } from "node:fs/promises";
           const metadata = JSON.parse(await readFile("package-metadata.json", "utf8"));

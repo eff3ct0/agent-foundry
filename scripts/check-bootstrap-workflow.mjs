@@ -197,8 +197,25 @@ const checkJourney = (text, projectRoot) => {
      '          NODE',
      '',
   ].join("\n");
-  const actualGuard = section(creationRun, '          npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json\n', applyCommand);
+  // The registry read is polled because the journey and npm-release both fire on release:published; the
+  // exact version may not have propagated yet. The bounded retry must wrap the read and still hand valid
+  // JSON to the guard, which must remain intact and immediately precede apply.
+  const registryPoll = [
+    '          # ponytail: fixed ~5min poll window; raise if publish propagation routinely exceeds it',
+    '          attempt=1',
+    '          until npm view "$JOURNEY_PACKAGE_SPEC" --json > package-metadata.json 2> npm-view-error.log; do',
+    '            if [ "$attempt" -ge 30 ]; then',
+    '              echo "npm view failed for $JOURNEY_PACKAGE_SPEC after $attempt attempts (~5min)" >&2',
+    '              cat npm-view-error.log >&2',
+    '              exit 1',
+    '            fi',
+    '            attempt=$((attempt + 1))',
+    '            sleep 10',
+    '          done',
+  ].join("\n");
+  const actualGuard = creationRun.includes(registryPoll) ? section(creationRun, `${registryPoll}\n`, applyCommand) : "";
   if (!creationStep.includes('JOURNEY_PACKAGE_SPEC: ${{ env.JOURNEY_PACKAGE_NAME }}@${{ needs.prepare.outputs.package_version }}')
+      || !creationRun.includes(registryPoll)
       || actualGuard !== metadataGuard) {
     fail("real-agent journey must verify exact scoped package metadata before apply");
   }
