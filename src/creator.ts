@@ -67,6 +67,7 @@ export interface Placeholder {
   default: string;
   required: boolean;
   enum?: string[];
+  multi?: boolean;
   kind?: string;
   condition?: PlaceholderCondition;
   when?: PlaceholderCondition;
@@ -1396,7 +1397,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
     let rawSelection: string | undefined = options.agent;
     if (options.agent === undefined && options.agents === undefined && !options.nonInteractive && options.prompt) {
       try {
-        rawSelection = await options.prompt({ key: "AGENTS", prompt: "Agent providers (comma-separated, or none)", default: "none", required: false });
+        rawSelection = await options.prompt({ key: "AGENTS", prompt: "Agent providers", default: "none", required: false, multi: true, enum: providerCatalog.providers.map((provider) => provider.id) });
       } catch {
         rawSelection = "none";
       }

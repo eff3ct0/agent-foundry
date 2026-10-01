@@ -64,6 +64,25 @@ export const renderSelection = (
   return lines.join("\n");
 };
 
+export const renderMultiSelection = (
+  placeholder: Placeholder,
+  selected: Set<number>,
+  cursor: number,
+  options: InstallerUiOptions,
+): string => {
+  const values = placeholder.enum ?? [];
+  const navigation = glyph(options, "Use ↑/↓, Space to toggle, Enter to confirm.", "Use Up/Down, Space to toggle, Enter to confirm.");
+  const lines = [paint(`${placeholder.prompt} (${placeholder.key})`, "bold", options), paint(navigation, "dim", options)];
+  values.forEach((value, index) => {
+    const active = index === cursor;
+    const pointer = active ? glyph(options, "❯", ">") : " ";
+    const checkbox = selected.has(index) ? glyph(options, "☑", "[x]") : glyph(options, "☐", "[ ]");
+    const label = active ? paint(value, "cyan", options) : value;
+    lines.push(`${pointer} ${checkbox} ${label}`);
+  });
+  return lines.join("\n");
+};
+
 const visible = (value: string, width: number): string => {
   if (value.length <= width) return value;
   return `${value.slice(0, Math.max(0, width - 1))}…`;

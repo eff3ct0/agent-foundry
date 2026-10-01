@@ -20,6 +20,7 @@ import {
   detectUiOptions,
   renderCompletion,
   renderDiagnostics,
+  renderMultiSelection,
   renderReview,
   renderSelection,
   renderStep,
@@ -148,6 +149,21 @@ class InstallerCancelled extends Error {
   }
 }
 
+// Redraw a selection frame in place: the first call lays down a one-time spacer,
+// every later call moves the cursor up over the previous frame and clears to the
+// end of the screen before repainting, so navigating never stacks copies.
+// ponytail: assumes rendered frame lines do not wrap; a terminal narrower than the
+// longest line would under-clear (upgrade: count wrapped rows instead of "\n").
+const createInPlaceDraw = (): ((frame: string) => void) => {
+  let drawn = false;
+  return (frame: string): void => {
+    const frameLineCount = frame.split("\n").length;
+    stderr.write(drawn ? `\u001b[${frameLineCount}A\u001b[0J` : "\n");
+    drawn = true;
+    stderr.write(`${frame}\n`);
+  };
+};
+
 const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
   const session: PromptSession = { lines: [], waiters: [], closed: false, tty: Boolean(stdin.isTTY && stderr.isTTY), prompt: async () => "", close: () => undefined };
   const createTerminal = (): Interface => {
@@ -185,7 +201,8 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
       session.terminal = undefined;
       session.closed = false;
     }
-    stderr.write(`\n${renderSelection(placeholder, selected, ui)}\n`);
+    const draw = createInPlaceDraw();
+    draw(renderSelection(placeholder, selected, ui));
     return new Promise((resolve, reject) => {
       const wasRaw = stdin.isRaw;
       const finish = (callback: () => void, continueReading = false): void => {
@@ -214,7 +231,7 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
             finish(() => resolve(choices[selected] ?? ""), true);
             return;
           } else continue;
-          stderr.write(`\n${renderSelection(placeholder, selected, ui)}\n`);
+          draw(renderSelection(placeholder, selected, ui));
         }
       };
       if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(true);
@@ -222,7 +239,59 @@ const createPromptSession = (ui: InstallerUiOptions): PromptSession => {
       stdin.on("data", onData);
     });
   };
-  session.prompt = async (placeholder) => session.tty && placeholder.enum?.length ? selectPrompt(placeholder) : linePrompt(placeholder);
+  const multiSelectPrompt = async (placeholder: Placeholder): Promise<string> => {
+    const choices = placeholder.enum ?? [];
+    let cursor = 0;
+    const chosen = new Set<number>();
+    if (session.terminal) {
+      session.terminal.removeAllListeners();
+      session.terminal.close();
+      session.terminal = undefined;
+      session.closed = false;
+    }
+    const draw = createInPlaceDraw();
+    draw(renderMultiSelection(placeholder, chosen, cursor, ui));
+    return new Promise((resolve, reject) => {
+      const wasRaw = stdin.isRaw;
+      const finish = (callback: () => void, continueReading = false): void => {
+        stdin.off("data", onData);
+        if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
+        if (!continueReading) stdin.pause();
+        callback();
+      };
+      const onData = (chunk: Buffer | string): void => {
+        const value = chunk.toString();
+        const keys: string[] = [];
+        for (let index = 0; index < value.length;) {
+          const key = value.startsWith("\u001b[A", index) || value.startsWith("\u001b[B", index) ? value.slice(index, index + 3) : value[index];
+          keys.push(key);
+          index += key.length;
+        }
+        for (const key of keys) {
+          if (key === "\u0003" || key === "\u001b") {
+            finish(() => reject(new InstallerCancelled()));
+            return;
+          }
+          if (key === "\u001b[A" || key.toLowerCase() === "k") cursor = (cursor + choices.length - 1) % choices.length;
+          else if (key === "\u001b[B" || key.toLowerCase() === "j") cursor = (cursor + 1) % choices.length;
+          else if (key === " ") { if (chosen.has(cursor)) chosen.delete(cursor); else chosen.add(cursor); }
+          else if (key === "\r" || key === "\n") {
+            const ids = choices.filter((_, index) => chosen.has(index));
+            finish(() => resolve(ids.length > 0 ? ids.join(",") : "none"), true);
+            return;
+          } else continue;
+          draw(renderMultiSelection(placeholder, chosen, cursor, ui));
+        }
+      };
+      if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(true);
+      stdin.resume();
+      stdin.on("data", onData);
+    });
+  };
+  session.prompt = async (placeholder) =>
+    session.tty && placeholder.multi && placeholder.enum?.length ? multiSelectPrompt(placeholder)
+    : session.tty && placeholder.enum?.length ? selectPrompt(placeholder)
+    : linePrompt(placeholder);
   session.close = () => {
     session.closed = true;
     if (stdin.isTTY && stdin.setRawMode) stdin.setRawMode(false);
