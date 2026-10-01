@@ -29,8 +29,8 @@ jobs:
           node-version: 20.19.0
       - name: Activate pinned package toolchain
         run: |
-          corepack enable
-          COREPACK_DEFAULT_TO_LATEST=0 corepack install --global pnpm@12.4.2
+          test "$(node --version)" = "v20.19.0"
+          npm install --global pnpm@12.4.2
           test "$(pnpm --version)" = "12.4.2"
       - name: Build immutable template package
         run: |
