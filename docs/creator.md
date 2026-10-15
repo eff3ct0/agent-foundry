@@ -137,6 +137,11 @@ candidate, target and existing touched-parent identities. Recheck before writes;
 stale bytes/mode/context or unsafe paths require a newly reconciled accepted plan.
 Decline leaves the target unchanged. No force or whole-directory takeover exists.
 
+Interactive apply shows the same scoped ownership/baseline and complete before/after
+bytes on stderr before asking for consent. UTF-8 content is JSON-escaped to keep
+terminal controls inert; non-UTF-8 content is shown losslessly as base64.
+Post-action stdout JSON is not a substitute for this pre-consent review.
+
 Schema-2 ownership records `boundary: block` separately from its full protected
 file context and its exact `before` identity. Private `.staging/before` snapshots
 preserve preimages; `.staging/files` contains selected output; the journal records

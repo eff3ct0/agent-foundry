@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import os from "node:os";
@@ -69,6 +69,47 @@ test("adoption preserves a real application's authority, Git, startup and suppor
   assert.deepEqual(await readFile(path.join(f.target, ".factory/creator/.staging/before/AGENT.md")), Buffer.from(f.originals["AGENT.md"]));
   const checked = await creator.verify(await creator.preparePlan(f.options));
   assert.equal(checked.status, "verified", JSON.stringify(checked.diagnostics));
+});
+
+test("interactive adoption exposes protected context and block changes before consent without applying them", { timeout: 15000 }, async (t) => {
+  const f = await fixture(t);
+  const child = spawn(process.execPath, [path.resolve("dist/index.js"), "apply", "--target", f.target, "--config", f.configPath, "--no-color"], {
+    stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, CI: "0" },
+  });
+  t.after(() => child.kill());
+  let display = "";
+  let output = "";
+  let beforeConsent;
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => {
+    display += chunk;
+    if (beforeConsent === undefined && display.includes("? [y/N] ")) {
+      beforeConsent = { display, output };
+      child.stdin.end("no\n");
+    }
+  });
+  const exit = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  assert.equal(exit.signal, null);
+  assert.equal(exit.code, 1, display);
+  assert.ok(beforeConsent, "the CLI must reach its consent boundary");
+  assert.equal(beforeConsent.output, "", "the post-action JSON cannot substitute for a pre-consent preview");
+  for (const relative of f.config.adoption.shared_files) {
+    const original = f.originals[relative];
+    assert.ok(beforeConsent.display.includes(JSON.stringify(original)), `${relative}: show the exact existing bytes before consent`);
+    assert.ok(beforeConsent.display.includes(hash(Buffer.from(original))), `${relative}: identify the protected context`);
+    assert.equal(await readFile(path.join(f.target, relative), "utf8"), original);
+  }
+  assert.ok(beforeConsent.display.includes('"boundary": "block"'), "show block ownership rather than whole-file takeover");
+  assert.ok(beforeConsent.display.includes('"mode": "0640"'), "show the existing non-default authority mode");
+  assert.ok(beforeConsent.display.includes("<!-- BEGIN AGENT FOUNDRY -->"), "show the proposed Markdown block boundary");
+  assert.ok(beforeConsent.display.includes("# BEGIN AGENT FOUNDRY"), "show the proposed ignore block boundary");
+  assert.ok(beforeConsent.display.includes("<!-- END AGENT FOUNDRY -->"), "show the complete proposed Markdown block");
+  assert.ok(beforeConsent.display.includes("# END AGENT FOUNDRY"), "show the complete proposed ignore block");
+  assert.equal(JSON.parse(output).status, "cancelled");
+  await assert.rejects(lstat(path.join(f.target, ".factory/creator")), { code: "ENOENT" });
 });
 
 test("declined adoption and unresolved rule conflicts leave the application untouched", async (t) => {

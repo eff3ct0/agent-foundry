@@ -13,13 +13,23 @@ export const detectUiOptions = (environment: NodeJS.ProcessEnv = process.env, wi
   };
 };
 export const renderWelcome = (options: InstallerUiOptions): string => `${paint("Agent Foundry installer", "bold", options)}\nExplicit Matt-first fresh setup; no automatic work or remote readiness checks.`;
+const renderPreviewBytes = (encoded: string): string => {
+  const bytes = Buffer.from(encoded, "base64");
+  const text = bytes.toString("utf8");
+  return bytes.equals(Buffer.from(text, "utf8")) ? JSON.stringify(text) : `base64:${encoded}`;
+};
 export const renderReview = (envelope: CreatorEnvelope, options: InstallerUiOptions): string => {
   const lines = [paint("Review exact plan", "bold", options), `Target: ${envelope.target}`, `Payload: ${envelope.payload.version} ${envelope.payload.digest}`,
     `Candidate: ${envelope.candidate?.candidate_digest ?? "unavailable"}`, `Configuration: ${envelope.config_digest ?? "unavailable"}`,
     `Acceptance: ${envelope.plan_digest ?? "unavailable: resolve conflicts"}`];
   lines.push(`Exact source/candidate: ${JSON.stringify(envelope.candidate ?? null)}`);
   lines.push(`Effective accepted configuration/binding/manual routes:\n${JSON.stringify(envelope.configuration ?? null, null, 2)}`);
-  for (const entry of envelope.operations) lines.push(`${entry.action} ${entry.path} mode=${entry.mode} bytes=${entry.size} sha256=${entry.sha256}`);
+  for (const entry of envelope.operations) {
+    lines.push(`${entry.action} ${entry.path} mode=${entry.mode} bytes=${entry.size} sha256=${entry.sha256}`);
+    if (entry.ownership) lines.push(`Scoped ownership/baseline:\n${JSON.stringify(entry.ownership, null, 2)}`);
+    if (entry.preview) lines.push(`Before (JSON-escaped UTF-8 or base64): ${renderPreviewBytes(entry.preview.before)}`,
+      `After (JSON-escaped UTF-8 or base64): ${renderPreviewBytes(entry.preview.after)}`);
+  }
   if (envelope.effects) lines.push(`Local Git: ${envelope.effects.local_git}; external effects: none`, `Recovery: ${envelope.effects.recovery_baseline}`);
   if (envelope.effects) lines.push(`Exact local recovery effects:\n${JSON.stringify(envelope.effects, null, 2)}`);
   if (envelope.readiness) lines.push(`Readiness record: ${envelope.readiness.record}`, ...envelope.readiness.required.map((entry) => `External prerequisite (not checked): ${entry}`));
