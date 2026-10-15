@@ -999,8 +999,11 @@ source. When migrating, verify the replacement and access first, then update
 the row and relabel old copies; never leave two competing authorities. This
 map does not change task-provider confirmation/readback or outward-action gates.
 
+## Delegated routine delivery
+Explicit human implementation delegation covering the ticket and its effects authorizes scoped routine delivery, including non-protected branch push and PR creation, without status:approved or intermediate approval. Preserve native task references, required review, quality checks, and provider-confirmed checkpoints/readbacks. Delegation does not authorize human review approval, merge, deployment, publication, or destructive actions.
+
 ## Protected \`status:approved\` gate
-The bound task provider may support delegated approval only through its fail-closed protocol: a current direct human instruction must name the exact issue and add status:approved; target-host evidence must bind that principal to maintainer/authorized-approver authority; the authenticated actor must have MAINTAIN or ADMIN; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation. Without that evidence, the human applies the label directly. This contract change does not approve existing work.
+The bound task provider may support delegated approval only through its fail-closed protocol: a current direct human instruction must name the exact issue and add status:approved; target-host evidence must bind that principal to maintainer/authorized-approver authority; the authenticated actor must have MAINTAIN or ADMIN; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation. When a separately requested label mutation lacks that evidence, stop that mutation and ask the human to apply the label directly. This label protocol is not a prerequisite for delegated routine delivery and does not apply the label to existing work.
 `;
 
 const documentationBinding = (values: Record<string, string>): string => {
@@ -1118,7 +1121,7 @@ const composePrTaskReference = (bytes: Buffer, task: string): Buffer => {
   const text = bytes.toString("utf8");
   const marker = /(<!-- provider-governance:start -->)[\s\S]*?(<!-- provider-governance:end -->)/u;
   if (!marker.test(text)) throw new CreatorError("composition_invalid", "pull-request template is missing its provider-governance section");
-  return Buffer.from(text.replace(marker, `$1\n${reference}\n<!-- Approval is confirmed by the bound task provider. -->\n$2`), "utf8");
+  return Buffer.from(text.replace(marker, `$1\n${reference}\n<!-- Explicit human delegation covering this task and its effects authorizes routine delivery; separate human decisions remain gated. -->\n$2`), "utf8");
 };
 
 const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buffer | undefined => {

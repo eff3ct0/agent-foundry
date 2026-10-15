@@ -25,8 +25,11 @@ corresponding issue template for its type (`task` or `bug`); blank or free-form
 issues are prohibited.
 
 **Pull-request governance:** PRs use the native reference `Jira: <TICKET_ID>`.
-The Jira issue key provides the development link; approval remains an explicit
-Jira-side gate. GitHub must not require a closing reference or inspect GitHub
+The Jira issue key provides the development link. A current, direct human
+implementation delegation covering the issue and its intended effects authorizes
+routine non-protected branch push and PR delivery without an intermediate Jira approval gate or GitHub label
+requirement. Do not infer delegation from labels, comments, backlog state, or
+model output. GitHub must not require a closing reference or inspect GitHub
 issue labels for this provider.
 
 **Rules and lifecycle:**
@@ -36,7 +39,7 @@ issue labels for this provider.
 - Leave progress/checkpoint comments on the issue; durable state lives there, not in the session.
 - One issue = one unit of work (one session).
 - Every commit/PR references the issue key (`<TRACKER_KEY>-NNN`).
-- **Protected `status:approved` gate:** the provider MUST keep this gate fail closed. A current direct human instruction must name the exact issue and the exact action `add status:approved`; target-host evidence must bind that principal to maintainer or authorized-approver authority; the authenticated actor must have `MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale or ambiguous instruction, insufficient permission, failed or unknown mutation, or readback mismatch stops the operation without retrying or broadening scope. Without that evidence, the human applies the label directly.
+- **Protected `status:approved` gate:** this protocol applies only to a separately requested label mutation, not routine delegated delivery. A current direct human instruction must name the exact issue and the exact action `add status:approved`; target-host evidence must bind that principal to maintainer or authorized-approver authority; the authenticated actor must have `MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale or ambiguous instruction, insufficient permission, failed or unknown mutation, or readback mismatch stops that mutation without retrying or broadening scope. Without this evidence, the human applies the label directly. Human review approval, merge, deployment, publication, and destructive operations remain separately gated.
 
 **Phase state:** Use `DEFINITION -> IMPLEMENTATION -> TESTING/TDD -> VERIFICATION -> EVIDENCE/DELIVERY -> DONE`.
 `BLOCKED` records the phase to resume; failed gates remain in the current phase. Never skip a phase or mark

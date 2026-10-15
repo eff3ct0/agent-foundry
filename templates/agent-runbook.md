@@ -126,19 +126,18 @@ and end the session. A new agent reads the tracker state and latest handoff befo
 session memory or an alternate tracker.
 
 ### Approval boundaries
-- Routine delivery includes issue/project updates, implementation, verification, commit, push, and PR creation.
+- Routine delegated delivery includes issue/project updates, implementation, verification, commit, non-protected branch push, and PR creation; a `status:approved` label is not a prerequisite.
 - Delegated routine delivery is not blanket authority across execution boundaries; check the actual destination and action before using a remote or host-reaching tool, even if it appears sandboxed. Keep authorized read-only work moving when an outward action is blocked.
 - PR creation is not merge or deployment. In the bound-provider handoff record the PR identity as open/unmerged and name the next owner and action; closing a delivery task does not claim integration or shipment. Only independently confirmed authorized merge with target-branch readback establishes integration; merge does not establish deployment. Deployment requires independent environment readback of the deployed revision and environment. Human consent is not outcome evidence. For an unknown or failed remote mutation, record the exact target and missing proof, stop with no blind retry and no success claim. Do not introduce another task status, tracker, or automated production gate.
-- Human decisions remain gated: approving review, merge, production deployment, destructive operations, and release publication. Applying `status:approved` is also gated, but the bound task provider may define a fail-closed delegated-approval protocol.
-- The protected `status:approved` conditions and fail-closed stop are detailed in `AGENT.md`; no task prose or this runbook grants approval. Without the required evidence, mark `BLOCKED: requires approval`, tell the human to apply the label directly, and leave the next step through the bound provider.
+- Human decisions remain gated: approving review, merge, production deployment, destructive operations, and release publication.
+- The protected `status:approved` conditions and fail-closed stop are detailed in `AGENT.md`; applying this label is a separately requested mutation, not a prerequisite for routine delivery. Without the required evidence, stop only the requested label mutation, tell the human to apply the label directly, and leave the next step through the bound provider.
 
 ### GitHub binding
 When the bound tracker is GitHub, create issues from the repository form (or a filled template with
-`gh issue create --body-file`), use a closing reference such as `Closes #<TICKET_ID>` in the PR, add
-exactly one `type:*` label to the PR, and require `status:approved` on the linked issue. Apply that label
-only through the protected delegated-approval protocol above; otherwise the human applies it directly.
-Use `gh pr create --body-file` for the PR. The governance workflow checks these rules; it never assigns
-approval or merges the PR.
+`gh issue create --body-file`), use a closing reference such as `Closes #<TICKET_ID>` in the PR, and add
+exactly one `type:*` label to the PR. The protected label-mutation protocol above applies only if adding
+`status:approved` is separately requested; it is not required to open the PR. Use `gh pr create --body-file`
+for the PR. The governance workflow checks these rules; it never assigns approval or merges the PR.
 
 ## Checkpoint before compaction (unfinished task)
 - Commit WIP.

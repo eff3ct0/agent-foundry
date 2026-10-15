@@ -187,10 +187,14 @@ read-only cold turn and execution is a second cold turn. The agent must run
 decision explicitly, then permits exactly one feature issue, feature branch,
 implementation, commit, and test flow.
 
-The helper guards `gh` and `git` command paths and fails closed on approval
-labels, merge, release, deletion, protected-branch pushes, refusal, timeout,
-malformed output, or provider failure. Routine issue creation, branch pushes,
-implementation, and verification do not require invented intermediate approval.
+The helper guards `gh` and `git` command paths and fails closed on a
+separately requested `status:approved` label mutation, merge, release, deletion,
+protected-branch pushes, refusal, timeout, malformed output, or provider
+failure. Explicit human implementation delegation covering a ticket and its
+effects authorizes routine non-protected branch push and PR delivery without
+intermediate approval or a `status:approved` label. Routine issue creation,
+implementation, and verification do not require invented intermediate
+approval.
 Evidence contains only bounded event classifications and redacted identifiers;
 raw prompts, responses, credentials, and private paths are not retained.
 The CLI contract and safety flags are based on the current official Codex
@@ -221,8 +225,8 @@ The canonical label catalog is [`.github/labels.json`](.github/labels.json); run
 - `type:product` - template improvements or changes.
 - `type:dx-feedback` - friction found while USING the archetype (see the [DX feedback issue form](.github/ISSUE_TEMPLATE/dx-feedback.yml) and [`docs/smoke-test.md`](docs/smoke-test.md)).
 - `type:bug` - defect.
-- `status:approved` - protected approval; agents may assign it only through the
-  fail-closed delegated-approval protocol in `AGENT.md` and the bound task provider.
+- `status:approved` - protected label mutation; agents may assign it only through the
+  fail-closed protocol in `AGENT.md` and the bound task provider. It is not a prerequisite for delegated delivery.
 
 ## Improvement cycle (one task per session)
 1. Take an actionable issue (prioritize `dx-feedback` when it blocks use). Announce `Working #<n>`.

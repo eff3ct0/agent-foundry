@@ -65,11 +65,14 @@ Unresolved propagation stays pending/blocked in the bound task-provider handoff,
 without blocking unrelated safe local work or creating a new task lifecycle.
 
 ## Protected `status:approved` gate
-The detailed fail-closed approval conditions are in [`AGENT.md`](../AGENT.md).
-The selected provider controls the native operation and readback. This
-source-template guide does not bind a provider or grant approval for existing
-work; without the required evidence, the human applies the label directly.
+The detailed fail-closed protocol in [`AGENT.md`](../AGENT.md) applies only to
+a separately requested label mutation, never as a prerequisite for delegated
+push or PR delivery. Without the required evidence, stop only that mutation
+and ask the human to apply the label directly. Historical labels remain
+unchanged.
 
 The selected task provider also controls pull-request linkage. Initialization
-composes the native reference into both PR templates; the retained governance
-validator keeps GitHub issue-label checks only for GitHub task providers.
+composes the native reference into both PR templates; the retained validator
+checks native references and exactly one `type:*` PR label without querying
+GitHub issues for non-GitHub providers.
+
