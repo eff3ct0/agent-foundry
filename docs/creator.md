@@ -11,6 +11,29 @@ foundry verify --target ./new-project --config answers.json --non-interactive
 foundry doctor --target ./new-project --config answers.json --non-interactive
 ```
 
+## Matt-first source preparation
+
+The current installer still delivers the legacy payload documented below.
+`foundation/matt-first/` holds source inputs for the separately reviewed #407
+cutover; it is not installed by the current CLI or advertised as a usable
+Matt-first candidate. Its envelope and catalog use their intended installed
+paths, so their links are resolved by composition, not from this source folder.
+
+Run `node scripts/procedure-sources.mjs` to read and verify the selected upstream
+input buffers without writing files or making network calls. The checked-in
+`upstream-lock.json` binds the reviewed selection to
+`mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, exact Git blobs,
+SHA-256 bytes and Git modes. The selected tree preserves original relative
+entry/resource/metadata paths and the full MIT notice. Upstream files are
+unchanged; the authored envelope/catalog explicitly describe invocation
+adaptations. A source-lock integrity check is not an independent semantic review,
+installer ownership, host discovery, tracker readiness or published-byte proof.
+
+The seven-entry catalog includes two Foundry-owned durable procedures. Optional
+orchestration, native projections, global skill installation, and a session
+launcher are not selected by these inputs. Source assets remain packaging inputs,
+not current source-repository operating rules. Do not apply the creator to SELF.
+
 ## Pinned offline factory defaults (optional)
 
 With an independently obtained full commit SHA for the intended `org/factory@vX`,

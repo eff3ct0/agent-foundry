@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "repository": "mattpocock/skills",
+  "revision": "49dd158d1076134a641b33efb035946536778336",
+  "files": [
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "size": 1068,
+      "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+      "git_blob": "f1dd2c09108dde1a5f56097cee8461b3ea834499"
+    },
+    {
+      "path": "skills/engineering/code-review/SKILL.md",
+      "mode": "100644",
+      "size": 6670,
+      "sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357",
+      "git_blob": "373a4f26e6cfa3617778397945bb069d9cb184bc"
+    },
+    {
+      "path": "skills/engineering/code-review/agents/openai.yaml",
+      "mode": "100644",
+      "size": 100,
+      "sha256": "8229ca854e11dc8e6aef2131ee03f31fb1561cf905fab9ccc325180cf3331352",
+      "git_blob": "9076774ba327f49068db9273feceda03bfe940fa"
+    },
+    {
+      "path": "skills/engineering/codebase-design/DEEPENING.md",
+      "mode": "100644",
+      "size": 2553,
+      "sha256": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1",
+      "git_blob": "cd94075cfd754d147555c5d747a16431ed4c7dd8"
+    },
+    {
+      "path": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
+      "mode": "100644",
+      "size": 2665,
+      "sha256": "52b52e75655a27aea59c6966b410bac82448968ad46ef1ebb9f07c274e3ae010",
+      "git_blob": "d0990138c35c800bd821289a73115e52680c1620"
+    },
+    {
+      "path": "skills/engineering/codebase-design/SKILL.md",
+      "mode": "100644",
+      "size": 6446,
+      "sha256": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2",
+      "git_blob": "3f63c8146dd2604b419c929e9876b90c30d410e9"
+    },
+    {
+      "path": "skills/engineering/codebase-design/agents/openai.yaml",
+      "mode": "100644",
+      "size": 102,
+      "sha256": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f",
+      "git_blob": "3180715edb37f6e96bec42f92f00169faa8886ef"
+    },
+    {
+      "path": "skills/engineering/diagnosing-bugs/SKILL.md",
+      "mode": "100644",
+      "size": 8664,
+      "sha256": "849198df88cdb65fd0d97236604c1fca7ff2f22d2f705f9724a800d0266b118d",
+      "git_blob": "d039541ddd1c46e6ddbd662fe99d49b686fc5e12"
+    },
+    {
+      "path": "skills/engineering/diagnosing-bugs/agents/openai.yaml",
+      "mode": "100644",
+      "size": 103,
+      "sha256": "3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b",
+      "git_blob": "a13a755a77634ce61a649a3a0d905a66d3865b35"
+    },
+    {
+      "path": "skills/engineering/diagnosing-bugs/scripts/hitl-loop.template.sh",
+      "mode": "100644",
+      "size": 1316,
+      "sha256": "35103539fc36873eea36074769ad454f9379d6fc8b2dc0e26ce987fd3bfe5503",
+      "git_blob": "243198464a8401a7ba1d63b3708fa43c3d067665"
+    },
+    {
+      "path": "skills/engineering/domain-modeling/ADR-FORMAT.md",
+      "mode": "100644",
+      "size": 2733,
+      "sha256": "944c92aa790e8fbdc9199640b170979abb8a34ba8d0fe18c2a01a63bce140ca0",
+      "git_blob": "d7e61f30a9fd8ca70d9ee68f019c2a9ebf2d13f7"
+    },
+    {
+      "path": "skills/engineering/domain-modeling/GLOSSARY-FORMAT.md",
+      "mode": "100644",
+      "size": 2300,
+      "sha256": "21dcc40cdec8e151a829b98ab1517c1867bc444e3665134a98c6983411996801",
+      "git_blob": "9c0b4c7a2e8507c23cbb5e0baa66d81699321cc6"
+    },
+    {
+      "path": "skills/engineering/domain-modeling/SKILL.md",
+      "mode": "100644",
+      "size": 3346,
+      "sha256": "7b925d7b1e341a2eeae33ad68a8a8c0ab889a38ddd22a7598e4c240e5a7556a3",
+      "git_blob": "a4438c6879c517d1a08e2b5fbca049b632688dfe"
+    },
+    {
+      "path": "skills/engineering/domain-modeling/agents/openai.yaml",
+      "mode": "100644",
+      "size": 101,
+      "sha256": "f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b",
+      "git_blob": "7f1522d2f11506ee205275ab7c282aa52366ecf6"
+    },
+    {
+      "path": "skills/engineering/grill-with-docs/SKILL.md",
+      "mode": "100644",
+      "size": 247,
+      "sha256": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe",
+      "git_blob": "62b9efb6f991d1b229adee7506962f13ced0c499"
+    },
+    {
+      "path": "skills/engineering/grill-with-docs/agents/openai.yaml",
+      "mode": "100644",
+      "size": 145,
+      "sha256": "94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9",
+      "git_blob": "5dbe2780a51be3e9b118bd7758a73e54a9384e11"
+    },
+    {
+      "path": "skills/engineering/implement/SKILL.md",
+      "mode": "100644",
+      "size": 622,
+      "sha256": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d",
+      "git_blob": "bd49e472984c7b99aac40286fdae749bb955a842"
+    },
+    {
+      "path": "skills/engineering/implement/agents/openai.yaml",
+      "mode": "100644",
+      "size": 139,
+      "sha256": "8970a8596ade0c28ab427f41a4ea242d6bdf6186c59ebf55e1238dbecaab79dc",
+      "git_blob": "f8794dc153b409052a9167baf10858cf01b36175"
+    },
+    {
+      "path": "skills/engineering/prototype/LOGIC.md",
+      "mode": "100644",
+      "size": 6036,
+      "sha256": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9",
+      "git_blob": "32be86a0a5d9928db84b3988e55f9debe476ab40"
+    },
+    {
+      "path": "skills/engineering/prototype/SKILL.md",
+      "mode": "100644",
+      "size": 2931,
+      "sha256": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3",
+      "git_blob": "a0044501fe0d385b4d8575b610188ede9b236ccf"
+    },
+    {
+      "path": "skills/engineering/prototype/UI.md",
+      "mode": "100644",
+      "size": 6913,
+      "sha256": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3",
+      "git_blob": "3977951663490882c2632b40695d9f59a2fe2408"
+    },
+    {
+      "path": "skills/engineering/prototype/agents/openai.yaml",
+      "mode": "100644",
+      "size": 100,
+      "sha256": "5af65e43ab41a350436697b81e27b7f848d36782043b73c322bb2c9fa9cc55dc",
+      "git_blob": "1618b147965bc729b7bf3e8da5f130132067aadc"
+    },
+    {
+      "path": "skills/engineering/research/SKILL.md",
+      "mode": "100644",
+      "size": 794,
+      "sha256": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4",
+      "git_blob": "fecee97e9457ba039678d2fcf1b1bc9fca78307d"
+    },
+    {
+      "path": "skills/engineering/research/agents/openai.yaml",
+      "mode": "100644",
+      "size": 94,
+      "sha256": "9b4c470d63221c1f68f22df70b83e2f12401b317babe0d1b7b5f24a974474d0d",
+      "git_blob": "e18b96ca0ccc1003889d5d6991386207c2454bc2"
+    },
+    {
+      "path": "skills/engineering/tdd/SKILL.md",
+      "mode": "100644",
+      "size": 3629,
+      "sha256": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0",
+      "git_blob": "01eadaa34e7c9a63a67d6dc3cce1cc81b0e49985"
+    },
+    {
+      "path": "skills/engineering/tdd/agents/openai.yaml",
+      "mode": "100644",
+      "size": 87,
+      "sha256": "ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b",
+      "git_blob": "651b838a7663e027b1b8884491e867f26bb9a021"
+    },
+    {
+      "path": "skills/engineering/tdd/mocking.md",
+      "mode": "100644",
+      "size": 1481,
+      "sha256": "3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef",
+      "git_blob": "71cbfee674d93244ce81d1830b930ca9a69200bd"
+    },
+    {
+      "path": "skills/engineering/tdd/tests.md",
+      "mode": "100644",
+      "size": 2214,
+      "sha256": "859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a",
+      "git_blob": "7ab86479f925a1f9e8ba680af33cb3b12e015381"
+    },
+    {
+      "path": "skills/engineering/to-spec/SKILL.md",
+      "mode": "100644",
+      "size": 3043,
+      "sha256": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088",
+      "git_blob": "3f52599ae2a4347aee5a07432c2707518e691a7f"
+    },
+    {
+      "path": "skills/engineering/to-spec/agents/openai.yaml",
+      "mode": "100644",
+      "size": 135,
+      "sha256": "1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb",
+      "git_blob": "549e6f76f020a1b9ba65f52ccda336566ee6222a"
+    },
+    {
+      "path": "skills/engineering/to-tickets/SKILL.md",
+      "mode": "100644",
+      "size": 5812,
+      "sha256": "56ec23c5b2782785d4e65bff9e315b6d3aeb4ef977c174a219e99489fada1995",
+      "git_blob": "9b77a01db9460c99c22d03c910c349f890f12c0e"
+    },
+    {
+      "path": "skills/engineering/to-tickets/agents/openai.yaml",
+      "mode": "100644",
+      "size": 146,
+      "sha256": "21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090",
+      "git_blob": "24605a5db64e4fc750b999aa94aea126bee814ee"
+    },
+    {
+      "path": "skills/engineering/wayfinder/SKILL.md",
+      "mode": "100644",
+      "size": 12380,
+      "sha256": "9be7b478c389605a24517d27752f278933588da97a1b5921b165f455edf4c5b7",
+      "git_blob": "e28cf3018906d6d60fc5b25390b4eeea035dd290"
+    },
+    {
+      "path": "skills/engineering/wayfinder/agents/openai.yaml",
+      "mode": "100644",
+      "size": 144,
+      "sha256": "88bc81a11a6d52ac67aeaa76b8b619e387020d47c5133a4dd4927fd15c4ad073",
+      "git_blob": "b37544751e0570f9df8de6c02aef238de8c3e1e0"
+    },
+    {
+      "path": "skills/productivity/grilling/SKILL.md",
+      "mode": "100644",
+      "size": 2049,
+      "sha256": "befdff1e27a1dfe2a294d5871169ac1afe16d983911daa4f32627514a48c1e15",
+      "git_blob": "df69d9936880cd3314c28858c6c52f48db23b856"
+    },
+    {
+      "path": "skills/productivity/grilling/agents/openai.yaml",
+      "mode": "100644",
+      "size": 113,
+      "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b",
+      "git_blob": "ddbdb96139c0c1dfe6bca698f39d0465674b8a39"
+    }
+  ]
+}

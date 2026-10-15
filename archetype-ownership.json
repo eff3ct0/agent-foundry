@@ -168,11 +168,13 @@
         {"path": "package", "kind": "directory"},
         {"path": "src", "kind": "directory"},
         {"path": "initializer", "kind": "directory"},
+        {"path": "foundation", "kind": "directory"},
         {"path": "test", "kind": "directory"},
         {"path": "docs/creator.md", "kind": "file"},
         {"path": "docs/installer-ux.md", "kind": "file"},
         {"path": "docs/github-provisioning.md", "kind": "file"},
         {"path": "scripts/build-payload.mjs", "kind": "file"},
+        {"path": "scripts/procedure-sources.mjs", "kind": "file"},
         {"path": "scripts/build.mjs", "kind": "file"}
       ]
     },
