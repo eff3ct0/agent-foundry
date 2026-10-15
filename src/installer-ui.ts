@@ -17,8 +17,11 @@ export const renderReview = (envelope: CreatorEnvelope, options: InstallerUiOpti
   const lines = [paint("Review exact plan", "bold", options), `Target: ${envelope.target}`, `Payload: ${envelope.payload.version} ${envelope.payload.digest}`,
     `Candidate: ${envelope.candidate?.candidate_digest ?? "unavailable"}`, `Configuration: ${envelope.config_digest ?? "unavailable"}`,
     `Acceptance: ${envelope.plan_digest ?? "unavailable: resolve conflicts"}`];
+  lines.push(`Exact source/candidate: ${JSON.stringify(envelope.candidate ?? null)}`);
+  lines.push(`Effective accepted configuration/binding/manual routes:\n${JSON.stringify(envelope.configuration ?? null, null, 2)}`);
   for (const entry of envelope.operations) lines.push(`${entry.action} ${entry.path} mode=${entry.mode} bytes=${entry.size} sha256=${entry.sha256}`);
   if (envelope.effects) lines.push(`Local Git: ${envelope.effects.local_git}; external effects: none`, `Recovery: ${envelope.effects.recovery_baseline}`);
+  if (envelope.effects) lines.push(`Exact local recovery effects:\n${JSON.stringify(envelope.effects, null, 2)}`);
   if (envelope.readiness) lines.push(`Readiness record: ${envelope.readiness.record}`, ...envelope.readiness.required.map((entry) => `External prerequisite (not checked): ${entry}`));
   return lines.join("\n");
 };

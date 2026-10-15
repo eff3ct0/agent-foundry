@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { renameSync, symlinkSync, watch } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -63,28 +64,29 @@ test("acceptance is bound to config, destination and immutable candidate, not a 
   assert.deepEqual(await readdir(target), ["app.txt"]);
 });
 
-test("handled failure restores fresh absence; interruption retains inspectable applied and pending boundaries", async (t) => {
-  const { target, configPath } = await fixture(t);
-  const failed = await creator.preparePlan({ command: "apply", target, configPath, failAfter: 3 });
-  await assert.rejects(creator.applyPlan(failed, failed.envelope.plan_digest), (error) => {
-    assert.equal(error.plan.envelope.rollback.restored, true);
-    assert.deepEqual(error.plan.envelope.applied, []);
-    return true;
-  });
-  await assert.rejects(lstat(target), { code: "ENOENT" });
-  const interrupted = await creator.preparePlan({ command: "apply", target, configPath, interruptAfter: 3 });
-  await assert.rejects(creator.applyPlan(interrupted, interrupted.envelope.plan_digest), (error) => {
-    assert.equal(error.plan.envelope.status, "partial");
-    assert.equal(error.plan.envelope.applied.length, 3);
-    assert.ok(error.plan.envelope.pending.includes("AGENT.md"));
-    return true;
-  });
-  const journal = JSON.parse(await readFile(path.join(target, ".factory/creator/.staging/journal.json")));
-  assert.equal(journal.plan_digest, interrupted.envelope.plan_digest);
-  const diagnosis = await creator.preparePlan({ command: "doctor", target, configPath });
-  assert.equal((await creator.doctor(diagnosis)).status, "partial");
-  assert.equal(diagnosis.envelope.diagnostics[0].code, "staging_interrupted");
-  await assert.rejects(creator.applyPlan(diagnosis, interrupted.envelope.plan_digest), { code: "acceptance_required" });
+test("handled failure and interruption preserve inspectable effects without deleting concurrent work", async (t) => {
+  for (const fault of ["failAfter", "interruptAfter"]) {
+    const { target, configPath } = await fixture(t);
+    const interrupted = await creator.preparePlan({ command: "apply", target, configPath, [fault]: 3 });
+    await assert.rejects(creator.applyPlan(interrupted, interrupted.envelope.plan_digest), (error) => {
+      assert.equal(error.plan.envelope.status, "partial");
+      assert.equal(error.plan.envelope.rollback.restored, false);
+      assert.equal(error.plan.envelope.rollback.attempted, false);
+      assert.equal(error.plan.envelope.applied.length, 3);
+      assert.ok(error.plan.envelope.pending.includes("AGENT.md"));
+      return true;
+    });
+    const journal = JSON.parse(await readFile(path.join(target, ".factory/creator/.staging/journal.json")));
+    assert.equal(journal.plan_digest, interrupted.envelope.plan_digest);
+    assert.equal(journal.status, "applying");
+    const diagnosis = await creator.preparePlan({ command: "doctor", target, configPath });
+    const diagnosed = await creator.doctor(diagnosis);
+    assert.equal(diagnosed.status, "partial");
+    assert.deepEqual(diagnosed.applied, journal.applied);
+    assert.equal(diagnosed.pending.length, interrupted.files.length - 3);
+    assert.equal(diagnosis.envelope.diagnostics[0].code, "staging_interrupted");
+    await assert.rejects(creator.applyPlan(diagnosis, interrupted.envelope.plan_digest), { code: "acceptance_required" });
+  }
 });
 
 test("unowned content, unsafe paths and schema-1 state never become fresh ownership", async (t) => {
@@ -151,4 +153,64 @@ test("accepted local Git initialization cannot be redirected by ambient Git envi
     env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_"))),
   });
   assert.equal(remote.stdout, "");
+});
+
+test("a replaced journal cannot redirect writes to an unaccepted file", async (t) => {
+  const { directory, target, configPath } = await fixture(t);
+  await mkdir(target);
+  const victim = path.join(directory, "victim.txt");
+  await writeFile(victim, "unchanged victim\n");
+  let replaced = false;
+  const watcher = watch(target, { recursive: true }, (_event, filename) => {
+    if (!replaced && filename === ".factory/creator/.staging/journal.json") {
+      replaced = true;
+      const journal = path.join(target, filename);
+      renameSync(journal, `${journal}.preserved`);
+      symlinkSync(victim, journal);
+    }
+  });
+  t.after(() => watcher.close());
+  const plan = await creator.preparePlan({ command: "apply", target, configPath });
+  await creator.applyPlan(plan, plan.envelope.plan_digest).catch(() => undefined);
+  assert.equal(replaced, true);
+  assert.equal(await readFile(victim, "utf8"), "unchanged victim\n");
+});
+
+test("a replaced target root never redirects accepted writes into another directory", async (t) => {
+  const { directory, target, configPath } = await fixture(t);
+  await mkdir(target);
+  const victim = path.join(directory, "victim");
+  await mkdir(victim);
+  await writeFile(path.join(victim, "sentinel.txt"), "unchanged\n");
+  let replaced = false;
+  const watcher = watch(target, { recursive: true }, (_event, filename) => {
+    if (!replaced && filename === ".factory/creator/.staging/journal.json") {
+      replaced = true;
+      renameSync(target, path.join(directory, "original-target"));
+      symlinkSync(victim, target);
+    }
+  });
+  t.after(() => watcher.close());
+  const plan = await creator.preparePlan({ command: "apply", target, configPath });
+  await creator.applyPlan(plan, plan.envelope.plan_digest).catch(() => undefined);
+  assert.equal(replaced, true);
+  assert.deepEqual(await readdir(victim), ["sentinel.txt"]);
+  assert.equal(await readFile(path.join(victim, "sentinel.txt"), "utf8"), "unchanged\n");
+});
+
+test("a competing accepted apply cannot acquire or erase another invocation's staging", async (t) => {
+  const { target, configPath } = await fixture(t);
+  await mkdir(target);
+  const plan = await creator.preparePlan({ command: "apply", target, configPath });
+  const results = await Promise.allSettled([
+    creator.applyPlan(plan, plan.envelope.plan_digest),
+    creator.applyPlan(plan, plan.envelope.plan_digest),
+  ]);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(results.filter((result) => result.status === "rejected").length, 1);
+  const diagnosis = await creator.preparePlan({ command: "doctor", target, configPath });
+  assert.equal((await creator.doctor(diagnosis)).integrity, "verified");
+  const journal = JSON.parse(await readFile(path.join(target, ".factory/creator/.staging/journal.json")));
+  assert.equal(journal.status, "committed");
+  assert.equal(journal.applied.length, plan.files.length);
 });

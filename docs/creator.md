@@ -137,15 +137,27 @@ to actual evidence. Required missing evidence means incomplete; optional modes
 not selected are not failures. Host/binding/source/workspace changes invalidate
 affected observations. Installed-candidate evidence is not registry proof.
 
-Apply stages/validates all named bytes/modes and records the accepted plan and
-applied effects in `.factory/creator/.staging/journal.json`. Exclusive file
-creation refuses racing destination files. A handled file failure restores only
-unchanged newly created files to absence; a concurrent edit prevents unsafe
-restoration and preserves the journal. Interruption/uncertain Git leaves exact
-staged evidence. Diagnosis never blindly replays apply, wipes staging or claims
-crash atomicity. `--failure-after N` and `--interrupt-after N` are explicit local
-fault-injection seams; full update/shared-block/crash recovery belongs to the
-separate recovery unit.
+Apply binds mutations to opened directory handles and the journal to its
+exclusively created file handle. Target/ancestor/journal replacements cannot
+redirect writes; competing applies cannot acquire or erase another transaction's
+staging. Hosts without working directory-descriptor paths fail before writes
+rather than falling back to unsafe lexical mutation. This mechanism is exercised
+on Linux here; other environments require their own capability observation.
+
+The exact private staged-file identities and 0600 journal path are shown before
+consent. `.factory/creator/.staging/journal.json` records the accepted candidate,
+absence baseline, actual applied files and local-Git not-started/attempted/verified
+boundary. Completed journal/staged bytes remain private recovery evidence with
+`status: committed`; they are not active procedure sources or task state.
+`doctor` reads the journal and actual files, reporting applied/pending effects
+even before installed startup exists. It does not blindly replay or erase them.
+
+A filesystem compare-then-unlink cannot exclude concurrent edits. This fresh
+path therefore preserves partial files/staging on handled failure or interruption
+and reports no automatic rollback/restoration; it never deletes a racing edit
+or claims crash atomicity. Inspected, separately authorized restoration/completion
+and staging retirement belong to the recovery unit. `--failure-after N` and
+`--interrupt-after N` are explicit local fault-injection seams.
 
 The initializer forwards schema-2 configuration and exact acceptance to this
 same engine. Source package-content helpers use preview/accept/integrity and do

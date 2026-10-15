@@ -52,7 +52,8 @@ export const detectMode = async (root) => {
   const resolved = path.resolve(root);
   const result = { mode: INCOMPLETE, status: "incomplete", integrity: "not-checked", setup: "incomplete", diagnostics: [], applied: [], pending: [] };
   try {
-    if (!(await metadata(resolved))?.isDirectory() || await realpath(resolved) !== resolved) throw new Error("startup root must be a real directory without symlink parents");
+    const rootIdentity = await metadata(resolved);
+    if (!rootIdentity?.isDirectory() || await realpath(resolved) !== resolved) throw new Error("startup root must be a real directory without symlink parents");
     if (await isTemplate(resolved)) return { ...result, mode: SELF, status: "source" };
     for (const relative of [".factory", ".factory/creator", STAGING, ".factory-template-creator"]) {
       const entry = await metadata(path.join(resolved, relative));
@@ -61,7 +62,7 @@ export const detectMode = async (root) => {
     if (await metadata(path.join(resolved, ".factory-template-creator"))) throw new Error("legacy creator location requires explicit inspected re-adoption; no ordinary conversion");
     if (await metadata(path.join(resolved, STAGING))) {
       const { value: journal } = await readJson(resolved, `${STAGING}/journal.json`);
-      if (journal.schema_version !== 2 || journal.profile !== "matt-first" || !Array.isArray(journal.files) || journal.files.length > 1000 || !journal.files.every(identityValid)) throw new Error("invalid interruption journal; inspect locally before recovery");
+      if (journal.schema_version !== 2 || journal.profile !== "matt-first" || !["applying", "committed"].includes(journal.status) || !Array.isArray(journal.files) || journal.files.length > 1000 || !journal.files.every(identityValid)) throw new Error("invalid interruption journal; inspect locally before recovery");
       for (const file of journal.files) {
         try {
           const current = await regular(resolved, file.path);
@@ -69,7 +70,7 @@ export const detectMode = async (root) => {
           else result.pending.push(file.path);
         } catch { result.pending.push(file.path); }
       }
-      return { ...result, integrity: "failed", diagnostics: [{ code: "partial_apply", path: STAGING, message: "Interrupted/uncertain transaction. Inspect journal and actual touched bytes/modes/local Git before separately authorized recovery; no blind replay." }] };
+      if (journal.status !== "committed") return { ...result, integrity: "failed", recovery: { journal: `${STAGING}/journal.json`, local_git: journal.local_git }, diagnostics: [{ code: "partial_apply", path: STAGING, message: "Interrupted/uncertain transaction. Inspect journal and actual touched bytes/modes/local Git before separately authorized recovery; no blind replay." }] };
     }
     const provenanceEntry = await metadata(path.join(resolved, PROVENANCE));
     if (!provenanceEntry) {
@@ -109,6 +110,8 @@ export const detectMode = async (root) => {
       if (owned.size !== seen.size + 1 || !owned.has(PROVENANCE) || [...seen].some((relative) => !owned.has(relative))) throw new Error("ledger file set differs from provenance");
       ownership = "exact schema-2 file boundaries verified; no directory ownership";
     }
+    const finalRoot = await metadata(resolved);
+    if (!finalRoot?.isDirectory() || finalRoot.dev !== rootIdentity.dev || finalRoot.ino !== rootIdentity.ino || await realpath(resolved) !== resolved) throw new Error("workspace identity changed during read-only diagnosis");
     return { ...result, mode: USABLE, status: "usable", integrity: "verified", ownership,
       readiness: { record: provenance.readiness_record, observed_by_startup: false, required: "Fresh permitted tracker identity/access/write-readback and genuinely independent selected-host manual discovery. Consult the exact scoped record; file integrity is not readiness." },
       next_action: provenance.next_action,

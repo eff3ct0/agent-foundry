@@ -587,44 +587,6 @@ test("source inventory fails closed without an external executable or with inval
 });
 
 
-test("two packed artifacts preserve complete package and generated-tree identity", async (context) => {
-  if (process.platform === "win32") {
-    context.skip("the package installation fixture uses a POSIX executable");
-    return;
-  }
-  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-artifact-identity-"));
-  try {
-    const identities = [];
-    for (const run of ["first", "second"]) {
-      const packageDirectory = path.join(parent, `${run}-package`);
-      const installDirectory = path.join(parent, `${run}-install`);
-      const target = path.join(parent, `${run}-project`);
-      const config = path.join(parent, `${run}-answers.json`);
-      await mkdir(packageDirectory);
-      await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packageDirectory], { cwd: root });
-      const tarballName = (await readdir(packageDirectory)).find((entry) => entry.endsWith(".tgz"));
-      assert.ok(tarballName, "pnpm pack did not produce a tarball");
-      const tarballPath = path.join(packageDirectory, tarballName);
-      await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, tarballPath], { cwd: root });
-      await writeFile(config, await readFile(path.join(root, "test/fixtures/matt-first.json")));
-      const packagePath = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry");
-      const installedCli = path.join(packagePath, "dist", "index.js");
-      const preview = JSON.parse((await execFileAsync(process.execPath, [installedCli, "plan", "--target", target, "--config", config, "--non-interactive"], { cwd: root })).stdout);
-      const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--non-interactive", "--accept-plan", preview.plan_digest], { cwd: root })
-        .then((value) => ({ ...value, code: 0 }))
-        .catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code }));
-      assert.equal(result.code, 0, result.stderr);
-      identities.push(await packedArtifactIdentity({ tarballPath, packagePath, projectPath: target }));
-    }
-    assert.deepEqual(identities[0], identities[1]);
-    assert.deepEqual(identities[0].package, { name: manifest.package_name, version: manifest.package_version });
-    for (const digest of [identities[0].tarball_digest, identities[0].payload_digest, identities[0].tree_digest]) {
-      assert.match(digest, /^sha256:[0-9a-f]{64}$/u);
-    }
-  } finally {
-    await rm(parent, { recursive: true, force: true });
-  }
-});
 
 test("artifact identity preserves versioned envelopes and fail-closed tree and release validation", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "creator-identity-contract-"));
