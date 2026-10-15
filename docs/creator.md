@@ -1,237 +1,154 @@
-# Transactional project creator
+# Matt-first fresh setup — source-local breaking cutover
 
-The package CLI uses the immutable payload produced by #105 as its only source
-of template files. It does not make network calls or mutate the payload.
+This work-in-progress source replaces the legacy installer contract in one engine.
+It is not a published version, a transfer-ready delivery, or qualification of all
+hosts/journeys. The package names and `foundry` binary remain unchanged; selecting
+a breaking release number and qualifying the complete pair are separately gated.
+Never apply the creator to this source SELF repository.
+
+## Inspect, accept, apply
+
+Build the source with `pnpm build`. Use its exact `dist/index.js` or an explicitly
+identified isolated installed package, not a moving registry version. Place the
+accepted JSON configuration outside the empty disposable destination:
 
 ```sh
-foundry plan --target ./new-project --config answers.json --non-interactive
-foundry dry-run --target ./new-project --config answers.json --non-interactive
-foundry apply --target ./new-project --config answers.json --non-interactive
-foundry verify --target ./new-project --config answers.json --non-interactive
-foundry doctor --target ./new-project --config answers.json --non-interactive
+node dist/index.js plan --target /tmp/accepted-empty-project --config setup.json --non-interactive
+node dist/index.js apply --target /tmp/accepted-empty-project --config setup.json --non-interactive --accept-plan sha256:PLAN_DIGEST_FROM_PREVIEW
+node dist/index.js verify --target /tmp/accepted-empty-project --config setup.json --non-interactive
+node dist/index.js doctor --target /tmp/accepted-empty-project --config setup.json --non-interactive
 ```
 
-## Matt-first source preparation
+`plan`/`dry-run` are read-only. Review every output file/mode/hash, candidate,
+configuration, target, local-Git effect, recovery baseline and external
+prerequisite. Acceptance covers that exact plan digest. Before mutation the
+engine rereads candidate/configuration/target; a changed input invalidates the
+acceptance. Interactive apply shows the same complete preview and asks once;
+no/EOF/interrupt leaves the plan unapplied. Noninteractive apply requires
+`--accept-plan`; `--yes` is not a compatibility alias.
 
-The current installer still delivers the legacy payload documented below.
-`foundation/matt-first/` holds source inputs for the separately reviewed #407
-cutover; it is not installed by the current CLI or advertised as a usable
-Matt-first candidate. Its envelope and catalog use their intended installed
-paths, so their links are resolved by composition, not from this source folder.
+The target must be empty or absent with an existing real parent directory.
+Nonempty unrelated repositories require the separate adoption path, not fresh
+classification. Recognized exact schema-2 ownership permits an unchanged no-op;
+missing ledger, drift, changed candidate/config, schema-1 or either legacy
+state/staging footprint requires inspected accepted recovery/re-adoption. No
+matching-bytes ownership or whole-directory deletion is inferred.
 
-Run `node scripts/procedure-sources.mjs` to read and verify the selected upstream
-input buffers without writing files or making network calls. The checked-in
-`upstream-lock.json` binds the reviewed selection to
-`mattpocock/skills@49dd158d1076134a641b33efb035946536778336`, exact Git blobs,
-SHA-256 bytes and Git modes. The selected tree preserves original relative
-entry/resource/metadata paths and the full MIT notice. Upstream files are
-unchanged; the authored envelope/catalog explicitly describe invocation
-adaptations. A source-lock integrity check is not an independent semantic review,
-installer ownership, host discovery, tracker readiness or published-byte proof.
+## Schema-2 configuration
 
-The seven-entry catalog includes two Foundry-owned durable procedures. Optional
-orchestration, native projections, global skill installation, and a session
-launcher are not selected by these inputs. Source assets remain packaging inputs,
-not current source-repository operating rules. Do not apply the creator to SELF.
-
-## Pinned offline factory defaults (optional)
-
-With an independently obtained full commit SHA for the intended `org/factory@vX`,
-prepare a **local, clean checkout** at that commit with its `vX` tag pointing to
-the same commit. No network lookup or origin URL is trusted by the creator.
-Place `factory.defaults.json` at the checkout root:
+Every field is explicit. There are no inferred stack/CI/secrets/model/provider
+settings, legacy placeholder defaults, or automatic host projections.
 
 ```json
-{"schema_version":1,"values":{"FACTORY_REQUIRED":"true","TASK_TRACKER":"github-issues","REPO_LANGUAGE":"en"}}
+{
+  "schema_version": 2,
+  "profile": "matt-first",
+  "project": { "name": "Accepted project" },
+  "binding": {
+    "provider": "github-issues",
+    "repository": "https://github.com/OWNER/REPOSITORY",
+    "project": "https://github.com/users/OWNER/projects/1",
+    "access": "Permitted existing gh CLI access; no credential discovery.",
+    "recovery": "Stop affected work and request exact binding/access repair.",
+    "permissions": ["Name the accepted work and separately permitted validation effects."],
+    "approval_gates": ["Name current project and human gates; installation grants none."],
+    "documentation": {
+      "architecture": "AGENT.md",
+      "constraints": "AGENT.md",
+      "business": "AGENT.md",
+      "technical": "AGENT.md"
+    }
+  },
+  "hosts": [{ "id": "plain", "version": "ACTUAL_HOST_VERSION", "route": "manual" }],
+  "initialize_git": false,
+  "readiness_record": "https://github.com/OWNER/REPOSITORY/issues/NUMBER"
+}
 ```
 
-Supply project answers in an external `answers.json`, including `FACTORY_SPEC`:
+Replace sample identities with accepted exact destinations; samples confer no
+access. The task provider/repository/board, access/recovery, permitted effects,
+human gates and four documentation-family sources compose the sole
+`docs/bindings.md`. HTTPS sources are external prerequisites, not installed
+bytes or working adapters. An external family's actual access/conditional write
+and readback must be separately verified before using it. Do not put credentials
+in configuration: it is included in Git-owned provenance.
 
-```json
-{"values":{"FACTORY_SPEC":"acme/factory@v1","PROJECT_NAME":"My project","TASK_TRACKER":"github-issues"}}
-```
+Each selected host has an exact ID/version and the explicit `manual` route.
+Native selection fails rather than silently downgrading. This slice generates
+no host pointers/projections or plugin content. `initialize_git: true` accepts
+only local `git init` at the target, with no template, remote, commit, push or
+launch. Git environment overrides are excluded; the actual Git directory is
+read back. An uncertain Git operation retains recovery evidence.
 
-```sh
-foundry plan --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive
-foundry apply --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive --yes
-foundry verify --target ./new-project --config answers.json --factory-root ./factory --factory-sha <trusted-full-commit-sha> --non-interactive
-```
+## Selected output and immutable identity
 
-Both flags and `--config` are required together. Project answers must be outside
-the factory checkout: paths inside it and outside symlinks resolving into it
-are rejected before any target write. A project config elsewhere is allowed.
-The creator checks the local
-Git root, clean checkout, `HEAD`, `vX` tag, tracked regular root defaults file,
-and exact caller-supplied SHA before using the defaults. The caller must obtain
-the SHA **independently** from a trusted record binding it to the intended
-organization factory; a local tag, origin URL, or JSON alone cannot establish
-that identity. No fetch or credential access occurs. The defaults file accepts
-only schema version 1 and known placeholder keys; `FACTORY_SPEC` belongs to
-project answers and cannot be set by organization defaults.
+The complete inventory is shown by preview, not a broad inherited template:
 
-Values resolve per key: packaged placeholder defaults, then organization
-defaults, then explicit project answers. An explicit empty optional project
-value clears the inherited value. `FACTORY_REQUIRED=true` in the factory cannot
-be disabled by project answers. When a project switches `TASK_TRACKER` or
-`SECRETS_PROVIDER`, inherited tracker fields (`TRACKER`, `TRACKER_KEY`, `EPIC_ID`)
-or `SECRETS_PATH` respectively do not carry across; supply project-specific
-values if needed. Effective values and the verified factory revision feed the
-configuration digest, ownership and apply/verify checks. Without factory flags,
-v1 configuration and inline CI behavior are unchanged. To roll back this extension,
-omit both factory flags and use explicit project answers; applying that change
-updates creator-owned files, subject to the usual conflict checks.
+- `AGENT.md`: short integration envelope, applicable procedures and human gates.
+- `start.mjs`: passive local diagnosis; no ticket claim, network, launch or work.
+- `docs/bindings.md`: sole accepted slim binding and documentation authority.
+- `.factory/procedures.md`: seven semantic contracts and exact readable sources.
+- `.factory/skills/matt-pocock/`: selected unchanged upstream tree/resources,
+  metadata and complete MIT notice at
+  `mattpocock/skills@49dd158d1076134a641b33efb035946536778336`.
+- `.factory/skills/foundry-checkpoint/SKILL.md` and
+  `.factory/skills/foundry-resume/SKILL.md`: durable boundaries, not a phase engine.
+- `.factory/provenance.json`: schema-2 candidate/config/payload/source identities,
+  indexed paths/hashes/adaptations/manual routes and tracker readiness pointer.
+- `.gitignore`: accepted exclusion for local `.factory/creator/` recovery bytes.
+- `.factory/creator/state.json`: local 0600 schema-2 `matt-first` ledger with exact
+  file boundaries, absence baseline, hashes/modes and provenance identity.
 
-Documentation defaults follow the same precedence, but non-local profiles
-require an explicit project selection and project-supplied identity/contract
-fields. A factory suggestion cannot authorize a remote destination. Selecting
-`local` after a factory suggestion discards inherited destination fields and
-keeps the Git-only authority map. The creator validates exact HTTPS family
-URLs within the destination identity; external-contract declarations name a
-supported integration, access mechanism category, and read/write/readback
-specifications. This is not a live adapter or remote verification. A read-only
-website cannot gain write capability by selection, and Pages publication
-requires separate deployment evidence. Plan/apply/verify make no remote
-documentation calls; every later remote operation needs explicit user
-authorization for the target, action, and credential/session.
+Build verifies selected upstream bytes/Git blobs/modes with
+`node scripts/procedure-sources.mjs`; the payload declaration/lock selects only
+these inputs plus startup. `dist/candidate.json` binds source revision and dirty
+status, compiled engine-file hashes, package metadata and payload digest. Dirty
+source is explicitly source-local, not claimed identical to its base commit.
+Provenance binds those identities to generated bytes. None is a signature,
+publication attestation, task store, host qualification or readiness certificate.
 
-### Reusable GitHub CI from the same pin
+No default handbook/runbook, compulsory phase engine, governance/forms/workflows,
+CI, README replacement, second provider manifest, secrets setup or global
+runtime/auth/model changes are installed.
 
-When the pinned project selects GitHub CI and `CI_STACKS`, the creator requires
-a tracked regular `.github/workflows/<stack>.yml` for **each selected stack** in
-the same clean, tagged checkout. Each must be one bounded YAML 1.2 document
-with `on.workflow_call` and callable `jobs`. For a factory tagged `v1`:
+## Integrity, readiness and recovery
 
-```yaml
-jobs:
-  rust:
-    uses: eff3ct0/factory/.github/workflows/rust.yml@v1
-```
+`applied` with `integrity: verified` means the accepted named file bytes/modes
+were verified, not setup complete. All machine results retain `setup: incomplete`
+because this offline installer does not perform remote or independent-session
+observations. The required observations and exact tracker pointer are reported.
+Consult the current scoped tracker record; never convert an old flag or file
+presence into readiness.
 
-Only packaged CI recipe names can be selected. Callers use the `FACTORY_SPEC`
-version tag, not the trusted SHA; the SHA verifies the local snapshot, not
-remote publication. Malformed YAML, duplicates, aliases, invalid jobs, and
-oversized workflows fail before target writes. The digest includes the verified
-factory revision and selected workflow contents: an owned inline CI file can
-migrate with unchanged answers, and a changed pinned revision updates state.
-Without a pin, existing inline CI remains unchanged. Unknown or drifted owned
-`ci.yml` files remain conflicts, never overwritten. Offline validation cannot
-prove GitHub accepts the workflow or that its tag is published. Runner validation
-for step jobs (`runs-on`) is a separate follow-up; do not treat this check as
-complete hosted-callable proof.
+`node start.mjs` passively distinguishes `SELF`, `INCOMPLETE`, `USABLE` readable
+foundation with verified local integrity, and `UNSAFE`/unrecognized state.
+`USABLE` does not certify external readiness or permission. Missing local ledger
+allows read-only Git/provenance discovery but does not establish updater
+ownership. Startup proposes explicit planning selection and stops.
 
-## Provider-aware setup
+Separately authorize and invoke a genuinely independent manual validator with
+only the installed startup pointer and bounded validation authority. It loads
+the binding/index/selected method and dependencies, reads exact native provider
+identity/state/owner/dependencies/project, demonstrates a legitimate permitted
+write and fresh exact readback, records exact candidate/host/workspace/access
+observations on that tracker, identifies the proposed planning action and
+required authority, then stops without planning/implementation. Scope all claims
+to actual evidence. Required missing evidence means incomplete; optional modes
+not selected are not failures. Host/binding/source/workspace changes invalidate
+affected observations. Installed-candidate evidence is not registry proof.
 
-The creator has a versioned, provider-neutral catalog for the supported agent
-providers. Select no provider, one provider, or several providers with
-`--agent <id>` or `--agents <id,...>`:
+Apply stages/validates all named bytes/modes and records the accepted plan and
+applied effects in `.factory/creator/.staging/journal.json`. Exclusive file
+creation refuses racing destination files. A handled file failure restores only
+unchanged newly created files to absence; a concurrent edit prevents unsafe
+restoration and preserves the journal. Interruption/uncertain Git leaves exact
+staged evidence. Diagnosis never blindly replays apply, wipes staging or claims
+crash atomicity. `--failure-after N` and `--interrupt-after N` are explicit local
+fault-injection seams; full update/shared-block/crash recovery belongs to the
+separate recovery unit.
 
-| Provider ID | Executable | Workspace-owned file | Handoff command shape |
-| --- | --- | --- | --- |
-| `claude-code` | `claude` | `.claude/factory-template.md` | `claude --cwd <project-directory>` |
-| `opencode` | `opencode` | `.opencode/agents/factory-template.md` | `opencode --dir <project-directory>` |
-| `codex` | `codex` | `.codex/AGENTS.md` | `codex --cd <project-directory>` |
-| `pi` | `pi` | `.pi/AGENTS.md` | `pi --cwd <project-directory>` |
-
-Provider selection is validated and executable detection happens before any
-target write. An unavailable provider fails closed with an actionable hint.
-`none` (the default) creates no provider files. A selected provider produces
-the stable `.factory/provider-manifest.json` and records its generated files in
-the normal creator ownership state.
-
-Provider adapters own only the files listed in the catalog. Unknown files and
-changed managed files remain protected by the creator conflict rules. Provider
-setup therefore participates in dry-run, staging verification, rollback, and
-rerun `noop` detection; it does not modify global user configuration.
-
-Use `--launch-agent` only with exactly one selected, installed provider. The
-flag is disabled by default and is evaluated only after apply and verify have
-succeeded. The handoff uses an argument array with shell execution disabled and
-reports the provider exit code separately; an agent failure never claims that
-the repository setup succeeded. Runtime installation, authentication, API-key
-configuration, model selection, and global preferences remain manual user
-prerequisites and are never written to generated files.
-
-Every command emits one versioned JSON envelope on stdout. Human diagnostics
-and prompts are written to stderr. `plan` and `dry-run` are read-only. An
-`apply` stages bytes under `.factory-template-creator/.staging`, verifies each
-staged digest and mode, and commits only after the complete stage is valid.
-Creator state is stored in `.factory-template-creator/state.json`; it records
-the payload identity, configuration digest, and bounded output ownership
-digests. It does not copy the payload manifest or become a second payload
-source of truth.
-
-When installed from an npm package, npm may rename the packaged payload's
-`.gitignore` to `.npmignore`. The creator accepts that one exact transport alias
-only when the bytes still match the manifest; ownership and the manifest's
-target mode remain authoritative.
-
-The creator never overwrites an unknown file. An unchanged rerun is `noop`.
-Changed configuration produces an explicit update plan, while an externally
-drifted owned file is a conflict requiring recovery rather than an implicit
-overwrite. `doctor` reports interrupted staging, payload mismatch, ownership
-drift, unknown files, and incomplete configuration.
-
-The interactive presentation layer is documented in
-[`docs/installer-ux.md`](installer-ux.md). It keeps prompts, review, progress,
-confirmation, and completion summaries on stderr while retaining this JSON
-envelope on stdout. It delegates every write to the same plan/apply/verify
-engine and never launches an agent.
-
-Initialization composition is part of the same plan/apply/verify transaction.
-The payload carries the placeholder schema, provider fragments, CI recipe
-catalog, and ownership inventory as immutable inputs. Configuration keys are
-validated for required, enum, conditional, duplicate, and unknown-key errors
-before any target write. Only the ownership inventory's explicit text-file list
-is rendered; binary or unclassified files are copied without broad replacement.
-
-The selected task, secrets, optional code-intelligence, and CI recipes are
-composed in stable order. Provider and CI inputs, placeholders, and the
-ownership manifest are removed only when their packaged bytes are unchanged;
-changed paths become conflicts. Retained assets are relocated under `.factory`
-according to the ownership contract, while generated bindings, CI, and optional
-OpenCode output remain at their declared destinations. Application-owned and
-unknown files are never removed or overwritten.
-
-`--failure-after N` and `--interrupt-after N` are deterministic failure-injection
-options used by the focused tests. The former must roll back creator-owned
-changes; the latter intentionally leaves staging for `doctor` to report.
-
-## Exact-version package consumers
-
-The release verifier exercises both consumer commands from fresh directories:
-
-```sh
-pnpm verify:package-consumer --package @eff3ct/agent-foundry --version 0.1.0 \
-  --source-sha <full-source-sha> --output ./package-consumer-evidence
-```
-
-Without `--tarball`, the verifier first reads the exact `name@version` from the
-registry and then runs `pnpm dlx --package name@version` and
-`npx --yes name@version`. A missing publication, unavailable registry, or
-authentication failure produces a machine-readable `blocked` result; it is
-never reported as a published-package success. For offline verification, pass
-the exact local tarball with `--tarball`. That mode still installs the package
-in isolated directories and checks package, payload, tarball, source, release,
-and generated-tree identities, followed by apply, verify, rerun `noop`, and a
-selected Codex startup.
-
-## Startup routing
-
-The packaged payload includes `start.mjs`, the canonical offline router for
-`SELF`, `SETUP`, and `WORK` modes. It reads only local workspace files and uses
-a strict source marker; it does not infer source mode from a GitHub remote, call
-the network, or launch an agent. Use `node start.mjs` manually when hooks are
-unavailable.
-
-## Exact-version creation and rollback
-
-The package exact-version command is the primary creation path:
-
-```sh
-pnpm dlx --package @eff3ct/agent-foundry@<EXACT_VERSION> foundry apply --target ./new-project --config answers.json --non-interactive --yes
-```
-
-GitHub Template mode remains enabled only as a rollback safety valve until
-published-consumer verification passes. If the package path fails, re-enable
-Template mode and repair the package path. Published npm bytes are immutable;
-publish a correcting version instead of replacing an existing version.
+The initializer forwards schema-2 configuration and exact acceptance to this
+same engine. Source package-content helpers use preview/accept/integrity and do
+not launch fake agents or qualify real host/provider readiness. Legacy release
+matrices and source-maintenance recipes are not Matt-first release qualification;
+complete pair/journey/host/publication checks remain separate bounded units.

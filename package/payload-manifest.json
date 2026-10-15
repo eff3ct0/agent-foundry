@@ -1,423 +1,262 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "package_name": "@eff3ct/agent-foundry",
   "package_version": "0.3.1",
-  "payload_version": "1.0.0",
+  "payload_version": "2.0.0",
+  "profile": "matt-first",
   "files": [
     {
-      "path": ".github/ISSUE_TEMPLATE/bug.yml",
+      "path": "foundation/matt-first/envelope.md",
       "mode": "100644",
-      "size": 952,
-      "sha256": "d9be6f81c8835d68c9e2ee73d9e0750e78dddb7c067c43dd7933318da67bae55"
+      "size": 3899,
+      "sha256": "8f00f5865df169ba320200bd4b9c1ea8e0b855b63da0d2990077b28a46b79691"
     },
     {
-      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "path": "foundation/matt-first/procedures.md",
       "mode": "100644",
-      "size": 28,
-      "sha256": "1f103c6a9dd07cd13a9a6f17ace6b813f47747eb9cb7e00488cb2073caaf91bb"
+      "size": 12141,
+      "sha256": "56149cb70e7cbe5647584f03bda1e3bb85ab93b007a238c8069f2dafcc8071d2"
     },
     {
-      "path": ".github/ISSUE_TEMPLATE/dx-feedback.yml",
+      "path": "foundation/matt-first/skills/foundry-checkpoint/SKILL.md",
       "mode": "100644",
-      "size": 1161,
-      "sha256": "a71cd2de6fca2adde2de1975188d79c58b6cd6712bfcf3251a546c9a66b977f1"
+      "size": 3714,
+      "sha256": "10e0213a6c7ddae601a33cdc8b121c24fcd9218c20a1fc636c58538012891611"
     },
     {
-      "path": ".github/ISSUE_TEMPLATE/feature.yml",
+      "path": "foundation/matt-first/skills/foundry-resume/SKILL.md",
       "mode": "100644",
-      "size": 1396,
-      "sha256": "73858f385627d1641360d4dd448726582688f5df52beca494dccf8a22356ebad"
+      "size": 4394,
+      "sha256": "be3c946b94559f1d0ca3fdb0281110073df96c55ac7ed4f19fb4b18e62b30484"
     },
     {
-      "path": ".github/ISSUE_TEMPLATE/task.yml",
+      "path": "foundation/matt-first/upstream-lock.json",
       "mode": "100644",
-      "size": 1115,
-      "sha256": "9ee423524b0cc1f7aab07ceb8c5fff832c42a3d47240159dc2294c1b4dfd9593"
+      "size": 9576,
+      "sha256": "e5e3cec24abc6da50de49889b41eb27bd8fe927da64e15fde7c90c8bcdfedb6f"
     },
     {
-      "path": ".github/labels.json",
+      "path": "foundation/matt-first/upstream/LICENSE",
       "mode": "100644",
-      "size": 1019,
-      "sha256": "76a0b99f5357ae9ea25e6dec4cbe898dd5efe156d19e831f4f3767aa190bca2c"
+      "size": 1068,
+      "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5"
     },
     {
-      "path": ".github/pull_request_template.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/code-review/SKILL.md",
       "mode": "100644",
-      "size": 1657,
-      "sha256": "4411f482f5e2fb3cb1f217ee4269ca20e562ce8c0837083bf3f0bdd7c6c58e29"
+      "size": 6670,
+      "sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357"
     },
     {
-      "path": ".github/workflows/governance.yml",
+      "path": "foundation/matt-first/upstream/skills/engineering/code-review/agents/openai.yaml",
       "mode": "100644",
-      "size": 1165,
-      "sha256": "e75dd491ef3379adb36ed41aadf31352edd62b0c36d0869fb9502e46544aea7c"
+      "size": 100,
+      "sha256": "8229ca854e11dc8e6aef2131ee03f31fb1561cf905fab9ccc325180cf3331352"
     },
     {
-      "path": ".github/workflows/sync-labels.yml",
+      "path": "foundation/matt-first/upstream/skills/engineering/codebase-design/DEEPENING.md",
       "mode": "100644",
-      "size": 1002,
-      "sha256": "153bbdb1f5d8d3c1671121fe57861a100d46a68d2ffa77eb057bef594566cfb2"
+      "size": 2553,
+      "sha256": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1"
     },
     {
-      "path": ".gitignore",
+      "path": "foundation/matt-first/upstream/skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
       "mode": "100644",
-      "size": 294,
-      "sha256": "fd529ea706bdbf87db72cca6977aaffb0e108c81104a997e019e9e4f728a93c1"
+      "size": 2665,
+      "sha256": "52b52e75655a27aea59c6966b410bac82448968ad46ef1ebb9f07c274e3ae010"
     },
     {
-      "path": "AGENT.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/codebase-design/SKILL.md",
       "mode": "100644",
-      "size": 18766,
-      "sha256": "672fdf3aec46d32b81423c61353fb1dcaf44f8f0239cb348c1a8e23644b97ae6"
+      "size": 6446,
+      "sha256": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
     },
     {
-      "path": "CLAUDE.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/codebase-design/agents/openai.yaml",
       "mode": "100644",
-      "size": 682,
-      "sha256": "0f35eafe28cddaf497b273a06ec6b40a6718bf24b7ee0dd4e5c4f6e4ec9618b2"
+      "size": 102,
+      "sha256": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f"
     },
     {
-      "path": "README.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/diagnosing-bugs/SKILL.md",
       "mode": "100644",
-      "size": 12696,
-      "sha256": "1ebaed942ce77c9814d369438f4f8a9145d1709e9b9d1a75a96f6982a2ce4fd1"
+      "size": 8664,
+      "sha256": "849198df88cdb65fd0d97236604c1fca7ff2f22d2f705f9724a800d0266b118d"
     },
     {
-      "path": "archetype-ownership.json",
+      "path": "foundation/matt-first/upstream/skills/engineering/diagnosing-bugs/agents/openai.yaml",
       "mode": "100644",
-      "size": 11696,
-      "sha256": "a74d312d8b694305e27b68350a4a2912f8713862c20e98e6d21a141c88d9a5af"
+      "size": 103,
+      "sha256": "3e430dbe4334a87597488c060cb3dc3786bb00c9182877d6f5ec41f62490e90b"
     },
     {
-      "path": "ci/_contract.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/diagnosing-bugs/scripts/hitl-loop.template.sh",
       "mode": "100644",
-      "size": 2254,
-      "sha256": "fe721574051167e0c40b72c3cb92858fb1bd4e232c4585f9739e4bdc6e4aa782"
+      "size": 1316,
+      "sha256": "35103539fc36873eea36074769ad454f9379d6fc8b2dc0e26ce987fd3bfe5503"
     },
     {
-      "path": "ci/recipes.json",
+      "path": "foundation/matt-first/upstream/skills/engineering/domain-modeling/ADR-FORMAT.md",
       "mode": "100644",
-      "size": 3088,
-      "sha256": "4991d1dfe09a7c83b15edb1816a474a3ce87e3a19b65586c2b388f9f96023987"
+      "size": 2733,
+      "sha256": "944c92aa790e8fbdc9199640b170979abb8a34ba8d0fe18c2a01a63bce140ca0"
     },
     {
-      "path": "docs/agent-init.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/domain-modeling/GLOSSARY-FORMAT.md",
       "mode": "100644",
-      "size": 5893,
-      "sha256": "3c4b2c79d09d2b84c253ad5e3602099c4e6b0cf145d902e5f9be745318f4861a"
+      "size": 2300,
+      "sha256": "21dcc40cdec8e151a829b98ab1517c1867bc444e3665134a98c6983411996801"
     },
     {
-      "path": "docs/bootstrap.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/domain-modeling/SKILL.md",
       "mode": "100644",
-      "size": 4533,
-      "sha256": "4f99ee073579250463d5e5e0fac4045cbc8d781c2b7272ac7353f7c912d14e40"
+      "size": 3346,
+      "sha256": "7b925d7b1e341a2eeae33ad68a8a8c0ab889a38ddd22a7598e4c240e5a7556a3"
     },
     {
-      "path": "docs/determinism.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/domain-modeling/agents/openai.yaml",
       "mode": "100644",
-      "size": 3989,
-      "sha256": "b14a95f79250b6260794ea7886b75e46487b72e7ad4e1557efe90416c1e8ab28"
+      "size": 101,
+      "sha256": "f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b"
     },
     {
-      "path": "docs/engineering-handbook.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/grill-with-docs/SKILL.md",
       "mode": "100644",
-      "size": 7472,
-      "sha256": "f328f174eade0c90f52c93389dcc97b22b7b6f7ea47a46585d1ed3f8bb1921e8"
+      "size": 247,
+      "sha256": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe"
     },
     {
-      "path": "docs/factory-layout.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/grill-with-docs/agents/openai.yaml",
       "mode": "100644",
-      "size": 9685,
-      "sha256": "e116ab166cbafd869d3dd3f889524784bdfa7b77dbef9758ac53e7db70e24f30"
+      "size": 145,
+      "sha256": "94cd0ab161fb468a836349f5ed482ba58ce8e709a05c57ce533d739dbd35cca9"
     },
     {
-      "path": "docs/github-governance.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/implement/SKILL.md",
       "mode": "100644",
-      "size": 3028,
-      "sha256": "e098a81dae5f7a8009d9bdfb1c459ca01bd505454af607da555054bf9eb0630f"
+      "size": 622,
+      "sha256": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d"
     },
     {
-      "path": "docs/org-factory.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/implement/agents/openai.yaml",
       "mode": "100644",
-      "size": 10672,
-      "sha256": "0291d3bb133ddc6e522ba1f2fe80402ad765d396d5ec0baca47f8246d29559f2"
+      "size": 139,
+      "sha256": "8970a8596ade0c28ab427f41a4ea242d6bdf6186c59ebf55e1238dbecaab79dc"
     },
     {
-      "path": "docs/workflow.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/prototype/LOGIC.md",
       "mode": "100644",
-      "size": 7476,
-      "sha256": "a12e0cae138bb35898e91247754791f43faead0569bda666eb0c3426f3c948ec"
+      "size": 6036,
+      "sha256": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9"
     },
     {
-      "path": "hooks/README.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/prototype/SKILL.md",
       "mode": "100644",
-      "size": 1593,
-      "sha256": "db286e27dadc9ba5bf6565dd6ae1a528f679211ac3c43ef52965d82a5941642b"
+      "size": 2931,
+      "sha256": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
     },
     {
-      "path": "hooks/claude-code/session-start.sh",
+      "path": "foundation/matt-first/upstream/skills/engineering/prototype/UI.md",
       "mode": "100644",
-      "size": 287,
-      "sha256": "ef942b533f59080a5da239857dc31613ccbdb6e54c1e92a2d2b3c8f6002ffcdf"
+      "size": 6913,
+      "sha256": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3"
     },
     {
-      "path": "hooks/opencode/factory-start.ts",
+      "path": "foundation/matt-first/upstream/skills/engineering/prototype/agents/openai.yaml",
       "mode": "100644",
-      "size": 1448,
-      "sha256": "cbbd859fc91eb20ea6140341f40e780f6be5e5ba31b45d4384b2d4b54cd6ead1"
+      "size": 100,
+      "sha256": "5af65e43ab41a350436697b81e27b7f848d36782043b73c322bb2c9fa9cc55dc"
     },
     {
-      "path": "hooks/pi/factory-start.ts",
+      "path": "foundation/matt-first/upstream/skills/engineering/research/SKILL.md",
       "mode": "100644",
-      "size": 701,
-      "sha256": "89005ec5f447f38e8fda4d0585b4362d1b631b1cfe9d1d406d5c1d617429c59f"
+      "size": 794,
+      "sha256": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
     },
     {
-      "path": "placeholders.json",
+      "path": "foundation/matt-first/upstream/skills/engineering/research/agents/openai.yaml",
       "mode": "100644",
-      "size": 8133,
-      "sha256": "0e4549162c2d4609f36b99fb3731b4f8d81523597773c06056f3932d4c148cfb"
+      "size": 94,
+      "sha256": "9b4c470d63221c1f68f22df70b83e2f12401b317babe0d1b7b5f24a974474d0d"
     },
     {
-      "path": "providers/agents/catalog.json",
+      "path": "foundation/matt-first/upstream/skills/engineering/tdd/SKILL.md",
       "mode": "100644",
-      "size": 2833,
-      "sha256": "c89f155da6000464085706f8b1267188c262dff0bbe639a6dd7d8be16212b054"
+      "size": 3629,
+      "sha256": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0"
     },
     {
-      "path": "providers/agents/templates/claude-code.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/tdd/agents/openai.yaml",
       "mode": "100644",
-      "size": 847,
-      "sha256": "619350c31cae7cde5b8742e536a179145fc1370c9c84d2a82817800629e0cae9"
+      "size": 87,
+      "sha256": "ea6f01cf1b8c06a4b0f5b649d74b1b8ce8685e72af1b38d70d877693e092af0b"
     },
     {
-      "path": "providers/agents/templates/codex.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/tdd/mocking.md",
       "mode": "100644",
-      "size": 835,
-      "sha256": "7db9b5f864ff397d38ac818c7009a45f3f05556df5d5eed33eaa8708b95ebefb"
+      "size": 1481,
+      "sha256": "3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef"
     },
     {
-      "path": "providers/agents/templates/opencode.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/tdd/tests.md",
       "mode": "100644",
-      "size": 841,
-      "sha256": "bdd89bd95efd3c1f3ad4a5d998dae9f553154448347922fedd812ee07b99f205"
+      "size": 2214,
+      "sha256": "859f9e592c188fda4fc7277dd180e4ce9c7a2e13f6efe1f6f29eccc9d28c106a"
     },
     {
-      "path": "providers/agents/templates/pi.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/to-spec/SKILL.md",
       "mode": "100644",
-      "size": 829,
-      "sha256": "81a49c739468bbe8d046d6795cd67f45d50fc7d4dafee77ed830bd268e44d160"
+      "size": 3043,
+      "sha256": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
     },
     {
-      "path": "providers/code-intel/_contract.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/to-spec/agents/openai.yaml",
       "mode": "100644",
-      "size": 1083,
-      "sha256": "ebf4599821e567d889bf3b07ae1547939befb62e19eb59e125ead1f3c3dfe803"
+      "size": 135,
+      "sha256": "1c5b4d1e3d8e52287ef19cc2742fdbbfae1914ac75d33af3e4c8174f08cc55bb"
     },
     {
-      "path": "providers/code-intel/codegraph.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/to-tickets/SKILL.md",
       "mode": "100644",
-      "size": 1198,
-      "sha256": "aa28d4508ba74f4a1d6aaa985da2e994e9544590df927110fd123e2aee56b832"
+      "size": 5812,
+      "sha256": "56ec23c5b2782785d4e65bff9e315b6d3aeb4ef977c174a219e99489fada1995"
     },
     {
-      "path": "providers/code-intel/custom.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/to-tickets/agents/openai.yaml",
       "mode": "100644",
-      "size": 982,
-      "sha256": "02d476baf7ef948c43e6f19bd437c2eb06f79648054c58c239b155d01312a3f7"
+      "size": 146,
+      "sha256": "21bc6215fffcd7614e9f772bb1760e87cc5fc7dcc707e7d282bc9414267a6090"
     },
     {
-      "path": "providers/code-intel/none.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/wayfinder/SKILL.md",
       "mode": "100644",
-      "size": 1077,
-      "sha256": "8adeb42164a2491c9a77664a4d4349da43d0f77cc77c94a5c74137d2ba407d02"
+      "size": 12380,
+      "sha256": "9be7b478c389605a24517d27752f278933588da97a1b5921b165f455edf4c5b7"
     },
     {
-      "path": "providers/secrets/_contract.md",
+      "path": "foundation/matt-first/upstream/skills/engineering/wayfinder/agents/openai.yaml",
       "mode": "100644",
-      "size": 1001,
-      "sha256": "30fd996d359e5abc6381c6dca6eb06f2038a0ae41cca33fe11e31bfaa2b90b20"
+      "size": 144,
+      "sha256": "88bc81a11a6d52ac67aeaa76b8b619e387020d47c5133a4dd4927fd15c4ad073"
     },
     {
-      "path": "providers/secrets/custom.md",
+      "path": "foundation/matt-first/upstream/skills/productivity/grilling/SKILL.md",
       "mode": "100644",
-      "size": 731,
-      "sha256": "b94e9b44e60de4eb1c8edfb57629b92cce894a4eab2ee1eeeca237cffd2f0b1c"
+      "size": 2049,
+      "sha256": "befdff1e27a1dfe2a294d5871169ac1afe16d983911daa4f32627514a48c1e15"
     },
     {
-      "path": "providers/secrets/doppler.md",
+      "path": "foundation/matt-first/upstream/skills/productivity/grilling/agents/openai.yaml",
       "mode": "100644",
-      "size": 862,
-      "sha256": "78489cba2e67574d1090a6816b84161faa425b4c8536b95b7322703c0036a2f7"
-    },
-    {
-      "path": "providers/secrets/infisical.md",
-      "mode": "100644",
-      "size": 851,
-      "sha256": "7e06b4235cf6ae9440590db4fafaa108362e19873c97882e4f1dfa8e9aaf5ccf"
-    },
-    {
-      "path": "providers/secrets/none.md",
-      "mode": "100644",
-      "size": 665,
-      "sha256": "13f587c64006642bd4e493dcb4ffd23b6c816af466c85df143266aff1f25cb30"
-    },
-    {
-      "path": "providers/secrets/vault.md",
-      "mode": "100644",
-      "size": 788,
-      "sha256": "a3e8b0365ac3352b8ff68b790a23cfa8b8199ecb3cbf7feb06ba6a6962a9dbed"
-    },
-    {
-      "path": "providers/task/_contract.md",
-      "mode": "100644",
-      "size": 3421,
-      "sha256": "841b4bef33c6fae059c37a746e6cf5f7697a5150e040d9789dcdfb8192e3899f"
-    },
-    {
-      "path": "providers/task/custom.md",
-      "mode": "100644",
-      "size": 3378,
-      "sha256": "d8565cba2cd3d7e721b0fc702c81e1c5b0864a72f0f941232af90437ce920fe7"
-    },
-    {
-      "path": "providers/task/github-issues.md",
-      "mode": "100644",
-      "size": 4443,
-      "sha256": "8a740c86a4ad8205ecdaa304b752761a17e15614f90012789a46bb99941edab2"
-    },
-    {
-      "path": "providers/task/github-projects.md",
-      "mode": "100644",
-      "size": 4877,
-      "sha256": "099ad72f4eb06df7f538fd8889e558b0c4be4f8643b058e4fe1fe452e15cbd93"
-    },
-    {
-      "path": "providers/task/jira.md",
-      "mode": "100644",
-      "size": 3443,
-      "sha256": "3b6decd86eaebfc267c45351e969cdd790dc900431ef6decebd657d38e6f3cc4"
-    },
-    {
-      "path": "providers/task/linear.md",
-      "mode": "100644",
-      "size": 3243,
-      "sha256": "acb587ca6e84799ecb3af3be299a41d09a93bd5e95e96271f78802c591d38b70"
-    },
-    {
-      "path": "scripts/check-factory-layout.mjs",
-      "mode": "100644",
-      "size": 4820,
-      "sha256": "5e7753acd5954ec38ea199853d75ccdad83433724e52f70ad1101c6d1139439c"
-    },
-    {
-      "path": "scripts/task-adapter.mjs",
-      "mode": "100644",
-      "size": 11445,
-      "sha256": "4c7910cc72c347232c84a8460b15a2b688269426441fa31690e341ed23b05f97"
-    },
-    {
-      "path": "scripts/task-github-issues-read.mjs",
-      "mode": "100644",
-      "size": 7210,
-      "sha256": "552b809b6198c7008419c2ae05bdc79b45894b9d60cfa8090c53b7f52bb73ed4"
-    },
-    {
-      "path": "scripts/task-jira-read.mjs",
-      "mode": "100644",
-      "size": 5859,
-      "sha256": "e0e4c6fc7c44fababfa56c7d492162c437c4c8a5c781ccfe63eefafcccac6352"
-    },
-    {
-      "path": "scripts/typed-inherited-runtime/check-delivery-contract.js",
-      "mode": "100644",
-      "size": 27067,
-      "sha256": "2ec8ecb0e52f7218186f7e44e050cd75398135b5b5850215683512a614ea991b"
-    },
-    {
-      "path": "scripts/typed-inherited-runtime/check-pr-governance.js",
-      "mode": "100644",
-      "size": 8296,
-      "sha256": "da34121c4c5ba0dc0d49c35c46d1bd2046929b85044c796eaf39b56bd542e203"
-    },
-    {
-      "path": "scripts/typed-inherited-runtime/package.json",
-      "mode": "100644",
-      "size": 18,
-      "sha256": "1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae"
-    },
-    {
-      "path": "scripts/typed-inherited-runtime/sync-github-labels.js",
-      "mode": "100644",
-      "size": 3330,
-      "sha256": "17f51332147b031c6a529abbf6283400c523e4e3d948ef951a20186f165bf14d"
-    },
-    {
-      "path": "scripts/typed-inherited/check-delivery-contract.mts",
-      "mode": "100644",
-      "size": 26340,
-      "sha256": "5d15c4bc0c3e74249250fb58428c5d606fae437c8f91bd320152a70f43d7becf"
-    },
-    {
-      "path": "scripts/typed-inherited/check-pr-governance.mts",
-      "mode": "100644",
-      "size": 8521,
-      "sha256": "d2a229f9c32476a82d570a8b4ccdf13d04f70537fa26e8e461b6cda2ffd8ae4a"
-    },
-    {
-      "path": "scripts/typed-inherited/sync-github-labels.mts",
-      "mode": "100644",
-      "size": 3363,
-      "sha256": "2b8dc0fd3d59868e8db28ef699bebddbb18686892778882b2e5397c0b047c995"
+      "size": 113,
+      "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b"
     },
     {
       "path": "start.mjs",
       "mode": "100644",
-      "size": 14890,
-      "sha256": "cda423ff6d18767bdafa67bb5efa373dff789d2874072b1276d6f6c9ea1bcafe"
-    },
-    {
-      "path": "templates/adr.md",
-      "mode": "100644",
-      "size": 418,
-      "sha256": "f80da6b5bcf7e4b3828667e3a6779f8902b792eeee01395d57374c9f02b97bcc"
-    },
-    {
-      "path": "templates/agent-runbook.md",
-      "mode": "100644",
-      "size": 14848,
-      "sha256": "305c1c30b497678416959bb054057a46ccf2e17660f73b5f56ea58a9cc9d91e2"
-    },
-    {
-      "path": "templates/definition-of-done.md",
-      "mode": "100644",
-      "size": 1021,
-      "sha256": "eced3358b1f5ea3cc0631283c206eb8432b06308c604e465bfdd7b8647281ac0"
-    },
-    {
-      "path": "templates/handoff.md",
-      "mode": "100644",
-      "size": 7514,
-      "sha256": "ce3fdde7c95aad6d7c37104680901729e022f54d7d6594ca0d62d62b96f344d3"
-    },
-    {
-      "path": "templates/pull-request.md",
-      "mode": "100644",
-      "size": 1522,
-      "sha256": "1e31c40954982a72f12aa6d7ad88d28d93746f2fbcc529e12197a349482d9dd6"
-    },
-    {
-      "path": "templates/spec.md",
-      "mode": "100644",
-      "size": 577,
-      "sha256": "cfecccb6f391112254fbc5aabf1e6533f2d8467c62da3aabe9b2f572f3fe0a58"
-    },
-    {
-      "path": "templates/ticket.md",
-      "mode": "100644",
-      "size": 1615,
-      "sha256": "c1b40f6ed275378858e2058b96f2771e43e07208137d48ab121ab4fb71b81e9b"
+      "size": 11514,
+      "sha256": "d6836a74803dbdf59e72e4085267a99b19441a4d02ed9ada275e1b4736f26fbb"
     }
   ],
-  "payload_digest": "sha256:508698f9efd9d505d3a19fc32956c38cc6e23747be51528305cc98194f96599b"
+  "payload_digest": "sha256:516c281051235a844f887949560a383bae7451612d4083801adb99a9f6df1806"
 }

@@ -47,7 +47,7 @@ const installedPackage = async (installation) => {
 };
 
 export const validateCreatorEnvelope = (value, target) => {
-  if (!object(value) || value.schema_version !== 1 || value.command !== "apply" || value.status !== "applied" || value.target !== target || !object(value.payload) || typeof value.payload.version !== "string" || !DIGEST.test(value.payload.digest ?? "") || !Array.isArray(value.operations) || !Array.isArray(value.diagnostics) || value.verification !== "verified") {
+  if (!object(value) || value.schema_version !== 2 || value.profile !== "matt-first" || value.command !== "apply" || value.status !== "applied" || value.target !== target || !object(value.payload) || typeof value.payload.version !== "string" || !DIGEST.test(value.payload.digest ?? "") || !Array.isArray(value.operations) || !Array.isArray(value.diagnostics) || value.integrity !== "verified" || value.setup !== "incomplete") {
     fail("creator JSON envelope is absent or malformed");
   }
   return value;
@@ -62,7 +62,10 @@ export const runInstalledCreator = async ({ tarballPath, targetPath, configPath,
   try {
     await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installation, tarball], { env });
     const { packagePath, cliPath } = await installedPackage(installation);
-    const result = await execFileAsync(process.execPath, [cliPath, "apply", "--target", target, "--config", config, "--non-interactive"], { env })
+    const previewResult = await execFileAsync(process.execPath, [cliPath, "plan", "--target", target, "--config", config, "--non-interactive"], { env });
+    const preview = JSON.parse(previewResult.stdout);
+    if (preview.schema_version !== 2 || preview.status !== "planned" || !DIGEST.test(preview.plan_digest ?? "")) fail("schema-2 fresh preview is absent or conflicted");
+    const result = await execFileAsync(process.execPath, [cliPath, "apply", "--target", target, "--config", config, "--non-interactive", "--accept-plan", preview.plan_digest], { env })
       .catch((error) => fail(`installed creator failed: ${String(error.stderr ?? error.message ?? "unknown error")}`));
     let envelope;
     try { envelope = JSON.parse(result.stdout); } catch { fail("installed creator did not emit JSON"); }

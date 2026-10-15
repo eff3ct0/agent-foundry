@@ -586,140 +586,6 @@ test("source inventory fails closed without an external executable or with inval
   }
 });
 
-test("packed package preserves npm transport and startup handoff", async (context) => {
-  if (process.platform === "win32") {
-    context.skip("the isolated agent launch fixture uses a POSIX executable");
-    return;
-  }
-  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-npm-package-"));
-  try {
-    const packageDirectory = path.join(parent, "package");
-    const installDirectory = path.join(parent, "install");
-    const target = path.join(parent, "project");
-    const bin = path.join(parent, "bin");
-    await mkdir(packageDirectory);
-    await mkdir(installDirectory);
-    await mkdir(bin);
-    await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packageDirectory], { cwd: root });
-    const tarballName = (await readdir(packageDirectory)).find((entry) => entry.endsWith(".tgz"));
-    assert.ok(tarballName, "pnpm pack did not produce a tarball");
-    const tarball = path.join(packageDirectory, tarballName);
-    await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, tarball], { cwd: root });
-
-    const executable = path.join(bin, "codex");
-    await writeFile(executable, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FACTORY_NPM_INSTALL_ARGS\"\nexit 0\n");
-    await chmod(executable, 0o755);
-    const config = path.join(parent, "answers.json");
-    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "npm transport", TASK_TRACKER: "github-issues" } }));
-    const installedCli = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry", "dist", "index.js");
-    const environment = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, FACTORY_NPM_INSTALL_ARGS: path.join(parent, "handoff-args.txt") };
-    const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--agent", "codex", "--launch-agent", "--non-interactive"], { cwd: root, env: environment }).then((value) => ({ ...value, code: 0 })).catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code }));
-    assert.equal(result.code, 0, result.stderr);
-    const envelope = JSON.parse(result.stdout);
-    assert.equal(envelope.status, "applied");
-    assert.equal(envelope.verification, "verified");
-    assert.equal(envelope.handoff.status, "launched");
-    assert.equal(await readFile(path.join(parent, "handoff-args.txt"), "utf8"), `--cd\n${target}\n`);
-    assert.ok(await stat(path.join(target, ".gitignore")));
-    assert.ok(await stat(path.join(target, "start.mjs")));
-
-    const startup = await execFileAsync(process.execPath, [path.join(target, "start.mjs"), "--cwd", target, "--json"]);
-    const startupEnvelope = JSON.parse(startup.stdout);
-    assert.equal(startupEnvelope.mode, "ONBOARDING");
-    assert.equal(startupEnvelope.status, "ready");
-  } finally {
-    await rm(parent, { recursive: true, force: true });
-  }
-});
-
-test("packed generated governance self-check uses its relocated template and fails closed", async () => {
-  const parent = await mkdtemp(path.join(os.tmpdir(), "creator-governance-package-"));
-  try {
-    const packageDirectory = path.join(parent, "package");
-    const installDirectory = path.join(parent, "install");
-    const target = path.join(parent, "project");
-    const config = path.join(parent, "answers.json");
-    await mkdir(packageDirectory);
-    await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packageDirectory], { cwd: root });
-    const tarballName = (await readdir(packageDirectory)).find((entry) => entry.endsWith(".tgz"));
-    assert.ok(tarballName, "pnpm pack did not produce a tarball");
-    await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, path.join(packageDirectory, tarballName)], { cwd: root });
-    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "governance fixture", TASK_TRACKER: "github-issues" } }));
-    const cli = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry", "dist", "index.js");
-    const create = async (command) => JSON.parse((await execFileAsync(process.execPath,
-      [cli, command, "--target", target, "--config", config, "--non-interactive"], { cwd: root })).stdout);
-    assert.equal((await create("plan")).status, "planned");
-    assert.equal((await create("apply")).status, "applied");
-    assert.equal((await create("verify")).status, "verified");
-    assert.equal((await create("apply")).status, "noop");
-    const startupMode = async () => JSON.parse((await execFileAsync(process.execPath,
-      [path.join(target, "start.mjs"), "--cwd", target, "--json"])).stdout).mode;
-    assert.equal(await startupMode(), "ONBOARDING");
-    assert.equal(JSON.parse((await execFileAsync(process.execPath,
-      [cli, "onboard", "--complete", "--target", target, "--non-interactive"], { cwd: root })).stdout).status, "onboarded");
-    assert.equal(await startupMode(), "WORK");
-    assert.equal(JSON.parse((await execFileAsync(process.execPath,
-      [cli, "onboard", "--complete", "--target", target, "--non-interactive"], { cwd: root })).stdout).status, "noop");
-    const inheritedPaths = [
-      "scripts/typed-inherited/check-delivery-contract.mts",
-      "scripts/typed-inherited-runtime/check-delivery-contract.js",
-      "scripts/typed-inherited/check-pr-governance.mts",
-      "scripts/typed-inherited-runtime/check-pr-governance.js",
-      "scripts/typed-inherited/sync-github-labels.mts",
-      "scripts/typed-inherited-runtime/sync-github-labels.js",
-      "scripts/typed-inherited-runtime/package.json",
-    ];
-    const packageRoot = path.join(installDirectory, "node_modules/@eff3ct/agent-foundry/dist/payload");
-    for (const name of inheritedPaths) {
-      const source = await readFile(path.join(root, name));
-      assert.deepEqual(await readFile(path.join(packageRoot, name)), source);
-      const generated = path.join(target, ".factory", name);
-      assert.deepEqual(await readFile(generated), source);
-      assert.equal((await stat(generated)).mode & 0o7777, 0o644);
-    }
-    assert.deepEqual(await verifyTypedRuntime(path.join(packageRoot, "scripts/typed-inherited"),
-      path.join(packageRoot, "scripts/typed-inherited-runtime")), ["check-delivery-contract.js", "check-pr-governance.js", "package.json", "sync-github-labels.js"]);
-    assert.deepEqual(await verifyTypedRuntime(path.join(target, ".factory/scripts/typed-inherited"),
-      path.join(target, ".factory/scripts/typed-inherited-runtime")), ["check-delivery-contract.js", "check-pr-governance.js", "package.json", "sync-github-labels.js"]);
-    const labels = path.join(target, ".factory/scripts/typed-inherited-runtime/sync-github-labels.js");
-    assert.match((await execFileAsync(process.execPath, [labels, "--self-check"], { cwd: target })).stdout, /self-check OK\n$/u);
-    assert.equal((await execFileAsync(process.execPath, [labels, "--dry-run", "--repo", "acme/example"], { cwd: target })).stdout.trim().split("\n").length, 10);
-    for (const name of inheritedPaths) {
-      const packaged = path.join(packageRoot, name);
-      const original = await readFile(packaged);
-      await writeFile(packaged, Buffer.concat([original, Buffer.from("\n")]));
-      await assert.rejects(create("verify"), (error) => {
-        assert.match(error.stdout, /payload/u);
-        return true;
-      });
-      await writeFile(packaged, original);
-    }
-    assert.equal((await execFileAsync(process.execPath, [path.join(root, "scripts/typed-inherited-runtime/check-pr-governance.js"), "--self-check"])).stdout, "self-check OK\n");
-
-    const checker = path.join(target, ".factory/scripts/typed-inherited-runtime/check-pr-governance.js");
-    assert.match(await readFile(path.join(target, ".github/workflows/governance.yml"), "utf8"), /node \.factory\/scripts\/typed-inherited-runtime\/check-pr-governance\.js/u);
-    const relocated = path.join(target, ".factory/templates/pull-request.md");
-    const original = await readFile(relocated, "utf8");
-    assert.equal((await execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
-    await assert.rejects(execFileAsync(process.execPath, [checker, "--dry-run"], { cwd: target, env: {
-      PATH: process.env.PATH, HOME: process.env.HOME,
-    } }), /GITHUB_EVENT_PATH, GITHUB_REPOSITORY, and GITHUB_TOKEN are required/u);
-    await mkdir(path.join(target, "templates"));
-    await writeFile(path.join(target, "templates/pull-request.md"), original);
-    await rm(relocated);
-    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /ENOENT/u);
-    await writeFile(relocated, "# Invalid template\n");
-    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /provider-governance:start/u);
-    await rm(relocated);
-    await symlink(path.join(target, "templates/pull-request.md"), relocated);
-    await assert.rejects(execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target }), /symlink/u);
-    await rm(relocated);
-    await writeFile(relocated, original);
-    assert.equal((await execFileAsync(process.execPath, [checker, "--self-check"], { cwd: target })).stdout, "self-check OK\n");
-  } finally {
-    await rm(parent, { recursive: true, force: true });
-  }
-});
 
 test("two packed artifacts preserve complete package and generated-tree identity", async (context) => {
   if (process.platform === "win32") {
@@ -740,10 +606,11 @@ test("two packed artifacts preserve complete package and generated-tree identity
       assert.ok(tarballName, "pnpm pack did not produce a tarball");
       const tarballPath = path.join(packageDirectory, tarballName);
       await execFileAsync("npm", ["install", "--offline", "--ignore-scripts", "--prefix", installDirectory, tarballPath], { cwd: root });
-      await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "artifact identity", TASK_TRACKER: "github-issues" } }));
+      await writeFile(config, await readFile(path.join(root, "test/fixtures/matt-first.json")));
       const packagePath = path.join(installDirectory, "node_modules", "@eff3ct", "agent-foundry");
       const installedCli = path.join(packagePath, "dist", "index.js");
-      const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--non-interactive"], { cwd: root })
+      const preview = JSON.parse((await execFileAsync(process.execPath, [installedCli, "plan", "--target", target, "--config", config, "--non-interactive"], { cwd: root })).stdout);
+      const result = await execFileAsync(process.execPath, [installedCli, "apply", "--target", target, "--config", config, "--non-interactive", "--accept-plan", preview.plan_digest], { cwd: root })
         .then((value) => ({ ...value, code: 0 }))
         .catch((error) => ({ stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.code }));
       assert.equal(result.code, 0, result.stderr);

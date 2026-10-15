@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import {
-  cliInvocation,
   deterministicConfiguration,
   verifyPackageConsumers,
 } from "../scripts/package-consumer-verify.mjs";
@@ -16,25 +15,6 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceSha = "a".repeat(40);
 
-test("registry invocations retain apply, verify, and noop command arguments for both consumers", () => {
-  const spec = "@eff3ct/agent-foundry@0.1.0";
-  const target = path.join(os.tmpdir(), "consumer-project");
-  const configPath = path.join(os.tmpdir(), "consumer-answers.json");
-  for (const [consumer, name, prefix] of [
-    ["pnpm-dlx", "pnpm", ["dlx", "--package", spec, "foundry"]],
-    ["npx", "npx", ["--yes", "--package", spec, "foundry"]],
-  ]) {
-    for (const [command, launchAgent, expectedStatus] of [
-      ["apply", true, "applied"],
-      ["verify", false, "verified"],
-      ["apply", false, "noop"],
-    ]) {
-      const invocation = cliInvocation({ consumer, spec, command, target, configPath, selectedAgent: true, launchAgent });
-      assert.equal(invocation.name, name);
-      assert.deepEqual(invocation.args, [...prefix, command, "--target", target, "--config", configPath, "--non-interactive", "--agent", "codex", ...(launchAgent ? ["--launch-agent"] : [])], `${consumer} ${expectedStatus}`);
-    }
-  }
-});
 
 test("offline package consumers verify exact identity, apply/verify, noop, startup, and tree equality", async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "factory-package-consumer-"));
@@ -61,21 +41,13 @@ test("offline package consumers verify exact identity, apply/verify, noop, start
       assert.equal(consumer.apply.status, "applied");
       assert.equal(consumer.verify.status, "verified");
       assert.equal(consumer.rerun.status, "noop");
+      assert.equal(consumer.apply.integrity, "verified");
+      assert.equal(consumer.apply.setup, "incomplete");
       assert.equal(consumer.generated_tree_digest, consumer.rerun_tree_digest);
       assert.deepEqual(consumer.identity.release, result.release);
       assert.match(consumer.identity.tarball_digest, /^sha256:[0-9a-f]{64}$/u);
       assert.match(consumer.identity.payload.digest, /^sha256:[0-9a-f]{64}$/u);
       assert.match(consumer.identity.tree_digest, /^sha256:[0-9a-f]{64}$/u);
-      const project = path.join(parent, "evidence", consumer.consumer, "project");
-      const readme = await readFile(path.join(project, "README.md"), "utf8");
-      const agent = await readFile(path.join(project, "AGENT.md"), "utf8");
-      assert.match(readme, /^# /u);
-      assert.match(readme, /\.factory\/creator\/state\.json/u);
-      assert.match(agent, /\.factory\/templates\/agent-runbook\.md/u);
-      assert.match(agent, /Protected `status:approved` gate/u);
-      for (const text of [readme, agent]) assert.doesNotMatch(text, /This is a template|creator package is the primary project path|Archetype maintenance|Project initialization \(`SETUP`\)|npm-release\.yml|<EXACT_VERSION>/u);
-      const startup = await readFile(path.join(parent, "evidence", consumer.consumer, "agent-startup.txt"), "utf8");
-      assert.equal(startup, `--cd\n${path.join(parent, "evidence", consumer.consumer, "project")}\n`);
     }
   } finally {
     await rm(parent, { recursive: true, force: true });

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -19,7 +17,6 @@ const binding = (provider = "jira", board = "BOARD") => `# Bindings - mandatory 
 `;
 const identity = { provider: "jira", tracker: "organization/project", trackerKey: "BOARD", nativeId: "NATIVE-42" };
 const entry = { kind: "comment", operationId: "run-42", status: "In Progress", content: "Native handoff" };
-const exec = promisify(execFile);
 
 const fixture = async (text, ports) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "task-adapter-"));
@@ -162,28 +159,4 @@ test("structured handoff validates blocked continuation and unsupported writes d
     await assert.rejects(adapter.write(identity, { ...entry, kind: "create" }), { code: "operation_invalid" });
     assert.equal(writes, 0);
   } finally { await f.cleanup(); }
-});
-
-test("fresh offline creator target retains an executable adapter without src or local task files", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "adapter-generated-"));
-  const target = path.join(root, "project");
-  const config = path.join(root, "answers.json");
-  try {
-    await writeFile(config, JSON.stringify({ values: {
-      PROJECT_NAME: "Offline adapter proof", TASK_TRACKER: "jira", TRACKER: "organization/project", TRACKER_KEY: "BOARD",
-    } }));
-    const { stdout } = await exec(process.execPath, [new URL("../dist/index.js", import.meta.url).pathname,
-      "apply", "--target", target, "--config", config, "--non-interactive"]);
-    assert.equal(JSON.parse(stdout).verification, "verified");
-    const retained = path.join(target, ".factory/scripts/task-adapter.mjs");
-    assert.equal((await stat(retained)).isFile(), true);
-    assert.match(await readFile(path.join(target, "docs/bindings.md"), "utf8"), /Task provider \(TASK_TRACKER\): jira/u);
-    await assert.rejects(stat(path.join(target, "src")));
-    await assert.rejects(stat(path.join(target, "odd")));
-    const { createTaskAdapter: generated } = await import(new URL(`file://${retained}`));
-    const adapter = await generated({ projectRoot: target, ports: { jira: {
-      read: async () => ({ identity, status: "In Progress", entries: [] }),
-    } } });
-    assert.equal((await adapter.read(identity)).identity.nativeId, "NATIVE-42");
-  } finally { await rm(root, { recursive: true, force: true }); }
 });

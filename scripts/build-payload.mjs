@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { chmod, copyFile, mkdir, readFile, readdir, rm, stat, lstat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { readProcedureSources } from "./procedure-sources.mjs";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SCRIPT_DIR, "..");
-const PAYLOAD_VERSION = "1.0.0";
+const PAYLOAD_VERSION = "2.0.0";
 
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
@@ -66,8 +67,6 @@ export const payloadCandidates = async (root, ownership) => {
       }
     }
   }
-  candidates.add("placeholders.json");
-  candidates.add("archetype-ownership.json");
   return [...candidates].sort();
 };
 
@@ -104,6 +103,7 @@ export const buildPayload = async ({ root = ROOT, dist = path.join(root, "dist")
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   const ownership = JSON.parse(await readFile(path.join(root, "archetype-ownership.json"), "utf8"));
   const declaration = JSON.parse(await readFile(path.join(root, "package", "payload-files.json"), "utf8"));
+  await readProcedureSources(path.join(root, "foundation/matt-first"));
   const expected = await payloadCandidates(root, ownership);
   const declared = declaration.paths;
   validateDeclaredPaths(declared, expected);
@@ -120,10 +120,11 @@ export const buildPayload = async ({ root = ROOT, dist = path.join(root, "dist")
     });
   }
   const manifest = {
-    schema_version: 1,
+    schema_version: 2,
     package_name: packageJson.name,
     package_version: packageJson.version,
     payload_version: declaration.payload_version,
+    profile: "matt-first",
     files,
     payload_digest: manifestDigest(declaration.payload_version, files),
   };

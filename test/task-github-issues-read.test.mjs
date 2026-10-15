@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
-import os from "node:os";
-import path from "node:path";
 import { test } from "node:test";
-import { createTaskAdapter } from "../scripts/task-adapter.mjs";
 import { createGitHubIssuesReadPort } from "../scripts/task-github-issues-read.mjs";
 
-const exec = promisify(execFile);
 const identity = { provider: "github-issues", tracker: "acme/work", trackerKey: "acme/work", nativeId: "17" };
 const url = "https://api.github.com/repos/acme/work/issues/17";
 const handoff = { phase: "VERIFICATION", status: "ACTIVE", completedWork: "Reviewed read path", nextAction: "Run tests", branch: "feat/read", commit: "WIP", verification: "Not yet run", resumeEvidence: "Inspect native comments" };
@@ -86,34 +79,4 @@ test("correlated handoffs require shared complete evidence and unique canonical 
   for (const body of ['task-adapter:v1:{bad', 'task-adapter:v1:{"operationId":"x","operationId":"y","kind":"comment","content":"c"}']) {
     await assert.rejects(createGitHubIssuesReadPort(fake({ ...issue, comments: 1 }, [{ ...comments[0], body }])).read(identity), { code: "readback_mismatch" });
   }
-});
-
-test("fresh generated target retains port and dispatches only the selected binding", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "github-issues-generated-"));
-  try {
-    const target = path.join(root, "project");
-    const config = path.join(root, "answers.json");
-    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "GitHub Issues read proof", TASK_TRACKER: "github-issues", TRACKER: "acme/work", TRACKER_KEY: "acme/work" } }));
-    const { stdout } = await exec(process.execPath, [new URL("../dist/index.js", import.meta.url).pathname, "apply", "--target", target, "--config", config, "--non-interactive"]);
-    assert.equal(JSON.parse(stdout).verification, "verified");
-    assert.match(await readFile(path.join(target, "docs/bindings.md"), "utf8"), /Task provider \(TASK_TRACKER\): github-issues/u);
-    await assert.rejects(stat(path.join(target, "src")));
-    await assert.rejects(stat(path.join(target, "odd")));
-    const { createTaskAdapter: generated } = await import(new URL(`file://${target}/.factory/scripts/task-adapter.mjs`));
-    const { createGitHubIssuesReadPort: generatedPort } = await import(new URL(`file://${target}/.factory/scripts/task-github-issues-read.mjs`));
-    let jiraCalls = 0;
-    const adapter = await generated({ projectRoot: target, ports: { "github-issues": generatedPort(fake()), jira: { read: async () => { jiraCalls++; throw Error("fallback"); } } } });
-    assert.equal((await adapter.read(identity)).entries[1].operationId, "phase-1");
-    await assert.rejects(adapter.write(identity, { kind: "comment", operationId: "new", status: "open", content: "no write" }), { code: "native_unsupported" });
-    assert.equal(jiraCalls, 0);
-    const other = path.join(root, "other");
-    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Jira dispatch proof", TASK_TRACKER: "jira", TRACKER: "jira-project:tenant", TRACKER_KEY: "OPS" } }));
-    assert.equal(JSON.parse((await exec(process.execPath, [new URL("../dist/index.js", import.meta.url).pathname,
-      "apply", "--target", other, "--config", config, "--non-interactive"])).stdout).verification, "verified");
-    assert.match(await readFile(path.join(other, "docs/bindings.md"), "utf8"), /Task provider \(TASK_TRACKER\): jira/u);
-    let githubCalls = 0;
-    const jiraAdapter = await generated({ projectRoot: other, ports: { "github-issues": generatedPort({ get: async () => { githubCalls++; throw Error("fallback"); } }), jira: { read: async (id) => ({ identity: id, status: "To Do", entries: [] }) } } });
-    assert.equal((await jiraAdapter.read({ provider: "jira", tracker: "jira-project:tenant", trackerKey: "OPS", nativeId: "OPS-1" })).status, "To Do");
-    assert.equal(githubCalls, 0);
-  } finally { await rm(root, { recursive: true, force: true }); }
 });

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-const usage = "Usage: create-agent-foundry [directory] [--config <file>] [--non-interactive] [--yes] [--json] [--no-color] [--reduced-motion]";
-const flags = new Set(["--non-interactive", "--yes", "--json", "--no-color", "--reduced-motion"]);
+const usage = "Usage: create-agent-foundry [directory] --config <schema-2.json> [--accept-plan <sha256:digest>] [--non-interactive] [--json] [--no-color] [--reduced-motion]";
+const flags = new Set(["--non-interactive", "--json", "--no-color", "--reduced-motion"]);
 const args = process.argv.slice(2);
 const forwarded = [];
 const hasDirectory = Boolean(args[0] && !args[0].startsWith("-"));
@@ -10,10 +10,10 @@ const directory = hasDirectory ? args[0] : ".";
 let valid = true;
 for (let index = hasDirectory ? 1 : 0; index < args.length; index += 1) {
   const arg = args[index];
-  if (arg === "--config") {
+  if (arg === "--config" || arg === "--accept-plan") {
     const value = args[++index];
     if (!value || value.startsWith("-")) valid = false;
-    else forwarded.push("--config", value);
+    else forwarded.push(arg, value);
   } else if (flags.has(arg)) {
     forwarded.push(arg);
   } else {
