@@ -143,6 +143,10 @@ redirect writes; competing applies cannot acquire or erase another transaction's
 staging. Hosts without working directory-descriptor paths fail before writes
 rather than falling back to unsafe lexical mutation. This mechanism is exercised
 on Linux here; other environments require their own capability observation.
+New-destination acquisition retains the accepted parent until the root is opened,
+checks its identity and rechecks emptiness before staging. Journal updates finish
+all positional writes before truncation/sync; a zero-progress write fails rather
+than claiming committed recovery evidence.
 
 The exact private staged-file identities and 0600 journal path are shown before
 consent. `.factory/creator/.staging/journal.json` records the accepted candidate,
@@ -151,6 +155,9 @@ boundary. Completed journal/staged bytes remain private recovery evidence with
 `status: committed`; they are not active procedure sources or task state.
 `doctor` reads the journal and actual files, reporting applied/pending effects
 even before installed startup exists. It does not blindly replay or erase them.
+Read-only diagnosis validates retained staged bytes/modes, the journal's private
+mode, accepted candidate/file inventory, absence baseline and local-Git boundary.
+Missing or inconsistent committed recovery evidence cannot report healthy/USABLE.
 
 A filesystem compare-then-unlink cannot exclude concurrent edits. This fresh
 path therefore preserves partial files/staging on handled failure or interruption

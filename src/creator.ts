@@ -335,9 +335,20 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
 
 const inspectJournal = async (prepared: PreparedPlan) => {
   const relative = `${STAGING_DIRECTORY}/journal.json`;
-  const journal = parseJson((await regular(prepared.target, relative)).bytes, "recovery journal");
-  if (!object(journal) || journal.schema_version !== 2 || journal.profile !== "matt-first" || !Array.isArray(journal.files)
-    || journal.files.length > 1000 || !["applying", "committed"].includes(String(journal.status))) fail("journal_invalid", "unsupported recovery journal", relative);
+  const stored = await regular(prepared.target, relative).catch(() => fail("journal_invalid", "recovery journal is missing or unreadable", relative));
+  const journal = parseJson(stored.bytes, "recovery journal");
+  if (stored.mode !== 0o600 || !object(journal) || journal.schema_version !== 2 || journal.profile !== "matt-first" || !Array.isArray(journal.files)
+    || journal.files.length > 1000 || !["applying", "committed"].includes(String(journal.status))
+    || typeof journal.plan_digest !== "string" || !digestPattern.test(journal.plan_digest)
+    || journal.baseline !== "all named destination files absent"
+    || JSON.stringify(journal.candidate) !== JSON.stringify(prepared.envelope.candidate)
+    || !Array.isArray(journal.applied)
+    || !journal.applied.every((entry, index) => entry === prepared.files[index]?.relativePath)
+    || journal.applied.length > prepared.files.length
+    || (journal.status === "committed" && journal.applied.length !== prepared.files.length)
+    || !(prepared.config!.initialize_git
+      ? (journal.status === "committed" ? ["verified"] : ["not-started", "attempted", "verified"])
+      : ["not-selected"]).includes(String(journal.local_git))) fail("journal_invalid", "recovery identity, mode, baseline or effect boundary differs from accepted configuration", relative);
   const files: PayloadFile[] = [];
   const seen = new Set<string>();
   for (const entry of journal.files) {
@@ -347,14 +358,25 @@ const inspectJournal = async (prepared: PreparedPlan) => {
     seen.add(entry.path);
     files.push({ path: entry.path, mode: entry.mode, size: entry.size, sha256: entry.sha256 });
   }
+  if (JSON.stringify(files) !== JSON.stringify(prepared.files.map(fileIdentity))) fail("journal_invalid", "recovery file inventory differs from accepted candidate/configuration", relative);
   const applied: string[] = [];
   const pending: string[] = [];
   for (const file of files) {
     try {
       const current = await regular(prepared.target, file.path);
-      if (current.mode === parseInt(file.mode, 8) && current.bytes.length === file.size && hash(current.bytes) === file.sha256) applied.push(file.path);
-      else pending.push(file.path);
+      if (current.mode === parseInt(file.mode, 8) && current.bytes.length === file.size && hash(current.bytes) === file.sha256) {
+        applied.push(file.path);
+      } else pending.push(file.path);
     } catch { pending.push(file.path); }
+  }
+  if (journal.status === "committed") {
+    for (const file of files) {
+      // Report ordinary destination drift through the existing owned-file checks.
+      if (pending.includes(file.path)) continue;
+      const stagedPath = `${STAGING_DIRECTORY}/files/${file.path}`;
+      const staged = await regular(prepared.target, stagedPath).catch(() => fail("journal_invalid", "retained staged recovery file is missing or unreadable", stagedPath));
+      if (staged.mode !== parseInt(file.mode, 8) || staged.bytes.length !== file.size || hash(staged.bytes) !== file.sha256) fail("journal_invalid", "retained staged recovery bytes or mode differ", `${STAGING_DIRECTORY}/files/${file.path}`);
+    }
   }
   return { files, applied, pending, recovery: { journal: relative, status: String(journal.status), local_git: String(journal.local_git),
     candidate: journal.candidate, baseline: journal.baseline } };
@@ -385,18 +407,28 @@ export const applyPlan = async (preview: PreparedPlan, acceptedDigest: string): 
       if (!named.isFile() || held.dev !== named.dev || held.ino !== named.ino) fail("journal_replaced", "journal pathname was replaced; held recovery bytes retained without following replacement", journalPath);
     });
     const bytes = json(journal);
-    await journalHandle!.write(bytes, 0, bytes.length, 0);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const { bytesWritten } = await journalHandle!.write(bytes, offset, bytes.length - offset, offset);
+      if (bytesWritten === 0) fail("journal_write_failed", "journal write made no progress; recovery evidence is incomplete", journalPath);
+      offset += bytesWritten;
+    }
     await journalHandle!.truncate(bytes.length);
     await journalHandle!.sync();
   };
   try {
     if (!prepared.targetExisted) {
       const parent = await AnchoredDirectory.open(path.dirname(prepared.target), prepared.baseline);
-      try { await parent.parent(path.basename(prepared.target), false, (leaf) => mkdir(leaf, { mode: 0o755 })); }
-      finally { await parent.handle.close(); }
-    }
-    root = await AnchoredDirectory.open(prepared.target, prepared.targetExisted ? prepared.baseline : undefined);
+      try {
+        root = await parent.parent(path.basename(prepared.target), false, async (leaf) => {
+          await mkdir(leaf, { mode: 0o755 });
+          const created = await lstat(leaf);
+          return AnchoredDirectory.open(leaf, created);
+        });
+      } finally { await parent.handle.close(); }
+    } else root = await AnchoredDirectory.open(prepared.target, prepared.baseline);
     await root.matchesRoot(prepared.target);
+    if ((await readdir(root.location)).length) fail("plan_stale", "fresh destination changed before acquisition; existing content is not authorized");
     // The staging leaf is acquired exclusively. A competing apply never acquires or cleans another transaction.
     await root.parent(STAGING_DIRECTORY, true, (leaf) => mkdir(leaf, { mode: 0o700 }));
     stageOwned = true;

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { renameSync, symlinkSync, watch } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import creator from "../dist/creator.js";
 
@@ -213,4 +213,113 @@ test("a competing accepted apply cannot acquire or erase another invocation's st
   const journal = JSON.parse(await readFile(path.join(target, ".factory/creator/.staging/journal.json")));
   assert.equal(journal.status, "committed");
   assert.equal(journal.applied.length, plan.files.length);
+});
+
+test("a newly created root replaced before acquisition does not authorize existing content", async (t) => {
+  const { directory, target, configPath } = await fixture(t);
+  const victim = path.join(directory, "victim");
+  await mkdir(victim);
+  await writeFile(path.join(victim, "sentinel.txt"), "unchanged\n");
+  let replaced = false;
+  const watcher = watch(directory, (_event, filename) => {
+    if (!replaced && filename === "project") {
+      replaced = true;
+      renameSync(target, path.join(directory, "original-target"));
+      renameSync(victim, target);
+    }
+  });
+  t.after(() => watcher.close());
+  const plan = await creator.preparePlan({ command: "apply", target, configPath });
+  await creator.applyPlan(plan, plan.envelope.plan_digest).catch(() => undefined);
+  assert.equal(replaced, true);
+  assert.deepEqual(await readdir(target), ["sentinel.txt"]);
+  assert.equal(await readFile(path.join(target, "sentinel.txt"), "utf8"), "unchanged\n");
+});
+
+test("short journal writes still produce complete committed recovery evidence", async (t) => {
+  const { directory, target, configPath } = await fixture(t);
+  const probe = await open(path.join(directory, "probe"), "wx");
+  const prototype = Object.getPrototypeOf(probe);
+  await probe.close();
+  const originalWrite = prototype.write;
+  t.mock.method(prototype, "write", function (buffer, offset, length, position) {
+    return originalWrite.call(this, buffer, offset, Math.min(length, 1024), position);
+  });
+  const plan = await creator.preparePlan({ command: "apply", target, configPath });
+  const result = await creator.applyPlan(plan, plan.envelope.plan_digest);
+  assert.equal(result.status, "applied");
+  const journal = JSON.parse(await readFile(path.join(target, ".factory/creator/.staging/journal.json")));
+  assert.equal(journal.status, "committed");
+  assert.deepEqual(journal.applied, plan.files.map((file) => file.relativePath));
+});
+
+test("missing or inconsistent private recovery evidence cannot be reported healthy", async (t) => {
+  for (const defect of ["staged-file", "journal-mode", "candidate", "baseline", "local-git"]) {
+    const { target, configPath } = await fixture(t);
+    const plan = await creator.preparePlan({ command: "apply", target, configPath });
+    await creator.applyPlan(plan, plan.envelope.plan_digest);
+    const journalPath = path.join(target, ".factory/creator/.staging/journal.json");
+    if (defect === "staged-file") await rm(path.join(target, ".factory/creator/.staging/files/AGENT.md"));
+    else if (defect === "journal-mode") await chmod(journalPath, 0o644);
+    else {
+      const journal = JSON.parse(await readFile(journalPath));
+      if (defect === "candidate") journal.candidate.candidate_digest = `sha256:${"0".repeat(64)}`;
+      if (defect === "baseline") journal.baseline = "unknown";
+      if (defect === "local-git") journal.local_git = "verified";
+      await writeFile(journalPath, `${JSON.stringify(journal, null, 2)}\n`);
+    }
+    const diagnosis = await creator.doctor(await creator.preparePlan({ command: "doctor", target, configPath }));
+    assert.equal(diagnosis.integrity, "failed", defect);
+    const observed = await exec(process.execPath, [path.join(target, "start.mjs"), "--json"], { cwd: target }).catch((error) => error);
+    assert.equal(observed.code, 1, defect);
+    assert.equal(JSON.parse(observed.stdout).mode, "UNSAFE", defect);
+  }
+});
+
+test("a journal write without progress cannot claim a committed installation", async (t) => {
+  const { directory, target, configPath } = await fixture(t);
+  const probe = await open(path.join(directory, "probe"), "wx");
+  const prototype = Object.getPrototypeOf(probe);
+  await probe.close();
+  t.mock.method(prototype, "write", async () => ({ bytesWritten: 0 }));
+  const plan = await creator.preparePlan({ command: "apply", target, configPath });
+  await assert.rejects(creator.applyPlan(plan, plan.envelope.plan_digest), { code: "journal_write_failed" });
+  await assert.rejects(lstat(path.join(target, "AGENT.md")), { code: "ENOENT" });
+});
+
+test("interactive consent accepts only affirmation and leaves denied, EOF and interrupted targets absent", async (t) => {
+  for (const action of ["yes", "no", "eof", "interrupt"]) {
+    const { target, configPath } = await fixture(t);
+    const child = spawn(process.execPath, [cli, "apply", "--target", target, "--config", configPath, "--no-color"], { stdio: ["pipe", "pipe", "pipe"] });
+    t.after(() => child.kill());
+    let output = "";
+    let display = "";
+    let answered = false;
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => {
+      display += chunk;
+      if (!answered && display.includes("? [y/N] ")) {
+        answered = true;
+        if (action === "interrupt") child.kill("SIGINT");
+        else child.stdin.end(action === "yes" ? "yes\n" : action === "no" ? "no\n" : "");
+      }
+    });
+    const exit = await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => resolve({ code, signal }));
+    });
+    assert.equal(answered, true, display);
+    assert.equal(exit.signal, null, action);
+    const result = JSON.parse(output);
+    if (action === "yes") {
+      assert.equal(exit.code, 0, display);
+      assert.equal(result.integrity, "verified");
+      const verified = JSON.parse((await run("verify", "--target", target, "--config", configPath, "--non-interactive")).stdout);
+      assert.equal(verified.integrity, "verified");
+    } else {
+      assert.equal(exit.code, 1, action);
+      assert.equal(result.status, "cancelled", action);
+      await assert.rejects(lstat(target), { code: "ENOENT" });
+    }
+  }
 });

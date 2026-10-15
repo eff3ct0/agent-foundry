@@ -60,15 +60,28 @@ export const detectMode = async (root) => {
       if (entry && !entry.isDirectory()) throw new Error(`unsafe directory: ${relative}`);
     }
     if (await metadata(path.join(resolved, ".factory-template-creator"))) throw new Error("legacy creator location requires explicit inspected re-adoption; no ordinary conversion");
+    let recoveryJournal;
     if (await metadata(path.join(resolved, STAGING))) {
-      const { value: journal } = await readJson(resolved, `${STAGING}/journal.json`);
-      if (journal.schema_version !== 2 || journal.profile !== "matt-first" || !["applying", "committed"].includes(journal.status) || !Array.isArray(journal.files) || journal.files.length > 1000 || !journal.files.every(identityValid)) throw new Error("invalid interruption journal; inspect locally before recovery");
+      const { value: journal, mode } = await readJson(resolved, `${STAGING}/journal.json`);
+      if (mode !== 0o600 || journal.schema_version !== 2 || journal.profile !== "matt-first" || !["applying", "committed"].includes(journal.status)
+        || !object(journal.candidate) || !/^sha256:[a-f0-9]{64}$/u.test(journal.plan_digest)
+        || journal.baseline !== "all named destination files absent" || !["not-selected", "not-started", "attempted", "verified"].includes(journal.local_git)
+        || !Array.isArray(journal.files) || journal.files.length > 1000 || !journal.files.every(identityValid)
+        || new Set(journal.files.map((file) => file.path)).size !== journal.files.length
+        || !Array.isArray(journal.applied) || journal.applied.length > journal.files.length
+        || !journal.applied.every((entry, index) => entry === journal.files[index]?.path)
+        || (journal.status === "committed" && journal.applied.length !== journal.files.length)) throw new Error("invalid recovery journal identity, mode, baseline or effect boundary; inspect locally");
+      recoveryJournal = journal;
       for (const file of journal.files) {
         try {
           const current = await regular(resolved, file.path);
           if (current.mode === parseInt(file.mode, 8) && hash(current.bytes) === file.sha256) result.applied.push(file.path);
           else result.pending.push(file.path);
         } catch { result.pending.push(file.path); }
+        if (journal.status === "committed") {
+          const staged = await regular(resolved, `${STAGING}/files/${file.path}`);
+          if (staged.mode !== parseInt(file.mode, 8) || staged.bytes.length !== file.size || hash(staged.bytes) !== file.sha256) throw new Error(`retained recovery bytes or mode differ: ${file.path}`);
+        }
       }
       if (journal.status !== "committed") return { ...result, integrity: "failed", recovery: { journal: `${STAGING}/journal.json`, local_git: journal.local_git }, diagnostics: [{ code: "partial_apply", path: STAGING, message: "Interrupted/uncertain transaction. Inspect journal and actual touched bytes/modes/local Git before separately authorized recovery; no blind replay." }] };
     }
@@ -84,6 +97,14 @@ export const detectMode = async (root) => {
       || !Array.isArray(provenance.files) || provenance.files.length < 6 || provenance.files.length > 1000
       || !Array.isArray(provenance.method_entries) || !object(provenance.next_action) || provenance.next_action.started !== false
       || typeof provenance.readiness_record !== "string" || !provenance.readiness_record.startsWith("https://")) throw new Error("unsupported or malformed Matt-first provenance");
+    if (recoveryJournal) {
+      const expected = [...provenance.files, { path: PROVENANCE, mode: "0644", size: provenanceBytes.length, sha256: hash(provenanceBytes) }].sort((a, b) => a.path.localeCompare(b.path, "en"));
+      if (JSON.stringify(recoveryJournal.candidate) !== JSON.stringify(provenance.candidate)
+        || !recoveryJournal.files.some((file) => file.path === STATE)
+        || JSON.stringify(recoveryJournal.files.filter((file) => file.path !== STATE)) !== JSON.stringify(expected)
+        || recoveryJournal.local_git !== (provenance.configuration.initialize_git ? "verified" : "not-selected")) throw new Error("recovery evidence differs from installed candidate/configuration/file boundaries");
+      if (provenance.configuration.initialize_git && !(await metadata(path.join(resolved, ".git")))?.isDirectory()) throw new Error("verified local Git boundary is missing or unsafe");
+    }
     const seen = new Set();
     for (const file of provenance.files) {
       if (!identityValid(file) || seen.has(file.path) || file.path === PROVENANCE || file.path.startsWith(".factory/creator/") || file.path.startsWith(".factory-template-creator/")) throw new Error("invalid/duplicate/reserved provenance file boundary");

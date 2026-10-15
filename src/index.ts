@@ -12,8 +12,10 @@ const question = async (prompt: string): Promise<boolean> => {
   const terminal = createInterface({ input: stdin, output: stderr });
   try {
     return await new Promise<boolean>((resolve) => {
-      terminal.once("close", () => resolve(false));
-      terminal.once("SIGINT", () => resolve(false));
+      const cancel = () => resolve(false);
+      process.once("SIGINT", cancel);
+      terminal.once("close", () => { process.off("SIGINT", cancel); cancel(); });
+      terminal.once("SIGINT", cancel);
       terminal.question(prompt, (answer) => resolve(/^y(?:es)?$/iu.test(answer.trim())));
     });
   } finally { terminal.close(); }
