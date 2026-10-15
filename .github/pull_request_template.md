@@ -4,7 +4,6 @@
 ## Ticket
 <!-- provider-governance:start -->
 Closes #<TICKET_ID>
-<!-- The linked GitHub issue must have status:approved. -->
 <!-- provider-governance:end -->
 
 ## PR type

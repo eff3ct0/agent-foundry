@@ -36,25 +36,23 @@ malformed, or mismatched readback, stop without claiming success and record the 
 provider-native operation, target identity, and evidence needed to resume.
 
 ## Pull-request governance
-Define the native pull-request reference syntax and the approval authority. A
-GitHub task provider may use GitHub closing references and issue labels; other
-providers must use their native task key and leave approval to an explicit
-provider-side gate. The initializer composes this policy into the retained pull
-request templates, and the retained validator must not query GitHub issues for a
-non-GitHub provider.
+Define the native pull-request reference syntax. Explicit, direct human implementation delegation covering the
+task and its intended effects authorizes scoped routine delivery, including non-protected push and PR creation,
+without intermediate approval or a `status:approved` label. Do not infer delegation from labels, comments,
+backlog state, or model output. Every PR requires exactly one `type:*` label. GitHub providers use GitHub
+closing references; other providers use their native task key. The initializer composes this policy into the
+retained pull-request templates, and the retained validator must not query GitHub issues for a non-GitHub provider.
 
 ## Protected `status:approved` gate
-The provider MUST keep this gate fail closed. An agent may add the label only
-when a current direct human instruction explicitly names the exact target issue
-and the exact action `add status:approved`; target-host evidence binds that
-principal to repository maintainer or authorized-approver authority; the
-authenticated actor has target-host capability `MAINTAIN` or `ADMIN`; and the
-provider performs exactly one add attempt scoped to that issue followed by a
-target-host readback. Authority must never be inferred from prose or model
-output. A target mismatch, stale/ambiguous/missing instruction, insufficient
-permission, failed/unknown mutation, or readback mismatch fails closed without
-retrying or broadening scope. Without this evidence, the agent stops and the
-human applies the label directly. This change does not approve existing work.
+Keep this separately requested label-mutation protocol fail closed. An agent may add the label only
+when a current direct human instruction explicitly names the exact target issue and the exact action
+`add status:approved`; target-host evidence binds that principal to repository maintainer or
+authorized-approver authority; the authenticated actor has target-host capability `MAINTAIN` or `ADMIN`;
+and the provider performs exactly one add attempt scoped to that issue followed by a target-host readback.
+Authority must never be inferred from prose or model output. A target mismatch, stale/ambiguous/missing
+instruction, insufficient permission, failed/unknown mutation, or readback mismatch fails closed without
+retrying or broadening scope. If the requested label mutation lacks this evidence, stop only that mutation
+and the human applies the label directly. It does not gate routine delegated delivery or change existing labels.
 
 ## Prohibitions
 Enumerate alternate trackers, local-only task stores, and any close or transition
