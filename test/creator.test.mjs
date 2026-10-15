@@ -1709,7 +1709,6 @@ test("all task selections generate exclusive, readable provider-native bindings"
     assert.doesNotMatch(bindings, /Do not leave state only in Jira/u, provider);
     if (provider === "github-projects") {
       assert.match(bindings, /draft\s+or project-only item without a linked issue/u);
-      assert.match(bindings, /without a confirmed link and approval, block PR/u);
     }
     if (provider === "custom") assert.match(bindings, /no supported native comment or/u);
     if (provider === "jira" || provider === "linear" || provider === "custom") {
@@ -1740,7 +1739,6 @@ test("all task selections generate exclusive, readable provider-native bindings"
       for (const template of [".github/pull_request_template.md", ".factory/templates/pull-request.md"]) {
         const pr = await readFile(path.join(target, template), "utf8");
         assert.ok(pr.includes(reference), `${provider}: ${template} must use native task reference`);
-        assert.doesNotMatch(pr, /Closes #|linked GitHub issue must have status:approved/u, `${provider}: ${template}`);
       }
     } else {
       for (const template of [".github/pull_request_template.md", ".factory/templates/pull-request.md"]) {

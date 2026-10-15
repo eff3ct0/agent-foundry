@@ -43,8 +43,8 @@
     {
       "path": ".github/pull_request_template.md",
       "mode": "100644",
-      "size": 1657,
-      "sha256": "4411f482f5e2fb3cb1f217ee4269ca20e562ce8c0837083bf3f0bdd7c6c58e29"
+      "size": 1597,
+      "sha256": "2efd363f15bc950f80cb400dc25188468d6e38175c1dae53d05889f154a00574"
     },
     {
       "path": ".github/workflows/governance.yml",
@@ -67,8 +67,8 @@
     {
       "path": "AGENT.md",
       "mode": "100644",
-      "size": 18766,
-      "sha256": "672fdf3aec46d32b81423c61353fb1dcaf44f8f0239cb348c1a8e23644b97ae6"
+      "size": 19171,
+      "sha256": "8e9c748efe3fa39dd338f9c5fd06db079757465f7c006c5c13bc5880afeabd12"
     },
     {
       "path": "CLAUDE.md",
@@ -133,8 +133,8 @@
     {
       "path": "docs/github-governance.md",
       "mode": "100644",
-      "size": 3028,
-      "sha256": "e098a81dae5f7a8009d9bdfb1c459ca01bd505454af607da555054bf9eb0630f"
+      "size": 3719,
+      "sha256": "a3851411deaf33fb46056230d52f26ab5bede7004052c63f17ffc6d3ccb8d788"
     },
     {
       "path": "docs/org-factory.md",
@@ -145,8 +145,8 @@
     {
       "path": "docs/workflow.md",
       "mode": "100644",
-      "size": 7476,
-      "sha256": "a12e0cae138bb35898e91247754791f43faead0569bda666eb0c3426f3c948ec"
+      "size": 7682,
+      "sha256": "bc38002b8f3c26f04b55bf2ec7c5115e983018d6a9b9497f3ce12638189bae68"
     },
     {
       "path": "hooks/README.md",
@@ -271,38 +271,38 @@
     {
       "path": "providers/task/_contract.md",
       "mode": "100644",
-      "size": 3421,
-      "sha256": "841b4bef33c6fae059c37a746e6cf5f7697a5150e040d9789dcdfb8192e3899f"
+      "size": 3755,
+      "sha256": "1d0fc0b9f9165f0004d217c8c62ae49bba262b71192b8040a8b2514591354cdb"
     },
     {
       "path": "providers/task/custom.md",
       "mode": "100644",
-      "size": 3378,
-      "sha256": "d8565cba2cd3d7e721b0fc702c81e1c5b0864a72f0f941232af90437ce920fe7"
+      "size": 3712,
+      "sha256": "ce2cadecad4e503ba465bb11f4493b2dcd71c900c4cc79ec4fb09a6aba40bc47"
     },
     {
       "path": "providers/task/github-issues.md",
       "mode": "100644",
-      "size": 4443,
-      "sha256": "8a740c86a4ad8205ecdaa304b752761a17e15614f90012789a46bb99941edab2"
+      "size": 4703,
+      "sha256": "caeddd718fa07b68ed38f1c124bb515e7f6d9573b726dfae9c7810b56d706c28"
     },
     {
       "path": "providers/task/github-projects.md",
       "mode": "100644",
-      "size": 4877,
-      "sha256": "099ad72f4eb06df7f538fd8889e558b0c4be4f8643b058e4fe1fe452e15cbd93"
+      "size": 5066,
+      "sha256": "99c6ff2125fdeb3f9bf2ceda0482a5fd518d3549135e8ea844ab395e22b516c1"
     },
     {
       "path": "providers/task/jira.md",
       "mode": "100644",
-      "size": 3443,
-      "sha256": "3b6decd86eaebfc267c45351e969cdd790dc900431ef6decebd657d38e6f3cc4"
+      "size": 3866,
+      "sha256": "7720c44665f9c813b52cac127823371079a82f95f2bf03d48747ad20bbbd101a"
     },
     {
       "path": "providers/task/linear.md",
       "mode": "100644",
-      "size": 3243,
-      "sha256": "acb587ca6e84799ecb3af3be299a41d09a93bd5e95e96271f78802c591d38b70"
+      "size": 3666,
+      "sha256": "f50ad3822d907d64a2fc8e189ade472784645edcbc7fa0455bb677603de45bc9"
     },
     {
       "path": "scripts/check-factory-layout.mjs",
@@ -337,8 +337,8 @@
     {
       "path": "scripts/typed-inherited-runtime/check-pr-governance.js",
       "mode": "100644",
-      "size": 8296,
-      "sha256": "da34121c4c5ba0dc0d49c35c46d1bd2046929b85044c796eaf39b56bd542e203"
+      "size": 7936,
+      "sha256": "715dfa75f10966ffa09167f9fa0493be774bf6b975dac197f50609320dd1135f"
     },
     {
       "path": "scripts/typed-inherited-runtime/package.json",
@@ -361,8 +361,8 @@
     {
       "path": "scripts/typed-inherited/check-pr-governance.mts",
       "mode": "100644",
-      "size": 8521,
-      "sha256": "d2a229f9c32476a82d570a8b4ccdf13d04f70537fa26e8e461b6cda2ffd8ae4a"
+      "size": 8060,
+      "sha256": "0d2f65036f0be0ac93ff6755065bbf40c95b4f5df795b29bd161670309a778b1"
     },
     {
       "path": "scripts/typed-inherited/sync-github-labels.mts",
@@ -385,8 +385,8 @@
     {
       "path": "templates/agent-runbook.md",
       "mode": "100644",
-      "size": 14848,
-      "sha256": "305c1c30b497678416959bb054057a46ccf2e17660f73b5f56ea58a9cc9d91e2"
+      "size": 14837,
+      "sha256": "eee5424e79567146df1a706370e9b26993b24af32691194e4f997089980eb9ca"
     },
     {
       "path": "templates/definition-of-done.md",
@@ -403,8 +403,8 @@
     {
       "path": "templates/pull-request.md",
       "mode": "100644",
-      "size": 1522,
-      "sha256": "1e31c40954982a72f12aa6d7ad88d28d93746f2fbcc529e12197a349482d9dd6"
+      "size": 1462,
+      "sha256": "99abea97d10da668400e69fb9504fc6a3d730dc31e0ba06fbbc33a589826342f"
     },
     {
       "path": "templates/spec.md",
@@ -419,5 +419,5 @@
       "sha256": "c1b40f6ed275378858e2058b96f2771e43e07208137d48ab121ab4fb71b81e9b"
     }
   ],
-  "payload_digest": "sha256:baa7ca4f2d2b7f13b0f2c4a63298ff47d03bd4a21202b68bd8102ece5b6c5be2"
+  "payload_digest": "sha256:ccb07c341d7848651981613cea645d202f973eb5991342b99d0baa963d8b3c36"
 }

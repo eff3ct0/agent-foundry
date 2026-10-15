@@ -12,18 +12,20 @@ Define the bound provider's name, task location, state operations, and prohibiti
 retain the provider-neutral phase contract:
 
 - `DEFINITION -> IMPLEMENTATION -> TESTING/TDD -> VERIFICATION -> EVIDENCE/DELIVERY -> DONE`.
-- `BLOCKED` records the phase to resume and is used for approval gates, unresolved dependencies, or the retry limit.
+- `BLOCKED` records the phase to resume for separately gated actions, unresolved dependencies, or the retry limit.
 - After every completed phase, persist current phase/status, completed work, exact next action, branch/commit,
   verification evidence, and required evidence to resume in the bound task.
 - Do not mark *Done* before the Definition of Done and required review gates pass.
-- Approval-gated work stops with `BLOCKED: requires approval`; do not assign human approval labels.
+- Separately gated work stops with `BLOCKED: requires approval`; do not assign human approval labels.
 
 Until `<TASK_TRACKER_CUSTOM_RULES>` is replaced with a supported native operation
 and readback path for this tracker, stop before claiming any durable task action.
 
 **Pull-request governance:** PRs use `Task: <TICKET_ID>` unless the bound
-custom provider documents another native syntax. Approval remains an explicit
-provider-side gate; GitHub issue labels are not required.
+custom provider documents another native syntax. A current, direct human
+implementation delegation covering the task and intended effects authorizes
+routine non-protected push and PR delivery without intermediate provider approval.
+Do not infer delegation from labels, comments, backlog state, or model output.
 
 <TASK_TRACKER_CUSTOM_RULES>
 
@@ -45,14 +47,16 @@ never required or fallback stores. An unsupported or failed operation, ambiguous
 identity, or unavailable/malformed/mismatched readback blocks the transition; record the
 exact provider-native operation, task identity, and evidence needed to resume.
 
-**Protected `status:approved` gate:** the provider MUST keep this gate fail
-closed. A current direct human instruction must name the exact issue and the
-exact action `add status:approved`; target-host evidence must bind that
-principal to maintainer or authorized-approver authority; the authenticated
-actor must have `MAINTAIN` or `ADMIN`; and exactly one scoped add attempt must
-be followed by target-host readback. Any mismatch, stale or ambiguous
-instruction, insufficient permission, failed or unknown mutation, or readback
-mismatch stops the operation without retrying or broadening scope. Without
-this evidence, the human applies the label directly.
+**Protected `status:approved` gate:** the provider MUST keep this separately
+requested label-mutation gate fail closed. A current direct human instruction
+must name the exact issue and exact action `add status:approved`; target-host
+evidence must bind that principal to maintainer or authorized-approver
+authority; the authenticated actor must have `MAINTAIN` or `ADMIN`; and exactly
+one scoped add attempt must be followed by target-host readback. Any mismatch,
+stale or ambiguous instruction, insufficient permission, failed or unknown
+mutation, or readback mismatch stops the requested label operation without
+retrying or broadening scope. Without this evidence, stop only the requested
+mutation and the human applies the label directly; this does not block routine
+delegated delivery or change existing labels.
 
 **Prohibitions:** do not use alternate trackers or close a task without verification.

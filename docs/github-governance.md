@@ -11,10 +11,13 @@ The workflow job context is **`validate`**. Keep the job ID and its explicit nam
 check. GitHub `main` protection requires this exact check to pass.
 
 For GitHub task providers, the validator checks the pull request closing reference, exactly one `type:*`
-label, and the linked issue's `status:approved` label. For Jira, Linear, and custom task providers, the
-initializer composes the provider's native task reference instead; approval remains an explicit gate in that
-provider and the validator does not query GitHub issues. It never assigns approval and does not replace branch
-protection.
+label, and that each linked issue can be read with the expected identity. `status:approved` is not a
+PR-delivery prerequisite and is not checked by the validator.
+For Jira, Linear, and custom task providers, the initializer composes the provider's native task reference;
+the validator checks the native reference and type label without querying GitHub issues. The validator never
+assigns approval and does not replace branch protection. Routine push and PR delivery follow the explicit
+task/effect-scoped human delegation contract; separately gated decisions and protected label mutation remain
+outside it.
 
 ## Candidate validation
 
@@ -22,6 +25,11 @@ The workflow remains `pull_request_target` so its definition is read from the tr
 out `github.event.pull_request.base.sha`. PR event fields are validation input only: the required `validate`
 check never executes a validator or reads bindings supplied by the PR. If GitHub cannot provide the base SHA,
 checkout fails closed.
+
+A candidate's passing local validation is not permission to bypass the currently effective base rules.
+When changing this policy, record any bootstrap delivery gate and the exact missing action or authority in
+the bound ticket. The revised policy takes effect through reviewed incorporation into the trusted base,
+not by using a PR's own validator as an exemption. Metadata checks do not authenticate human delegation.
 
 The candidate validator receives only the explicitly read-only workflow token. The workflow grants no write
 permissions or secrets, and checkout does not persist credentials in the trusted worktree. Do not loosen those

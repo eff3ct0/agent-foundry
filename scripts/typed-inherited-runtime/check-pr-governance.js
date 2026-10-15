@@ -32,7 +32,7 @@ export const issueNumbers = (body, repository = "") => {
     }
     return references;
 };
-export const validatePr = (pullRequest, issueLabels = {}, repository = "", provider = defaultTaskProvider) => {
+export const validatePr = (pullRequest, repository = "", provider = defaultTaskProvider) => {
     const errors = [];
     const labels = Array.isArray(pullRequest?.labels) ? pullRequest.labels.map((label) => label?.name) : [];
     if (labels.filter((label) => typeof label === "string" && label.startsWith("type:")).length !== 1) {
@@ -49,36 +49,30 @@ export const validatePr = (pullRequest, issueLabels = {}, repository = "", provi
         }
         return errors;
     }
-    const references = issueNumbers(body, repository);
-    if (references.length === 0)
+    if (issueNumbers(body, repository).length === 0)
         errors.push("PR body must contain a closing reference such as 'Closes #123'");
-    for (const number of references) {
-        if (!issueLabels[number]?.includes("status:approved"))
-            errors.push(`linked issue #${number} must have the human status:approved label`);
-    }
     return errors;
 };
-export const githubIssueLabels = async (repository, token, number, fetchImpl = fetch) => {
+export const githubIssueExists = async (repository, token, number, fetchImpl = fetch) => {
     const response = await fetchImpl(`https://api.github.com/repos/${repository}/issues/${number}`, {
         headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28" },
     });
     if (!response.ok)
         throw new Error(`GitHub issue lookup failed with status ${response.status}`);
     const issue = await response.json();
-    if (!Array.isArray(issue.labels))
-        throw new Error("GitHub issue lookup returned malformed labels");
-    return issue.labels.map((label) => label?.name).filter((label) => typeof label === "string");
+    if (!issue || typeof issue !== "object" || Array.isArray(issue) || !("number" in issue) || issue.number !== number) {
+        throw new Error("GitHub issue lookup returned malformed issue");
+    }
 };
 export const validateEvent = async (event, repository, token, options = {}) => {
     const provider = options.provider ?? await boundTaskProvider();
     const fetchImpl = options.fetchImpl ?? fetch;
     const pullRequest = event?.pull_request ?? {};
-    const issueLabels = {};
     if (githubTaskProviders.has(provider)) {
         for (const number of issueNumbers(pullRequest.body, repository))
-            issueLabels[number] = await githubIssueLabels(repository, token, number, fetchImpl);
+            await githubIssueExists(repository, token, number, fetchImpl);
     }
-    return validatePr(pullRequest, issueLabels, repository, provider);
+    return validatePr(pullRequest, repository, provider);
 };
 const selfCheck = async () => {
     const workflow = await readFile(path.join(root, ".github", "workflows", "governance.yml"), "utf8");
@@ -112,9 +106,9 @@ const selfCheck = async () => {
         }
     }
     const valid = { body: "Summary\n\nCloses #42.", labels: [{ name: "type:product" }] };
-    assert.deepEqual(validatePr(valid, { 42: ["status:approved"] }, "acme/example", "github-issues"), []);
+    assert.deepEqual(validatePr(valid, "acme/example", "github-issues"), []);
     assert.deepEqual(issueNumbers("Fixes acme/example#7 and closes other/repo#8", "acme/example"), [7]);
-    assert.deepEqual(validatePr({ body: "Jira: FEX-1", labels: [{ name: "type:product" }] }, {}, "", "jira"), []);
+    assert.deepEqual(validatePr({ body: "Jira: FEX-1", labels: [{ name: "type:product" }] }, "", "jira"), []);
     const directory = await mkdtemp(path.join(os.tmpdir(), "governance-bindings-"));
     try {
         await mkdir(path.join(directory, "docs"));
