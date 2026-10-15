@@ -308,7 +308,10 @@ const integrateAdoption = async (prepared: PreparedPlan, files: PlannedFile[]): 
   const reviewed = new Map(adoption.rule_reviews.map((review) => [review.path, review]));
   for (const relative of new Set(["AGENT.md", "docs/bindings.md", ...reviewed.keys()])) {
     const base = await before(relative);
-    if (!base) continue;
+    if (!base) {
+      if (reviewed.has(relative)) fail("rule_review_stale", "explicitly reviewed authority is missing; reconcile and accept a new plan", relative);
+      continue;
+    }
     const review = reviewed.get(relative);
     if (!review || !review.compatible) fail("rule_conflict", "existing authority requires an exact explicit compatible-rule reconciliation; a pointer cannot override it", relative);
     if (base.sha256 !== review.sha256 || fileIdentity(base).mode !== review.mode) fail("rule_review_stale", "reviewed rule bytes or mode changed; reconcile and accept a new plan", relative);

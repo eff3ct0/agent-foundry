@@ -172,3 +172,17 @@ test("interrupted shared-block adoption retains actual effects and exact private
   assert.deepEqual(await readFile(path.join(f.target, ".factory/creator/.staging/before/AGENT.md")), Buffer.from(f.originals["AGENT.md"]));
   assert.equal(await readFile(path.join(f.target, "start.mjs"), "utf8"), f.originals["start.mjs"]);
 });
+
+test("disappearance of explicitly reviewed non-output authority invalidates acceptance", async (t) => {
+  const f = await fixture(t);
+  const relative = "rules.md";
+  const bytes = Buffer.from("Additional project authority. Nonconflicting selected procedures only.\n");
+  await writeFile(path.join(f.target, relative), bytes);
+  f.config.adoption.rule_reviews.push({ path: relative, sha256: hash(bytes), mode: "0644", compatible: true, resolution: "Reviewed exact project authority." });
+  await f.saveConfig();
+  const accepted = await creator.preparePlan(f.options);
+  assert.equal(accepted.envelope.status, "planned");
+  await rm(path.join(f.target, relative));
+  await assert.rejects(creator.applyPlan(accepted, accepted.envelope.plan_digest), { code: "plan_stale" });
+  await assert.rejects(lstat(path.join(f.target, ".factory/creator")), { code: "ENOENT" });
+});
