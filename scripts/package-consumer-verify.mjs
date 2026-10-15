@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -47,19 +47,27 @@ const commandLine = (name, args) => [name, ...args].join(" ");
 const registryFailure = (value) => /(?:E404|ENEEDAUTH|EAI_AGAIN|ENETUNREACH|ETIMEDOUT|ECONN|not in the registry|not found|registry|network|offline)/iu.test(value);
 
 export const deterministicConfiguration = Object.freeze({
-  values: Object.freeze({
-    CI_STACKS: "typescript",
-    CODE_INTELLIGENCE: "none",
-    PROJECT_NAME: "package consumer verification",
-    SECRETS_PROVIDER: "none",
-    TASK_TRACKER: "github-issues",
-  }),
+  schema_version: 2,
+  profile: "matt-first",
+  project: { name: "Isolated package content verification" },
+  binding: {
+    provider: "github-issues",
+    repository: "https://github.com/eff3ct0/agent-foundry",
+    project: "https://github.com/orgs/eff3ct0/projects/1",
+    access: "Separately authorized existing gh CLI access only; not exercised by package-content checks.",
+    recovery: "Stop affected operations and request exact binding/access repair.",
+    permissions: ["Offline isolated fixture installation only; no tracker writes or project work."],
+    approval_gates: ["No publication, approval labels, merge, global configuration or launch."],
+    documentation: { architecture: "AGENT.md", constraints: "AGENT.md", business: "AGENT.md", technical: "AGENT.md" },
+  },
+  hosts: [{ id: "plain", version: "content-check-only", route: "manual" }],
+  initialize_git: false,
+  readiness_record: "https://github.com/eff3ct0/agent-foundry/issues/407",
 });
 
 const validateConfiguration = (value) => {
-  if (!object(value) || !object(value.values) || Object.keys(value).some((key) => key !== "values")
-      || Object.keys(value.values).some((key) => typeof key !== "string" || typeof value.values[key] !== "string")) {
-    fail("invalid_configuration", "deterministic configuration is absent or malformed");
+  if (!object(value) || value.schema_version !== 2 || value.profile !== "matt-first") {
+    fail("invalid_configuration", "requires explicit schema-2 Matt-first fixture configuration; legacy answers are not converted");
   }
   return value;
 };
@@ -101,7 +109,7 @@ const parseEnvelope = (result, expectedStatus, label, requireVerification = true
   if (!result.ok) fail(registryFailure(result.error) ? "registry_unavailable" : "consumer_failed", `${label} failed: ${result.error}`);
   let envelope;
   try { envelope = JSON.parse(result.stdout); } catch { fail("consumer_failed", `${label} did not emit JSON`); }
-  if (!object(envelope) || envelope.status !== expectedStatus || requireVerification && envelope.verification !== "verified") {
+  if (!object(envelope) || envelope.schema_version !== 2 || envelope.status !== expectedStatus || requireVerification && envelope.integrity !== "verified") {
     fail("consumer_failed", `${label} returned an unverified ${envelope?.status ?? "unknown"} result`);
   }
   return envelope;
@@ -150,20 +158,10 @@ const fetchRegistryTarball = async ({ spec, directory, environment, executeComma
   return path.join(directory, tarballs[0]);
 };
 
-const createAgentFixture = async (directory) => {
-  const bin = path.join(directory, "agent-bin");
-  const log = path.join(directory, "agent-startup.txt");
-  await mkdir(bin, { recursive: true });
-  const quoted = `'${log.replaceAll("'", "'\\''")}'`;
-  await writeFile(path.join(bin, "codex"), `#!/bin/sh\nprintf '%s\\n' "$@" > ${quoted}\n`, "utf8");
-  await chmod(path.join(bin, "codex"), 0o755);
-  return { bin, log };
-};
 
-export const cliInvocation = ({ consumer, spec, cliPath, command, target, configPath, selectedAgent, launchAgent }) => {
+export const cliInvocation = ({ consumer, spec, cliPath, command, target, configPath, acceptedDigest }) => {
   const suffix = [command, "--target", target, "--config", configPath, "--non-interactive"];
-  if (selectedAgent) suffix.push("--agent", "codex");
-  if (command === "apply" && launchAgent) suffix.push("--launch-agent");
+  if (acceptedDigest) suffix.push("--accept-plan", acceptedDigest);
   if (cliPath) return { name: process.execPath, args: [cliPath, ...suffix] };
   if (consumer === "pnpm-dlx") return { name: "pnpm", args: ["dlx", "--package", spec, "foundry", ...suffix] };
   return { name: "npx", args: ["--yes", "--package", spec, "foundry", ...suffix] };
@@ -176,25 +174,24 @@ const runConsumer = async ({ consumer, spec, tarballPath, localTarballPath, pack
   const target = path.join(directory, "project");
   const configPath = path.join(directory, "answers.json");
   await writeJson(configPath, configuration);
-  const agent = await createAgentFixture(directory);
-  const consumerEnvironment = allowlistedEnvironment({ ...environment, PATH: `${agent.bin}${path.delimiter}${environment.PATH ?? process.env.PATH ?? ""}` });
+  const consumerEnvironment = allowlistedEnvironment(environment);
   let packagePath;
   let cliPath;
   ({ packagePath } = await installTarball({ tarballPath, directory: path.join(directory, "identity"), packageName, packageVersion, environment: consumerEnvironment, executeCommand }));
   if (localTarballPath) ({ cliPath } = await installTarball({ tarballPath: localTarballPath, directory, packageName, packageVersion, environment: consumerEnvironment, executeCommand }));
 
-  const invoke = async (command, launchAgent) => {
-    const invocation = cliInvocation({ consumer, spec, cliPath, command, target, configPath, selectedAgent: true, launchAgent });
+  const invoke = async (command, expectedStatus, acceptedDigest) => {
+    const invocation = cliInvocation({ consumer, spec, cliPath, command, target, configPath, acceptedDigest });
     const result = await run({ ...invocation, cwd: directory, environment: consumerEnvironment, executeCommand });
-    return { result, envelope: parseEnvelope(result, command === "verify" ? "verified" : command === "apply" && launchAgent ? "applied" : command === "apply" ? "noop" : "verified", `${consumer} ${command}`, command !== "verify") };
+    return { result, envelope: parseEnvelope(result, expectedStatus, `${consumer} ${command}`, !["plan", "dry-run"].includes(command)) };
   };
 
-  const applied = await invoke("apply", true);
-  const agentArgs = (await readFile(agent.log, "utf8").catch(() => "")).trim().split("\n").filter(Boolean);
-  if (agentArgs.length !== 2 || agentArgs[0] !== "--cd" || agentArgs[1] !== target) fail("consumer_failed", `${consumer} did not start the selected agent in the generated project`);
+  const preview = await invoke("plan", "planned");
+  const applied = await invoke("apply", "applied", preview.envelope.plan_digest);
   const identity = packagePath ? await consumerArtifactIdentity({ tarballPath, packagePath, projectPath: target, sourceSha, release }) : undefined;
-  const verified = await invoke("verify", false);
-  const rerun = await invoke("apply", false);
+  const verified = await invoke("verify", "verified");
+  const rerunPreview = await invoke("plan", "noop");
+  const rerun = await invoke("apply", "noop", rerunPreview.envelope.plan_digest);
   const rerunIdentity = packagePath ? await consumerArtifactIdentity({ tarballPath, packagePath, projectPath: target, sourceSha, release }) : undefined;
   if (!identity || !rerunIdentity || identity.tree_digest !== rerunIdentity.tree_digest) fail("tree_digest_mismatch", `${consumer} generated-tree digest changed on rerun`);
   return {
@@ -202,6 +199,7 @@ const runConsumer = async ({ consumer, spec, tarballPath, localTarballPath, pack
     mode: localTarballPath ? "local-tarball" : "registry",
     package_spec: spec,
     status: "passed",
+    scope: "package-content and fresh-file integrity only; independent host/provider/readiness NOT exercised",
     identity,
     apply: applied.envelope,
     verify: verified.envelope,

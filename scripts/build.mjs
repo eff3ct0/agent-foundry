@@ -1,7 +1,8 @@
-import { chmod, readFile, rm } from "node:fs/promises";
+import { chmod, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { buildPayload } from "./build-payload.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -25,3 +26,22 @@ await verifyTypedRuntime(path.join(root, "scripts/typed-inherited"), path.join(r
 
 await chmod(path.join(dist, "index.js"), 0o755);
 await buildPayload({ root, dist });
+const engineFiles = {};
+for (const name of (await readdir(dist)).filter((entry) => entry.endsWith(".js")).sort()) {
+  engineFiles[name] = createHash("sha256").update(await readFile(path.join(dist, name))).digest("hex");
+}
+const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+if (revision.status !== 0 || !/^[a-f0-9]{40}\s*$/u.test(revision.stdout)) throw new Error("source revision unavailable");
+const dirty = spawnSync("git", ["diff", "--quiet", "HEAD", "--"], { cwd: root });
+if (![0, 1].includes(dirty.status)) throw new Error("source state unavailable");
+const manifest = JSON.parse(await readFile(path.join(dist, "payload-manifest.json"), "utf8"));
+const candidate = {
+  schema_version: 2,
+  package: { name: creator.name, version: creator.version },
+  source_revision: revision.stdout.trim(),
+  source_dirty: dirty.status === 1,
+  payload_digest: manifest.payload_digest,
+  engine_files: engineFiles,
+};
+candidate.candidate_digest = `sha256:${createHash("sha256").update(`${JSON.stringify(candidate, null, 2)}\n`).digest("hex")}`;
+await writeFile(path.join(dist, "candidate.json"), `${JSON.stringify(candidate, null, 2)}\n`);

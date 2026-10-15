@@ -168,24 +168,25 @@
         {"path": "package", "kind": "directory"},
         {"path": "src", "kind": "directory"},
         {"path": "initializer", "kind": "directory"},
+        {"path": "foundation", "kind": "directory"},
         {"path": "test", "kind": "directory"},
         {"path": "docs/creator.md", "kind": "file"},
         {"path": "docs/installer-ux.md", "kind": "file"},
         {"path": "docs/github-provisioning.md", "kind": "file"},
         {"path": "scripts/build-payload.mjs", "kind": "file"},
+        {"path": "scripts/procedure-sources.mjs", "kind": "file"},
         {"path": "scripts/build.mjs", "kind": "file"}
       ]
     },
     "provider_ci_recipes": {
       "disposition": "removed",
-      "payload": true,
       "paths": [
         {"path": "ci", "kind": "directory"},
         {"path": "providers", "kind": "directory"}
       ]
     },
     "inherited_generic": {
-      "disposition": "inherited",
+      "disposition": "removed",
       "paths": [
         {"path": ".github/ISSUE_TEMPLATE/bug.yml", "kind": "file"},
         {"path": ".github/ISSUE_TEMPLATE/config.yml", "kind": "file"},
@@ -220,17 +221,30 @@
         {"path": "scripts/typed-inherited/sync-github-labels.mts", "kind": "file"},
         {"path": "scripts/typed-inherited-runtime/sync-github-labels.js", "kind": "file"},
         {"path": "scripts/typed-inherited-runtime/package.json", "kind": "file"},
-        {"path": "start.mjs", "kind": "file"},
         {"path": "templates", "kind": "directory"},
         {"path": "scripts/check-factory-layout.mjs", "kind": "file"}
+      ]
+    },
+    "matt_first_inputs": {
+      "disposition": "removed",
+      "payload": true,
+      "paths": [
+        {"path": "foundation/matt-first", "kind": "directory"}
+      ]
+    },
+    "inherited_startup": {
+      "disposition": "inherited",
+      "paths": [
+        {"path": "start.mjs", "kind": "file"}
       ]
     },
     "generated_outputs": {
       "disposition": "generated",
       "paths": [
-        {"path": ".github/workflows/ci.yml", "kind": "file"},
         {"path": "docs/bindings.md", "kind": "file"},
-        {"path": ".opencode/plugins/factory-start.ts", "kind": "file"}
+        {"path": ".factory/provenance.json", "kind": "file"},
+        {"path": ".factory/procedures.md", "kind": "file"},
+        {"path": ".factory/skills", "kind": "directory"}
       ]
     }
   }

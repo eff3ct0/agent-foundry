@@ -1,296 +1,216 @@
 #!/usr/bin/env node
-import { access, lstat, readFile, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import os from "node:os";
+import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { devNull } from "node:os";
+import { promisify } from "node:util";
 
-export const STARTUP_SCHEMA_VERSION = 1;
+const runFile = promisify(execFile);
+
+export const STARTUP_SCHEMA_VERSION = 2;
 export const SELF = "SELF";
-export const SETUP = "SETUP";
-export const ONBOARDING = "ONBOARDING";
-export const WORK = "WORK";
-export const SOURCE_MARKER = "MAINTAINERS.md";
-
-const MAX_DIAGNOSTICS = 8;
-const MAX_DIAGNOSTIC_CHARS = 512;
-const MAX_JSON_BYTES = 10 * 1024 * 1024;
-const REQUIRED_WORK_FILES = [
-  "AGENT.md",
-  "docs/bindings.md",
-  "templates/agent-runbook.md",
-];
-
-const messages = {
-  [SELF]: [
-    "SELF mode - archetype development (this repo IS the template).",
-    "  - DO NOT apply the creator package to this repo: it is the source archetype.",
-    "  - Follow MAINTAINERS.md + templates/agent-runbook.md.",
-    "  - Next: choose the next actionable issue from the backlog",
-    "    (gh issue list -R eff3ct0/agent-foundry --label type:product / Project #1)",
-    "    and announce 'Working #<n>'.",
-  ].join("\n"),
-  [SETUP]: [
-    "SETUP mode - uninitialized instance (placeholders.json exists).",
-    "  - Follow docs/agent-init.md; detect the stack.",
-    "  - Use the exact-version creator package; consult docs/creator.md only when that source guide exists.",
-    "  - Review the plan, then apply and verify with the package CLI.",
-    "  - No outward action without explicit approval.",
-  ].join("\n"),
-  [ONBOARDING]: [
-    "ONBOARDING mode - created project awaiting its first-session bootstrap (state.onboarded is false).",
-    "  - Follow the 'Project bootstrap (first session)' procedure in templates/agent-runbook.md.",
-    "  - Resolve bindings in docs/bindings.md (TASK_TRACKER + TRACKER_KEY and the real repository),",
-    "    capture the project goal, and seed the first actionable tickets; optional stack scaffold.",
-    "  - Then run the completion command (the creator writes state; start.mjs does not):",
-    "    foundry onboard --complete --target <this project>",
-    "  - After it completes, node start.mjs reports WORK.",
-  ].join("\n"),
-  [WORK]: [
-    "WORK mode - initialized project (placeholders.json is absent).",
-    "  - Follow AGENT.md + templates/agent-runbook.md.",
-    "  - Next: choose the next actionable ticket from the bound tracker",
-    "    (docs/bindings.md) and announce 'Working <ID>'.",
-  ].join("\n"),
-};
-
-const bounded = (value, limit = MAX_DIAGNOSTIC_CHARS) => String(value).replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, limit);
-const diagnostic = (code, message, relativePath) => ({
-  code,
-  message: bounded(message),
-  ...(relativePath ? { path: bounded(relativePath) } : {}),
+export const INCOMPLETE = "INCOMPLETE";
+export const USABLE = "USABLE";
+export const UNSAFE = "UNSAFE";
+const PROVENANCE = ".factory/provenance.json";
+const STATE = ".factory/creator/state.json";
+const STAGING = ".factory/creator/.staging";
+const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const safeRelative = (relative) => typeof relative === "string" && relative.length > 0 && !/[\\:\u0000-\u001f]/u.test(relative)
+  && relative.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+const metadata = async (filename) => lstat(filename).catch((error) => {
+  if (error.code === "ENOENT") return undefined;
+  throw error;
 });
-
-const exists = async (file) => access(file, constants.F_OK).then(() => true).catch(() => false);
-
-const readJson = async (file, label) => {
-  const entry = await lstat(file).catch(() => undefined);
-  if (!entry?.isFile()) throw new Error(`${label} must be a regular file`);
-  if (entry.size > MAX_JSON_BYTES) throw new Error(`${label} exceeds the ${MAX_JSON_BYTES} byte limit`);
+const regular = async (root, relative) => {
+  if (!safeRelative(relative)) throw new Error(`unsafe path: ${relative}`);
+  let current = root;
+  for (const part of relative.split("/").slice(0, -1)) {
+    current = path.join(current, part);
+    const entry = await metadata(current);
+    if (entry && !entry.isDirectory()) throw new Error(`unsafe parent: ${relative}`);
+  }
+  const filename = path.join(root, relative);
+  if (!(await lstat(filename)).isFile()) throw new Error(`expected regular file, not link/directory/device: ${relative}`);
+  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    return JSON.parse(await readFile(file, "utf8"));
-  } catch {
-    throw new Error(`${label} is not valid JSON`);
-  }
+    const entry = await handle.stat();
+    if (!entry.isFile() || entry.size > 10 * 1024 * 1024) throw new Error(`expected bounded regular file: ${relative}`);
+    return { bytes: await handle.readFile(), mode: entry.mode & 0o7777 };
+  } finally { await handle.close(); }
 };
-
-export const isTemplate = async (root) => {
-  const marker = await lstat(path.join(root, SOURCE_MARKER)).catch(() => undefined);
-  return marker?.isFile() === true;
+const readJson = async (root, relative) => {
+  const file = await regular(root, relative);
+  const value = JSON.parse(file.bytes.toString("utf8"));
+  if (!file.bytes.equals(Buffer.from(`${JSON.stringify(value, null, 2)}\n`))) throw new Error(`noncanonical or duplicate JSON: ${relative}`);
+  return { value, ...file };
 };
-
-const layoutPath = async (root, relative) => {
-  const direct = path.join(root, relative);
-  if (await exists(direct)) return relative;
-  const factory = path.join(root, ".factory", relative);
-  if (await exists(factory)) return `.factory/${relative}`;
-  if (relative !== "docs/bindings.md" && await exists(path.join(root, ".factory"))) return `.factory/${relative}`;
-  return relative;
+const verifyLocalGit = async (root) => {
+  const expected = path.join(root, ".git");
+  const before = await metadata(expected);
+  if (!before?.isDirectory() || await realpath(expected) !== expected) throw new Error("accepted local Git boundary is missing, linked or unsafe");
+  const environment = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP,
+    TMPDIR: process.env.TMPDIR, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull };
+  const observed = await runFile("git", ["-C", root, "rev-parse", "--absolute-git-dir", "--show-toplevel"], { timeout: 30_000, env: environment });
+  const after = await metadata(expected);
+  if (!after?.isDirectory() || before.dev !== after.dev || before.ino !== after.ino || observed.stdout !== `${expected}\n${root}\n`
+    || await realpath(expected) !== expected) throw new Error("local Git boundary changed or resolves outside the accepted destination");
 };
+const identityValid = (file) => object(file) && safeRelative(file.path) && /^0[0-7]{3}$/u.test(file.mode)
+  && Number.isSafeInteger(file.size) && file.size >= 0 && /^[a-f0-9]{64}$/u.test(file.sha256);
+const ownershipValid = (file) => identityValid(file) && ["file", "block"].includes(file.boundary)
+  && (file.before === "absent" || (identityValid(file.before) && file.before.path === file.path))
+  && (file.boundary !== "block" || (file.before !== "absent" && object(file.block)
+    && typeof file.block.begin === "string" && typeof file.block.end === "string"
+    && /^[a-f0-9]{64}$/u.test(file.block.sha256) && file.block.context_sha256 === file.before.sha256));
 
-const setupMessage = async (root) => {
-  let message = messages[SETUP];
-  message = message.replaceAll("docs/agent-init.md", await layoutPath(root, "docs/agent-init.md"));
-  if (!(await exists(path.join(root, "docs/creator.md")))) {
-    message = message.replace("; consult docs/creator.md only when that source guide exists", " (see its installed CLI help and documentation)");
-  }
-  return message;
-};
-
-const workMessage = async (root) => {
-  let message = messages[WORK];
-  message = message.replaceAll("templates/agent-runbook.md", await layoutPath(root, "templates/agent-runbook.md"));
-  message = message.replaceAll("docs/bindings.md", await layoutPath(root, "docs/bindings.md"));
-  return message;
-};
-
-const onboardingMessage = async (root) => {
-  let message = messages[ONBOARDING];
-  message = message.replaceAll("templates/agent-runbook.md", await layoutPath(root, "templates/agent-runbook.md"));
-  message = message.replaceAll("docs/bindings.md", await layoutPath(root, "docs/bindings.md"));
-  return message;
-};
-
-const validatePlaceholders = async (root) => {
-  const value = await readJson(path.join(root, "placeholders.json"), "placeholders.json");
-  if (!value || typeof value !== "object" || !Array.isArray(value.placeholders)) {
-    throw new Error("placeholders.json must contain a placeholders array");
-  }
-};
-
-const validateCreatorState = async (root) => {
-  const newDirectory = path.join(root, ".factory/creator");
-  const legacyDirectory = path.join(root, ".factory-template-creator");
-  const factory = await lstat(path.join(root, ".factory")).catch(() => undefined);
-  if (factory && (factory.isSymbolicLink() || !factory.isDirectory())) throw new Error("factory path must be a directory");
-  const newEntry = await lstat(newDirectory).catch(() => undefined);
-  const oldEntry = await lstat(legacyDirectory).catch(() => undefined);
-  if (newEntry && oldEntry) throw new Error("both creator state locations exist");
-  const directory = newEntry ? newDirectory : legacyDirectory;
-  const entry = await lstat(directory).catch(() => undefined);
-  if (!entry) return { present: false, incomplete: false };
-  if (entry.isSymbolicLink() || !entry.isDirectory()) throw new Error("creator state path must be a directory");
-  const statePath = path.join(directory, "state.json");
-  if (!(await exists(statePath))) return { present: true, incomplete: true };
-  const state = await readJson(statePath, "creator state");
-  if (!state || typeof state !== "object" || state.schema_version !== 1 || typeof state.payload_version !== "string" || typeof state.payload_digest !== "string" || typeof state.config_digest !== "string" || !Array.isArray(state.owned_files) || (state.onboarded !== undefined && typeof state.onboarded !== "boolean")) {
-    throw new Error("creator state is malformed");
-  }
-  // onboarded === false => not yet onboarded (ONBOARDING); true OR absent => onboarded (WORK).
-  return { present: true, incomplete: false, directory: newEntry ? ".factory/creator" : ".factory-template-creator", onboarded: state.onboarded };
-};
-
-const workFiles = async (root) => {
-  const paths = [];
-  for (const relative of REQUIRED_WORK_FILES) paths.push(await layoutPath(root, relative));
-  return paths;
-};
-
+export const isTemplate = async (root) => (await metadata(path.join(root, "MAINTAINERS.md")))?.isFile() === true
+  && (await regular(root, "MAINTAINERS.md")).bytes.toString("utf8").startsWith("# MAINTAINERS - Agent Foundry source governance\n");
 export const detectMode = async (root) => {
   const resolved = path.resolve(root);
-  const entry = await lstat(resolved).catch(() => undefined);
-  if (!entry?.isDirectory()) return { mode: "ERROR", status: "error", diagnostics: [diagnostic("workspace_invalid", "startup root must be a directory")] };
-  if (await isTemplate(resolved)) return { mode: SELF, status: "ready", diagnostics: [] };
-
-  const placeholders = await exists(path.join(resolved, "placeholders.json"));
-  if (placeholders) {
-    try {
-      await validatePlaceholders(resolved);
-      if (!(await exists(path.join(resolved, "docs/agent-init.md"))) && !(await exists(path.join(resolved, ".factory/docs/agent-init.md")))) {
-        const topic = await layoutPath(resolved, "docs/agent-init.md");
-        return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("context_missing", `required setup topic is missing: ${topic}; restore the template-owned file before continuing creator setup`, topic)] };
+  const result = { mode: INCOMPLETE, status: "incomplete", integrity: "not-checked", setup: "incomplete", diagnostics: [], applied: [], pending: [] };
+  try {
+    const rootIdentity = await metadata(resolved);
+    if (!rootIdentity?.isDirectory() || await realpath(resolved) !== resolved) throw new Error("startup root must be a real directory without symlink parents");
+    if (await isTemplate(resolved)) return { ...result, mode: SELF, status: "source" };
+    for (const relative of [".factory", ".factory/creator", STAGING, ".factory-template-creator"]) {
+      const entry = await metadata(path.join(resolved, relative));
+      if (entry && !entry.isDirectory()) throw new Error(`unsafe directory: ${relative}`);
+    }
+    if (await metadata(path.join(resolved, ".factory-template-creator"))) throw new Error("legacy creator location requires explicit inspected re-adoption; no ordinary conversion");
+    let recoveryJournal;
+    if (await metadata(path.join(resolved, STAGING))) {
+      const { value: journal, mode } = await readJson(resolved, `${STAGING}/journal.json`);
+      if (mode !== 0o600 || journal.schema_version !== 2 || journal.profile !== "matt-first" || !["applying", "committed"].includes(journal.status)
+        || !object(journal.candidate) || !/^sha256:[a-f0-9]{64}$/u.test(journal.plan_digest)
+        || !(journal.baseline === "all named destination files absent" || (Array.isArray(journal.baseline)
+          && journal.baseline.every(ownershipValid) && new Set(journal.baseline.map((file) => file.path)).size === journal.baseline.length))
+        || !["not-selected", "not-started", "attempted", "verified"].includes(journal.local_git)
+        || !Array.isArray(journal.files) || journal.files.length > 1000 || !journal.files.every(identityValid)
+        || new Set(journal.files.map((file) => file.path)).size !== journal.files.length
+        || !Array.isArray(journal.applied) || journal.applied.length > journal.files.length
+        || !journal.applied.every((entry, index) => entry === journal.files[index]?.path)
+        || (journal.status === "committed" && journal.applied.length !== journal.files.length)) throw new Error("invalid recovery journal identity, mode, baseline or effect boundary; inspect locally");
+      recoveryJournal = journal;
+      for (const file of journal.files) {
+        try {
+          const current = await regular(resolved, file.path);
+          if (current.mode === parseInt(file.mode, 8) && hash(current.bytes) === file.sha256) result.applied.push(file.path);
+          else result.pending.push(file.path);
+        } catch { result.pending.push(file.path); }
+        if (journal.status === "committed") {
+          const staged = await regular(resolved, `${STAGING}/files/${file.path}`);
+          if (staged.mode !== parseInt(file.mode, 8) || staged.bytes.length !== file.size || hash(staged.bytes) !== file.sha256) throw new Error(`retained recovery bytes or mode differ: ${file.path}`);
+        }
       }
-      return { mode: SETUP, status: "ready", diagnostics: [] };
-    } catch (error) {
-      return { mode: "ERROR", status: "error", diagnostics: [diagnostic("setup_malformed", error.message, "placeholders.json")] };
+      if (journal.status !== "committed") return { ...result, integrity: "failed", recovery: { journal: `${STAGING}/journal.json`, local_git: journal.local_git }, diagnostics: [{ code: "partial_apply", path: STAGING, message: "Interrupted/uncertain transaction. Inspect journal and actual touched bytes/modes/local Git before separately authorized recovery; no blind replay." }] };
     }
-  }
-
-  try {
-    const state = await validateCreatorState(resolved);
-    const files = await workFiles(resolved);
-    const present = await Promise.all(files.map((relative) => exists(path.join(resolved, relative))));
-    if (state.incomplete) {
-      return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("creator_incomplete", "creator state exists without a completed state file", state.directory ?? ".factory/creator")] };
+    const provenanceEntry = await metadata(path.join(resolved, PROVENANCE));
+    if (!provenanceEntry) {
+      if (await metadata(path.join(resolved, STATE))) throw new Error("installation state without Matt-first provenance; inspect legacy/partial state");
+      return { ...result, diagnostics: [{ code: "foundation_missing", path: PROVENANCE, message: "No recognized installed foundation; inspect and accept a fresh/adoption plan before mutation." }] };
     }
-    if (present.every(Boolean)) {
-      // Created-but-unconfigured gate: only an explicit `onboarded: false` routes ONBOARDING.
-      // `true` or an absent field (pre-0.3.0 projects) routes WORK as before.
-      if (state.onboarded === false) return { mode: ONBOARDING, status: "ready", diagnostics: [] };
-      return { mode: WORK, status: "ready", diagnostics: [] };
+    const { value: provenance, bytes: provenanceBytes } = await readJson(resolved, PROVENANCE);
+    if (!object(provenance) || provenance.schema_version !== 2 || provenance.profile !== "matt-first" || !object(provenance.candidate)
+      || !object(provenance.configuration) || provenance.configuration.schema_version !== 2 || !object(provenance.configuration.binding)
+      || !object(provenance.sources) || provenance.sources.revision !== "49dd158d1076134a641b33efb035946536778336"
+      || !Array.isArray(provenance.files) || provenance.files.length < 6 || provenance.files.length > 1000
+      || !Array.isArray(provenance.method_entries) || !object(provenance.next_action) || provenance.next_action.started !== false
+      || typeof provenance.readiness_record !== "string" || !provenance.readiness_record.startsWith("https://")) throw new Error("unsupported or malformed Matt-first provenance");
+    if (recoveryJournal) {
+      const expected = [...provenance.files, { path: PROVENANCE, mode: "0644", size: provenanceBytes.length, sha256: hash(provenanceBytes) }].sort((a, b) => a.path.localeCompare(b.path, "en"));
+      if (JSON.stringify(recoveryJournal.candidate) !== JSON.stringify(provenance.candidate)
+        || !recoveryJournal.files.some((file) => file.path === STATE)
+        || JSON.stringify(recoveryJournal.files.filter((file) => file.path !== STATE)) !== JSON.stringify(expected)
+        || recoveryJournal.local_git !== (provenance.configuration.initialize_git ? "verified" : "not-selected")) throw new Error("recovery evidence differs from installed candidate/configuration/file boundaries");
+      if (provenance.configuration.adoption && JSON.stringify(recoveryJournal.baseline) !== JSON.stringify(provenance.ownership)) throw new Error("scoped recovery baseline differs from accepted provenance");
+      if (provenance.configuration.initialize_git) await verifyLocalGit(resolved);
     }
-    if (present.every((value) => !value)) {
-      return { mode: SETUP, status: "incomplete", diagnostics: [diagnostic("project_incomplete", "generated project contracts are not present")] };
+    const seen = new Set();
+    for (const file of provenance.files) {
+      if (!identityValid(file) || seen.has(file.path) || file.path === PROVENANCE || file.path.startsWith(".factory/creator/") || file.path.startsWith(".factory-template-creator/")) throw new Error("invalid/duplicate/reserved provenance file boundary");
+      seen.add(file.path);
+      const current = await regular(resolved, file.path);
+      if (current.mode !== parseInt(file.mode, 8) || current.bytes.length !== file.size || hash(current.bytes) !== file.sha256) throw new Error(`installed bytes or mode differ: ${file.path}`);
     }
-    const missing = files.filter((_, index) => !present[index]);
-    return { mode: "ERROR", status: "error", diagnostics: missing.map((relative) => diagnostic("context_missing", `required project context is missing: ${relative}; restore the creator-owned file and run foundry verify before continuing`, relative)) };
+    if (!["start.mjs", ".factory/start.mjs"].includes(provenance.startup)
+      || provenance.startup !== (provenance.configuration.adoption?.startup ?? "start.mjs")) throw new Error("startup path differs from accepted configuration");
+    for (const required of ["AGENT.md", provenance.startup, "docs/bindings.md", ".factory/procedures.md", ".factory/skills/matt-pocock/LICENSE", ".factory/skills/foundry-checkpoint/SKILL.md", ".factory/skills/foundry-resume/SKILL.md", ...provenance.method_entries]) {
+      if (!seen.has(required)) throw new Error(`required indexed source absent: ${required}`);
+    }
+    let ownership = "missing: read-only discovery allowed; managed mutation needs inspected accepted ownership establishment";
+    if (await metadata(path.join(resolved, STATE))) {
+      if (!recoveryJournal) throw new Error("local ledger is missing its retained committed recovery evidence");
+      const { value: state, mode, bytes: stateBytes } = await readJson(resolved, STATE);
+      const boundary = recoveryJournal.files.find((file) => file.path === STATE);
+      if (!boundary || mode !== parseInt(boundary.mode, 8) || stateBytes.length !== boundary.size || hash(stateBytes) !== boundary.sha256) throw new Error("present ledger differs from its committed recovery identity; no ownership inference");
+      if (mode !== 0o600 || state.schema_version !== 2 || state.profile !== "matt-first" || state.provenance_digest !== `sha256:${hash(provenanceBytes)}`
+        || state.config_digest !== provenance.config_digest || state.candidate_digest !== provenance.candidate.candidate_digest
+        || !Array.isArray(state.owned_files) || state.owned_files.length !== provenance.files.length + 1) throw new Error("ledger does not match installed provenance; no ownership inference");
+      const owned = new Set();
+      for (const file of state.owned_files) {
+        if (!ownershipValid(file) || owned.has(file.path)) throw new Error("invalid owned file/block boundary");
+        owned.add(file.path);
+        const current = await regular(resolved, file.path);
+        if (current.mode !== parseInt(file.mode, 8) || hash(current.bytes) !== file.sha256 || current.bytes.length !== file.size) throw new Error(`owned file drift: ${file.path}`);
+        if (file.before !== "absent") {
+          const before = await regular(resolved, `${STAGING}/before/${file.path}`);
+          if (before.mode !== parseInt(file.before.mode, 8) || before.bytes.length !== file.before.size || hash(before.bytes) !== file.before.sha256) throw new Error(`private baseline differs: ${file.path}`);
+          if (file.boundary === "block") {
+            const begin = Buffer.from(`${file.block.begin}\n`);
+            const index = current.bytes.indexOf(begin);
+            if (index < 0 || current.bytes.indexOf(begin, index + begin.length) !== -1
+              || !current.bytes.subarray(0, before.bytes.length).equals(before.bytes)
+              || hash(current.bytes.subarray(index)) !== file.block.sha256) throw new Error(`owned block/context differs: ${file.path}`);
+          }
+        }
+      }
+      if (owned.size !== seen.size + 1 || !owned.has(PROVENANCE) || [...seen].some((relative) => !owned.has(relative))) throw new Error("ledger file set differs from provenance");
+      if (provenance.configuration.adoption && JSON.stringify(state.owned_files.filter((file) => file.path !== PROVENANCE)) !== JSON.stringify(provenance.ownership)) throw new Error("ledger boundaries differ from accepted provenance");
+      ownership = "exact schema-2 file/block boundaries and protected context verified; no directory ownership";
+    }
+    const finalRoot = await metadata(resolved);
+    if (!finalRoot?.isDirectory() || finalRoot.dev !== rootIdentity.dev || finalRoot.ino !== rootIdentity.ino || await realpath(resolved) !== resolved) throw new Error("workspace identity changed during read-only diagnosis");
+    return { ...result, mode: USABLE, status: "usable", integrity: "verified", ownership,
+      readiness: { record: provenance.readiness_record, observed_by_startup: false, required: "Fresh permitted tracker identity/access/write-readback and genuinely independent selected-host manual discovery. Consult the exact scoped record; file integrity is not readiness." },
+      next_action: provenance.next_action,
+      diagnostics: [{ code: "readiness_not_observed", message: "Startup is passive and does not fetch tracker evidence or launch validation. Setup remains incomplete until required observations are confirmed on the bound tracker." }] };
   } catch (error) {
-    return { mode: "ERROR", status: "error", diagnostics: [diagnostic("state_malformed", error.message, ".factory/creator/state.json")] };
+    return { ...result, mode: UNSAFE, status: "error", integrity: "failed", diagnostics: [{ code: "unsafe_foundation", message: String(error.message).slice(0, 1024) }] };
   }
 };
-
 export const route = async (root) => {
-  const resolved = path.resolve(root);
-  const result = await detectMode(resolved);
-  const message = result.mode === SELF ? messages[SELF] : result.mode === SETUP && result.diagnostics[0]?.code === "context_missing"
-    ? `SETUP incomplete - ${result.diagnostics[0].message}`
-    : result.mode === SETUP ? await setupMessage(resolved) : result.mode === ONBOARDING ? await onboardingMessage(resolved) : result.mode === WORK ? await workMessage(resolved) : "Startup routing failed closed; inspect diagnostics and repair the workspace before continuing.";
-  return {
-    schema_version: STARTUP_SCHEMA_VERSION,
-    root: resolved,
-    mode: result.mode,
-    status: result.status,
-    message,
-    diagnostics: result.diagnostics.slice(0, MAX_DIAGNOSTICS),
-  };
+  const result = await detectMode(root);
+  const message = result.mode === SELF
+    ? "SELF mode - archetype development (this repo IS the template).\n  - DO NOT apply the creator package to this repo: it is the source archetype.\n  - Follow MAINTAINERS.md + templates/agent-runbook.md.\n  - Work only the authorized issue through GitHub Issues / Project #1."
+    : result.mode === USABLE
+      ? "USABLE installed Matt-first foundation; file integrity verified, external readiness NOT observed by startup.\nRead AGENT.md, docs/bindings.md and .factory/procedures.md. Consult the scoped tracker readiness record.\nProposed next action: explicitly select grill-with-docs for the authorized project objective. Planning has NOT started."
+      : result.mode === INCOMPLETE
+        ? "INCOMPLETE setup. Inspect diagnostics and exact applied/pending effects. Do not replay an interrupted apply or start planning."
+        : "UNSAFE/unrecognized foundation. Stop affected use; inspect exact diagnostics before an authorized repair.";
+  return { schema_version: 2, root: path.resolve(root), ...result, message };
 };
-
-const jsonOutput = (result) => `${JSON.stringify(result, null, 2)}\n`;
-
-const selfCheck = async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "factory-startup-"));
-  try {
-    await writeFile(path.join(directory, "MAINTAINERS.md"), "maintainer\n");
-    assert((await detectMode(directory)).mode === SELF, "source fixture is not SELF");
-    await rm(path.join(directory, "MAINTAINERS.md"));
-    await writeFile(path.join(directory, "placeholders.json"), JSON.stringify({ placeholders: [] }));
-    assert((await detectMode(directory)).mode === SETUP, "setup fixture is not SETUP");
-    await rm(path.join(directory, "placeholders.json"));
-    for (const relative of REQUIRED_WORK_FILES) {
-      await mkdir(path.dirname(path.join(directory, relative)), { recursive: true });
-      await writeFile(path.join(directory, relative), "generated\n");
-    }
-    assert((await detectMode(directory, undefined)).mode === WORK, "work fixture is not WORK");
-    const stateDirectory = path.join(directory, ".factory/creator");
-    await mkdir(stateDirectory, { recursive: true });
-    const baseState = { schema_version: 1, payload_version: "selfcheck", payload_digest: "digest", config_digest: "config", owned_files: [] };
-    await writeFile(path.join(stateDirectory, "state.json"), JSON.stringify({ ...baseState, onboarded: false }));
-    assert((await detectMode(directory, undefined)).mode === ONBOARDING, "onboarded:false fixture is not ONBOARDING");
-    await writeFile(path.join(stateDirectory, "state.json"), JSON.stringify({ ...baseState, onboarded: true }));
-    assert((await detectMode(directory, undefined)).mode === WORK, "onboarded:true fixture is not WORK");
-    await writeFile(path.join(stateDirectory, "state.json"), JSON.stringify(baseState));
-    assert((await detectMode(directory, undefined)).mode === WORK, "absent-onboarded fixture is not WORK");
-    await rm(path.join(directory, ".factory"), { recursive: true, force: true });
-    await writeFile(path.join(directory, "placeholders.json"), "{");
-    assert((await detectMode(directory, undefined)).status === "error", "malformed fixture did not fail closed");
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-};
-
-const assert = (condition, message) => {
-  if (!condition) throw new Error(message);
-};
-
-const parseArgs = (argv) => {
+export const main = async (argv = process.argv.slice(2)) => {
   let root = process.cwd();
   let json = false;
-  let check = false;
-  let help = false;
   for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg === "--cwd" || arg === "-C") root = argv[++index] ?? "";
-    else if (arg === "--json") json = true;
-    else if (arg === "--self-check") check = true;
-    else if (arg === "--help" || arg === "-h") help = true;
-    else throw new Error(`unknown argument: ${arg}`);
+    if (argv[index] === "--cwd" || argv[index] === "-C") root = argv[++index];
+    else if (argv[index] === "--json") json = true;
+    else if (argv[index] === "--help") { process.stdout.write("Usage: node start.mjs [--cwd <directory>] [--json]\n"); return 0; }
+    else throw new Error(`unknown argument: ${argv[index]}`);
   }
   if (!root) throw new Error("--cwd requires a directory");
-  return { root, json, check, help };
+  const result = await route(root);
+  process.stdout.write(json ? `${JSON.stringify(result, null, 2)}\n` : `${result.message}\n${result.diagnostics.map((item) => `${item.code}: ${item.message}`).join("\n")}\n`);
+  return result.mode === UNSAFE ? 1 : 0;
 };
-
-export const main = async (argv = process.argv.slice(2)) => {
-  const parsed = parseArgs(argv);
-  if (parsed.help) {
-    process.stdout.write("Usage: node start.mjs [--cwd <directory>] [--json] [--self-check]\n");
-    return 0;
-  }
-  if (parsed.check) {
-    await selfCheck();
-    process.stdout.write("startup self-check OK\n");
-    return 0;
-  }
-  const result = await route(parsed.root);
-  if (parsed.json) process.stdout.write(jsonOutput(result));
-  else if (result.status !== "error") process.stdout.write(`${result.message}\n`);
-  if (result.status === "error") process.stderr.write(`error[startup_routing]: ${result.message}\n`);
-  return result.status === "error" ? 1 : 0;
-};
-
-if (path.resolve(process.argv[1] ?? "") === path.resolve(fileURLToPath(import.meta.url))) {
-  main().catch((error) => {
-    const result = {
-      schema_version: STARTUP_SCHEMA_VERSION,
-      root: path.resolve(process.cwd()),
-      mode: "ERROR",
-      status: "error",
-      message: "Startup routing failed closed; inspect diagnostics and repair the workspace before continuing.",
-      diagnostics: [diagnostic("startup_invalid", error.message)],
-    };
-    if (process.argv.includes("--json")) process.stdout.write(jsonOutput(result));
-    process.stderr.write(`error[startup_invalid]: ${bounded(error.message)}\n`);
+if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+  main().then((code) => { process.exitCode = code; }).catch((error) => {
+    process.stderr.write(`error[startup]: ${error.message}\n`);
     process.exitCode = 1;
-  }).then((code) => {
-    if (typeof code === "number") process.exitCode = code;
   });
 }

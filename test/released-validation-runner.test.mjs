@@ -50,7 +50,7 @@ test("released validation writes bounded redacted per-case evidence from the ins
   try {
     const result = await runReleasedValidationCase({ releasePackage: { release_sha: sha, tarball_path: "/tmp/release.tgz" }, matrixCase, configuration: { values: {} }, outputDirectory: directory, environment: { PATH: process.env.PATH, TOKEN: "secret" }, runCreator: async ({ environment }) => {
       assert.deepEqual(Object.keys(environment), ["PATH"]);
-      return { identity, creator: { status: "applied", verification: "verified" } };
+      return { identity, creator: { status: "applied", integrity: "verified", setup: "incomplete" } };
     } });
     assert.equal(result.command_results[0].status, "passed");
     const evidence = await readFile(path.join(directory, "ci=go;task=github-issues;secrets=none;intelligence=none;agent=codex", "release-evidence.json"), "utf8");

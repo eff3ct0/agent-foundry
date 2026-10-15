@@ -25,7 +25,7 @@ test("the full local release E2E continues after failures and writes all redacte
         runCreator: async () => {
           runs += 1;
           if (runs === 2) throw new Error("TOKEN=secret failed in /tmp/private-project");
-          return { identity, creator: { status: "applied", verification: "verified" } };
+          return { identity, creator: { status: "applied", integrity: "verified", setup: "incomplete" } };
         },
       }),
       /local matrix contains failed cases/u,

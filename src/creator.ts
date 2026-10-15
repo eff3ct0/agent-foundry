@@ -1,1767 +1,699 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import {
-  chmod,
-  copyFile,
-  lstat,
-  mkdir,
-  readFile,
-  readdir,
-  realpath,
-  rename,
-  rm,
-  rmdir,
-  stat,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { constants } from "node:fs";
+import { link, lstat, mkdir, open, readdir, realpath, rename, type FileHandle } from "node:fs/promises";
+import { AnchoredDirectory } from "./creator-filesystem";
 import path from "node:path";
+import { devNull } from "node:os";
 import { promisify } from "node:util";
-import { parseDocument, visit } from "yaml";
-import {
-  inspectProviderAvailability,
-  launchProvider,
-  parseProviderSelection,
-  validateProviderCatalog,
-  type ProviderCatalog,
-  type ProviderRuntime,
-} from "./providers";
+import { parseDocument } from "yaml";
 
-export const CREATOR_SCHEMA_VERSION = 1;
+export const CREATOR_SCHEMA_VERSION = 2;
 export const CREATOR_DIRECTORY = ".factory/creator";
 export const STATE_FILE = `${CREATOR_DIRECTORY}/state.json`;
 export const STAGING_DIRECTORY = `${CREATOR_DIRECTORY}/.staging`;
 const LEGACY_DIRECTORY = ".factory-template-creator";
-const LEGACY_STATE_FILE = `${LEGACY_DIRECTORY}/state.json`;
+const PROVENANCE = ".factory/provenance.json";
+const UPSTREAM = "49dd158d1076134a641b33efb035946536778336";
+const MAX_BYTES = 10 * 1024 * 1024;
+const digestPattern = /^sha256:[a-f0-9]{64}$/u;
+const runFile = promisify(execFile);
+const gitEnvironment = (): NodeJS.ProcessEnv => ({ PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP,
+  TMPDIR: process.env.TMPDIR, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull });
+const hash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+const json = (value: unknown): Buffer => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+const digest = (value: unknown): string => `sha256:${hash(json(value))}`;
+const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 
-const MAX_STATE_FILES = 10_000;
-const MAX_STATE_BYTES = 10 * 1024 * 1024;
-
-type JsonObject = Record<string, unknown>;
-
-export interface PayloadFile {
-  path: string;
-  mode: string;
-  size: number;
-  sha256: string;
-}
-
+export type Command = "plan" | "dry-run" | "apply" | "verify" | "doctor";
+export interface PayloadFile { path: string; mode: string; size: number; sha256: string }
 export interface PayloadManifest {
-  schema_version: number;
-  package_name: string;
-  package_version: string;
-  payload_version: string;
-  files: PayloadFile[];
-  payload_digest: string;
+  schema_version: number; package_name: string; package_version: string; payload_version: string;
+  profile: string; files: PayloadFile[]; payload_digest: string;
 }
-
-export interface PlaceholderCondition {
-  key: string;
-  equals?: string | string[];
-  not_equals?: string | string[];
-}
-
-export interface Placeholder {
-  key: string;
-  prompt: string;
-  default: string;
-  required: boolean;
-  enum?: string[];
-  multi?: boolean;
-  kind?: string;
-  condition?: PlaceholderCondition;
-  when?: PlaceholderCondition;
-}
-
-export interface PlaceholderManifest {
-  placeholders: Placeholder[];
-}
-
-export type OwnershipDisposition = "removed" | "inherited" | "generated";
-
-export interface OwnershipEntry {
-  path: string;
-  kind: "file" | "directory";
-}
-
-export interface OwnershipCategory {
-  disposition: OwnershipDisposition;
-  paths: OwnershipEntry[];
-  payload?: boolean;
-}
-
-export interface OwnershipManifest {
-  schema_version: number;
-  description?: string;
-  text_files: string[];
-  categories: Record<string, OwnershipCategory>;
+export interface CreatorConfig {
+  schema_version: 2;
+  profile: "matt-first";
+  project: { name: string };
+  binding: {
+    provider: string; repository: string; project: string; access: string; recovery: string;
+    permissions: string[]; approval_gates: string[];
+    documentation: { architecture: string; constraints: string; business: string; technical: string };
+  };
+  hosts: Array<{ id: string; version: string; route: "manual" }>;
+  initialize_git: boolean;
+  readiness_record: string;
+  adoption?: {
+    startup: "start.mjs" | ".factory/start.mjs";
+    shared_files: string[]; adopt_files: string[];
+    rule_reviews: Array<{ path: string; sha256: string; mode: string; compatible: boolean; resolution: string }>;
+  };
 }
 interface CreatorState {
-  schema_version: number;
-  payload_version: string;
-  payload_digest: string;
-  config_digest: string;
-  owned_files: Array<Pick<PayloadFile, "path" | "mode" | "size" | "sha256">>;
-  // Optional onboarding gate. `false` => created-but-unconfigured (start.mjs routes ONBOARDING);
-  // `true` OR ABSENT => onboarded (routes WORK). Absent keeps pre-0.3.0 projects valid and routed to WORK.
-  onboarded?: boolean;
+  schema_version: 2; profile: "matt-first"; payload_digest: string; config_digest: string;
+  candidate_digest: string; provenance_digest: string; owned_files: OwnedFile[];
+  local_git: "initialize" | "none";
 }
-
-export interface CreatorConfig {
-  values: Record<string, string>;
-  digest: string;
-  factoryCiRef?: string;
-  factoryIdentity?: { spec: string; sha: string; workflows: string[] };
+interface OwnedFile extends PayloadFile {
+  boundary: "file" | "block"; before: "absent" | PayloadFile;
+  block?: { begin: string; end: string; sha256: string; context_sha256: string };
 }
-
-export interface ProviderSummary {
-  catalog_version: string;
-  selected: Array<{
-    id: string;
-    display_name: string;
-    executable: string;
-    available: boolean;
-    capabilities: string[];
-    workspace_files: string[];
-    manual_prerequisites: string[];
-    next_steps: string[];
-  }>;
-  manifest_path?: string;
+export interface Diagnostic { code: string; message: string; path?: string }
+export interface Operation extends PayloadFile {
+  action: "create" | "change-block" | "adopt" | "noop" | "conflict"; reason: string;
+  ownership?: OwnedFile;
+  preview?: { encoding: "base64"; before: string; after: string };
 }
-
-export interface HandoffResult {
-  status: "launched" | "failed";
-  provider: string;
-  argv: string[];
-  exit_code: number;
-  signal: NodeJS.Signals | null;
-  message: string;
-}
-export type Command = "plan" | "dry-run" | "apply" | "verify" | "doctor" | "onboard";
-export type OperationAction = "create" | "update" | "remove" | "noop" | "conflict";
-
-export interface Diagnostic {
-  code: string;
-  message: string;
-  path?: string;
-}
-
-export interface Operation {
-  path: string;
-  action: OperationAction;
-  mode: string;
-  size: number;
-  sha256: string;
-  reason: string;
-}
-
 export interface CreatorEnvelope {
-  schema_version: number;
-  command: Command;
-  status: string;
-  target: string;
-  payload: {
-    version: string;
-    digest: string;
-  };
-  config_digest?: string;
-  operations: Operation[];
-  diagnostics: Diagnostic[];
-  providers?: ProviderSummary;
-  verification?: "verified" | "failed";
-  handoff?: HandoffResult;
-  rollback?: {
-    attempted: boolean;
-    restored: boolean;
-    message: string;
-  };
+  schema_version: number; command: Command; status: string; target: string;
+  profile: "matt-first"; payload: { version: string; digest: string };
+  candidate?: Record<string, unknown>; config_digest?: string; plan_digest?: string;
+  operations: Operation[]; diagnostics: Diagnostic[];
+  effects?: { local_git: "initialize" | "none"; external: string[]; recovery_baseline: string; recovery_files?: PayloadFile[]; journal?: { path: string; mode: string } };
+  integrity?: "verified" | "failed" | "not-checked";
+  setup: "incomplete";
+  readiness?: { record: string; required: string[]; observed_by_installer: false };
+  next_action?: { procedure: string; source: string; authority: string; started: false };
+  applied?: string[]; pending?: string[];
+  configuration?: CreatorConfig;
+  recovery?: { journal: string; status: string; local_git: string; candidate: unknown; baseline: unknown };
+  rollback?: { attempted: boolean; restored: boolean; message: string };
 }
-
 export interface CreatorOptions {
-  command: Command;
-  target: string;
-  configPath?: string;
-  factoryRoot?: string;
-  factorySha?: string;
-  nonInteractive?: boolean;
-  prompt?: (placeholder: Placeholder) => Promise<string>;
-  failAfter?: number;
-  interruptAfter?: number;
-  agent?: string;
-  agents?: string[];
-  launchAgent?: boolean;
-  resolvedConfig?: CreatorConfig;
+  command: Command; target: string; configPath?: string;
+  failAfter?: number; interruptAfter?: number;
 }
-
-interface PlannedFile {
-  relativePath: string;
-  bytes: Buffer;
-  mode: number;
-  sha256: string;
-  size: number;
-}
-
+interface PlannedFile { relativePath: string; bytes: Buffer; mode: number; sha256: string; size: number }
 export interface PreparedPlan {
-  envelope: CreatorEnvelope;
-  target: string;
-  targetExisted: boolean;
-  files: PlannedFile[];
-  stateBytes?: Buffer;
-  config?: CreatorConfig;
-  state?: CreatorState;
-  legacyState?: boolean;
-  failAfter?: number;
-  interruptAfter?: number;
-  providerRuntimes: ProviderRuntime[];
-  providerSummary?: ProviderSummary;
+  envelope: CreatorEnvelope; target: string; targetExisted: boolean; files: PlannedFile[];
+  stateBytes?: Buffer; state?: CreatorState; config?: CreatorConfig;
+  options: CreatorOptions;
+  before?: PlannedFile[]; ownership?: OwnedFile[];
+  directories?: Array<{ path: string; dev: number; ino: number; mode: number }>;
+  baseline: { existed: boolean; dev: number; ino: number; mode: number };
 }
-
 export class CreatorError extends Error {
-  readonly code: string;
-  readonly path?: string;
-  readonly plan?: PreparedPlan;
-  readonly preserveStaging: boolean;
-
-  constructor(code: string, message: string, options: { path?: string; plan?: PreparedPlan; preserveStaging?: boolean } = {}) {
-    super(message);
-    this.name = "CreatorError";
-    this.code = code;
-    this.path = options.path;
-    this.plan = options.plan;
-    this.preserveStaging = options.preserveStaging ?? false;
+  constructor(readonly code: string, message: string, readonly options: { path?: string; plan?: PreparedPlan } = {}) {
+    super(message); this.name = "CreatorError";
   }
+  get path(): string | undefined { return this.options.path; }
+  get plan(): PreparedPlan | undefined { return this.options.plan; }
 }
-
-const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
-const canonicalJson = (value: unknown): Buffer => Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
-const normalizePath = (value: string): string => value.replaceAll(path.sep, "/");
-const compareStrings = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
-
-const diagnostic = (code: string, message: string, relativePath?: string): Diagnostic => ({
-  code,
-  message,
-  ...(relativePath ? { path: relativePath } : {}),
-});
-
-const sortDiagnostics = (items: Diagnostic[]): Diagnostic[] => [...items].sort((left, right) =>
-  compareStrings(`${left.code}\0${left.path ?? ""}\0${left.message}`, `${right.code}\0${right.path ?? ""}\0${right.message}`));
-
-const sortOperations = (items: Operation[]): Operation[] => [...items].sort((left, right) => compareStrings(left.path, right.path));
-
-const isObject = (value: unknown): value is JsonObject => typeof value === "object" && value !== null && !Array.isArray(value);
-const runFile = promisify(execFile);
-
-const assertNoDuplicateJsonKeys = (text: string, label: string): void => {
-  let index = 0;
-  const whitespace = () => { while (/\s/u.test(text[index] ?? "")) index += 1; };
-  const stringValue = (): string => {
-    const start = index;
-    if (text[index] !== '"') throw new Error(`${label} contains an invalid string`);
-    index += 1;
-    while (index < text.length) {
-      if (text[index] === "\\") index += 2;
-      else if (text[index] === '"') {
-        index += 1;
-        return JSON.parse(text.slice(start, index)) as string;
-      } else index += 1;
-    }
-    throw new Error(`${label} contains an unterminated string`);
-  };
-  const value = (): void => {
-    whitespace();
-    if (text[index] === "{") {
-      index += 1;
-      whitespace();
-      const keys = new Set<string>();
-      if (text[index] === "}") { index += 1; return; }
-      while (true) {
-        whitespace();
-        const key = stringValue();
-        if (keys.has(key)) throw new Error(`${label} contains duplicate key: ${key}`);
-        keys.add(key);
-        whitespace();
-        if (text[index] !== ":") throw new Error(`${label} contains an invalid object`);
-        index += 1;
-        value();
-        whitespace();
-        if (text[index] === "}") { index += 1; return; }
-        if (text[index] !== ",") throw new Error(`${label} contains an invalid object`);
-        index += 1;
-      }
-    } else if (text[index] === "[") {
-      index += 1;
-      whitespace();
-      if (text[index] === "]") { index += 1; return; }
-      while (true) {
-        value();
-        whitespace();
-        if (text[index] === "]") { index += 1; return; }
-        if (text[index] !== ",") throw new Error(`${label} contains an invalid array`);
-        index += 1;
-      }
-    } else if (text[index] === '"') {
-      stringValue();
-    } else {
-      const start = index;
-      while (index < text.length && !/[\s,\]}]/u.test(text[index])) index += 1;
-      if (start === index) throw new Error(`${label} contains an invalid value`);
-    }
-  };
-  value();
-  whitespace();
-  if (index !== text.length) throw new Error(`${label} contains trailing data`);
-};
-
-const parseJson = async (filePath: string, label: string): Promise<unknown> => {
-  try {
-    const text = await readFile(filePath, "utf8");
-    assertNoDuplicateJsonKeys(text, label);
-    return JSON.parse(text);
-  } catch (error) {
-    throw new CreatorError("invalid_json", `${label} is not valid JSON: ${(error as Error).message}`, { path: filePath });
-  }
-};
-
-const assertSafeRelative = (relativePath: string): void => {
-  const normalized = relativePath.replaceAll("\\", "/");
-  if (!normalized || normalized.startsWith("/") || normalized.split("/").includes("..") || normalized.includes("\0")) {
-    throw new CreatorError("unsafe_path", `unsafe creator path: ${relativePath}`, { path: relativePath });
-  }
-};
-
-const resolveTarget = async (rawTarget: string): Promise<{ absolute: string; existed: boolean }> => {
-  if (!rawTarget || rawTarget === "-") throw new CreatorError("invalid_target", "a target directory is required");
-  if (rawTarget.replaceAll("\\", "/").split("/").includes("..")) {
-    throw new CreatorError("target_traversal", "target path traversal is not allowed", { path: rawTarget });
-  }
-  const absolute = path.resolve(process.cwd(), rawTarget);
-  let entry;
-  try {
-    entry = await lstat(absolute);
-  } catch {
-    entry = undefined;
-  }
-  if (entry?.isSymbolicLink()) throw new CreatorError("target_symlink", "target directory must not be a symlink", { path: rawTarget });
-  if (entry && !entry.isDirectory()) throw new CreatorError("target_not_directory", "target exists but is not a directory", { path: rawTarget });
-  if (entry && (entry.mode & 0o222) === 0) throw new CreatorError("target_unwritable", "target directory has no write permission", { path: rawTarget });
-
-  let parent = absolute;
-  while (true) {
-    try {
-      const parentEntry = await lstat(parent);
-      if (!parentEntry.isDirectory() || parentEntry.isSymbolicLink()) {
-        throw new CreatorError("target_symlink", "target parent must not contain a symlink", { path: parent });
-      }
-      if ((parentEntry.mode & 0o222) === 0) throw new CreatorError("target_unwritable", "target parent has no write permission", { path: parent });
-      const realParent = await realpath(parent);
-      if (realParent !== path.resolve(parent)) {
-        throw new CreatorError("target_symlink", "target parent resolves outside its lexical path", { path: parent });
-      }
-      break;
-    } catch (error) {
-      if (error instanceof CreatorError) throw error;
-      const next = path.dirname(parent);
-      if (next === parent) throw new CreatorError("invalid_target", "target parent cannot be resolved", { path: absolute });
-      parent = next;
-    }
-  }
-  return { absolute, existed: Boolean(entry) };
-};
-
-export const validatePlaceholderManifest = (value: unknown): PlaceholderManifest => {
-  if (!isObject(value) || !Array.isArray(value.placeholders)) throw new CreatorError("payload_invalid", "placeholder manifest has an unsupported shape");
-  const seen = new Set<string>();
-  const placeholders = value.placeholders.map((raw) => {
-    if (!isObject(raw) || typeof raw.key !== "string" || !raw.key || seen.has(raw.key)) {
-      throw new CreatorError("payload_invalid", `placeholder manifest has an invalid or duplicate key: ${String(isObject(raw) ? raw.key : raw)}`);
-    }
-    seen.add(raw.key);
-    if (typeof raw.prompt !== "string" || typeof raw.default !== "string" || typeof raw.required !== "boolean") {
-      throw new CreatorError("payload_invalid", `placeholder ${raw.key} has an invalid schema`);
-    }
-    if (raw.enum !== undefined && (!Array.isArray(raw.enum) || raw.enum.some((item) => typeof item !== "string") || new Set(raw.enum).size !== raw.enum.length)) {
-      throw new CreatorError("payload_invalid", `placeholder ${raw.key} has an invalid enum`);
-    }
-    for (const condition of [raw.condition, raw.when]) {
-      const validExpected = (expected: unknown): boolean => typeof expected === "string" || (Array.isArray(expected) && expected.every((item) => typeof item === "string"));
-      if (condition !== undefined && (!isObject(condition) || typeof condition.key !== "string" || (condition.equals === undefined && condition.not_equals === undefined) || (condition.equals !== undefined && !validExpected(condition.equals)) || (condition.not_equals !== undefined && !validExpected(condition.not_equals)) || (condition.equals !== undefined && condition.not_equals !== undefined))) {
-        throw new CreatorError("payload_invalid", `placeholder ${raw.key} has an invalid condition`);
-      }
-    }
-    return raw as unknown as Placeholder;
-  });
-  const keys = new Set(placeholders.map((placeholder) => placeholder.key));
-  for (const placeholder of placeholders) {
-    const condition = placeholder.condition ?? placeholder.when;
-    if (condition && !keys.has(condition.key)) throw new CreatorError("payload_invalid", `placeholder ${placeholder.key} conditions on unknown key ${condition.key}`);
-  }
-  return { placeholders };
-};
-
-export const validateOwnershipManifest = (value: unknown): OwnershipManifest => {
-  if (!isObject(value) || value.schema_version !== 1 || !isObject(value.categories) || !Array.isArray(value.text_files)) {
-    throw new CreatorError("ownership_invalid", "ownership manifest has an unsupported shape");
-  }
-  const seen = new Set<string>();
-  const categories: Record<string, OwnershipCategory> = {};
-  for (const [category, raw] of Object.entries(value.categories)) {
-    if (!isObject(raw) || !["removed", "inherited", "generated"].includes(String(raw.disposition)) || !Array.isArray(raw.paths) || raw.paths.length === 0) {
-      throw new CreatorError("ownership_invalid", `ownership category ${category} is invalid`);
-    }
-    const paths = raw.paths.map((entry) => {
-      if (!isObject(entry) || typeof entry.path !== "string" || !["file", "directory"].includes(String(entry.kind)) || entry.path.startsWith("/") || entry.path.split("/").includes("..") || seen.has(entry.path)) {
-        throw new CreatorError("ownership_invalid", `ownership path is invalid or duplicated: ${String(isObject(entry) ? entry.path : entry)}`);
-      }
-      seen.add(entry.path);
-      return entry as unknown as OwnershipEntry;
-    });
-    categories[category] = { disposition: raw.disposition as OwnershipDisposition, paths, payload: raw.payload === true };
-  }
-  const textFiles = value.text_files.map((entry) => {
-    if (typeof entry !== "string" || !entry || entry.startsWith("/") || entry.split("/").includes("..")) throw new CreatorError("ownership_invalid", `invalid text-file inventory entry: ${String(entry)}`);
-    return entry;
-  });
-  if (new Set(textFiles).size !== textFiles.length) throw new CreatorError("ownership_invalid", "text-file inventory contains duplicate paths");
-  return { schema_version: 1, description: typeof value.description === "string" ? value.description : undefined, text_files: textFiles, categories };
-};
-
-const loadManifest = async (): Promise<{ manifest: PayloadManifest; payloadRoot: string; placeholders: PlaceholderManifest; ownership: OwnershipManifest; providerCatalog: ProviderCatalog }> => {
-  const payloadRoot = path.join(__dirname, "payload");
-  const manifest = await parseJson(path.join(__dirname, "payload-manifest.json"), "payload manifest") as PayloadManifest;
-  if (!isObject(manifest) || !Array.isArray(manifest.files) || typeof manifest.payload_digest !== "string") {
-    throw new CreatorError("payload_invalid", "payload manifest has an unsupported shape");
-  }
-  const files = [...manifest.files].sort((left, right) => compareStrings(left.path, right.path));
-  if (JSON.stringify(files) !== JSON.stringify(manifest.files)) {
-    throw new CreatorError("payload_invalid", "payload manifest files are not in stable order");
-  }
-  const expectedDigest = `sha256:${sha256(Buffer.from(JSON.stringify({ payload_version: manifest.payload_version, files: manifest.files })))}`;
-  if (expectedDigest !== manifest.payload_digest) {
-    throw new CreatorError("payload_invalid", "payload manifest digest does not match its files");
-  }
-  const placeholders = validatePlaceholderManifest(await parseJson(path.join(payloadRoot, "placeholders.json"), "placeholder manifest"));
-  const ownership = validateOwnershipManifest(await parseJson(path.join(payloadRoot, "archetype-ownership.json"), "ownership manifest"));
-  const providerCatalog = validateProviderCatalog(await parseJson(path.join(payloadRoot, "providers/agents/catalog.json"), "provider catalog"));
-  return { manifest, payloadRoot, placeholders, ownership, providerCatalog };
-};
-
-const valueFromInput = (input: unknown): Record<string, unknown> => {
-  if (!isObject(input)) throw new CreatorError("configuration_invalid", "configuration must be a JSON object");
-  const wrapped = input.values !== undefined || input.answers !== undefined;
-  if (wrapped && Object.keys(input).some((key) => key !== "values" && key !== "answers")) throw new CreatorError("configuration_invalid", "configuration contains unknown top-level keys");
-  const candidate = input.values ?? input.answers ?? input;
-  if (!isObject(candidate)) throw new CreatorError("configuration_invalid", "configuration values must be a JSON object");
-  return candidate;
-};
-
-const loadFactoryDefaults = async (root: string, expectedSha: string, spec: unknown, placeholders: PlaceholderManifest): Promise<{
-  values: Record<string, string>;
-  git: (...args: string[]) => Promise<string>;
-}> => {
-  if (typeof spec !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]*\/factory@v[1-9][0-9]*$/u.test(spec)) {
-    throw new CreatorError("factory_invalid", "FACTORY_SPEC must identify org/factory@vX when factory defaults are requested");
-  }
-  if (!/^[0-9a-f]{40}$/u.test(expectedSha)) throw new CreatorError("factory_invalid", "--factory-sha must be an independently trusted full lowercase commit SHA");
-  const absolute = path.resolve(root);
-  const entry = await lstat(absolute).catch(() => undefined);
-  if (!entry?.isDirectory() || entry.isSymbolicLink() || await realpath(absolute) !== absolute) {
-    throw new CreatorError("factory_invalid", "--factory-root must be a real local checkout directory");
-  }
-  const gitEntry = await lstat(path.join(absolute, ".git")).catch(() => undefined);
-  if (!gitEntry || gitEntry.isSymbolicLink() || (!gitEntry.isDirectory() && !gitEntry.isFile())) {
-    throw new CreatorError("factory_invalid", "--factory-root must contain its own .git checkout entry");
-  }
-  const git = async (...args: string[]): Promise<string> => {
-    try {
-      const { stdout } = await runFile("git", ["-c", "core.fsmonitor=false", "-C", absolute, ...args], {
-        env: {
-          PATH: process.env.PATH ?? "",
-          ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot ?? "" } : {}),
-          GIT_CEILING_DIRECTORIES: path.dirname(absolute),
-          GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
-          GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0",
-        },
-        maxBuffer: 256 * 1024, timeout: 10_000,
-      });
-      return stdout;
-    } catch {
-      throw new CreatorError("factory_invalid", "local factory checkout cannot be verified without fetching");
-    }
-  };
-  const tag = spec.slice(spec.lastIndexOf("@") + 1);
-  const [checkoutRoot, head, tagSha, changes, tree] = await Promise.all([
-    git("rev-parse", "--show-toplevel"), git("rev-parse", "--verify", "HEAD^{commit}"),
-    git("rev-parse", "--verify", `refs/tags/${tag}^{commit}`), git("status", "--porcelain", "--untracked-files=all"),
-    git("ls-tree", "HEAD", "--", "factory.defaults.json"),
-  ]);
-  if (checkoutRoot.trim() !== absolute || head.trim() !== expectedSha || tagSha.trim() !== expectedSha || changes.trim()
-      || !/^100644 blob [0-9a-f]{40}\tfactory\.defaults\.json\n$/u.test(tree)) {
-    throw new CreatorError("factory_invalid", "factory root, clean checkout, tag, commit SHA, or tracked root defaults do not match the supplied pin");
-  }
-  const text = await git("show", "HEAD:factory.defaults.json");
-  let parsed: unknown;
-  try {
-    assertNoDuplicateJsonKeys(text, "factory defaults");
-    parsed = JSON.parse(text);
-  } catch {
-    throw new CreatorError("factory_invalid", "factory.defaults.json is not valid JSON or has duplicate keys");
-  }
-  if (!isObject(parsed) || Object.keys(parsed).sort().join(",") !== "schema_version,values"
-      || parsed.schema_version !== 1 || !isObject(parsed.values)) {
-    throw new CreatorError("factory_invalid", "factory.defaults.json requires schema_version 1 and a values object");
-  }
-  const values = parsed.values;
-  const byKey = new Map(placeholders.placeholders.map((placeholder) => [placeholder.key, placeholder]));
-  const invalid = Object.keys(values).filter((key) => !byKey.has(key) || key === "FACTORY_SPEC");
-  if (invalid.length) throw new CreatorError("factory_invalid", `factory defaults contain unknown or reserved keys: ${invalid.sort().join(", ")}`);
-  const normalized: Record<string, string> = {};
-  for (const [key, value] of Object.entries(values)) {
-    if (value === null || !["string", "number", "boolean"].includes(typeof value)) {
-      throw new CreatorError("factory_invalid", `factory default ${key} must be a scalar value`);
-    }
-    try {
-      normalized[key] = validateValue(byKey.get(key)!, value);
-    } catch (error) {
-      throw new CreatorError("factory_invalid", (error as Error).message);
-    }
-  }
-  return { values: normalized, git };
-};
-
-const validateFactoryWorkflows = async (git: (...args: string[]) => Promise<string>, stacks: string[]): Promise<string[]> => {
-  const digests: string[] = [];
-  for (const stack of stacks) {
-    if (!/^[a-z][a-z0-9-]*$/u.test(stack)) throw new CreatorError("ci_invalid", `invalid CI stack: ${stack}`);
-    const workflowPath = `.github/workflows/${stack}.yml`;
-    const tree = await git("ls-tree", "HEAD", "--", workflowPath);
-    if (!/^100644 blob [0-9a-f]{40}\t\.github\/workflows\/[a-z][a-z0-9-]*\.yml\n$/u.test(tree)) {
-      throw new CreatorError("ci_invalid", `pinned factory is missing a regular tracked workflow: ${workflowPath}`);
-    }
-    const workflow = await git("show", `HEAD:${workflowPath}`);
-    if (Buffer.byteLength(workflow, "utf8") > 64 * 1024) throw new CreatorError("ci_invalid", `pinned factory workflow is too large: ${workflowPath}`);
-    try {
-      const document = parseDocument(workflow, { version: "1.2", uniqueKeys: true });
-      if (document.errors.length) throw new Error("invalid YAML");
-      visit(document, { Alias: () => { throw new Error("aliases are not accepted"); } });
-      const parsed: unknown = document.toJS({ mapAsMap: true, maxAliasCount: 10 });
-      const check = (value: unknown, depth = 0): void => {
-        if (depth > 32) throw new Error("workflow nesting is too deep");
-        if (value instanceof Map) {
-          for (const [key, child] of value) {
-            if (typeof key !== "string" || ["__proto__", "constructor", "prototype"].includes(key)) throw new Error("unsafe YAML key");
-            check(child, depth + 1);
-          }
-        } else if (Array.isArray(value)) {
-          for (const child of value) check(child, depth + 1);
-        }
-      };
-      check(parsed);
-      if (!(parsed instanceof Map) || !(parsed.get("on") instanceof Map)
-          || !parsed.get("on").has("workflow_call")
-          || !(parsed.get("on").get("workflow_call") === null || parsed.get("on").get("workflow_call") instanceof Map)
-          || !(parsed.get("jobs") instanceof Map) || parsed.get("jobs").size === 0) throw new Error("workflow_call and jobs must be mappings");
-      const nonemptyString = (value: unknown): value is string => typeof value === "string" && !!value.trim();
-      const labels = (value: unknown): boolean => nonemptyString(value)
-        || (Array.isArray(value) && value.length > 0 && value.every(nonemptyString));
-      const supportedRunner = (value: unknown): boolean => labels(value)
-        || (value instanceof Map && value.size > 0
-          && [...value.keys()].every((key) => key === "group" || key === "labels")
-          && (!value.has("group") || nonemptyString(value.get("group")))
-          && (!value.has("labels") || labels(value.get("labels"))));
-      for (const job of parsed.get("jobs").values()) {
-        if (!(job instanceof Map) || (job.has("steps") === job.has("uses"))) throw new Error("jobs must contain steps or uses");
-        if (job.has("uses") && (typeof job.get("uses") !== "string" || !job.get("uses").trim())) throw new Error("job uses must be a nonempty string");
-        if (job.has("steps") && !supportedRunner(job.get("runs-on"))) throw new Error("step jobs require a nonempty runs-on runner");
-        if (job.has("steps") && (!Array.isArray(job.get("steps")) || !job.get("steps").length
-            || job.get("steps").some((step: unknown) => !(step instanceof Map)
-              || step.has("run") === step.has("uses")
-              || !["run", "uses"].some((field) => typeof step.get(field) === "string" && step.get(field).trim())))) {
-          throw new Error("job steps must contain exactly one nonempty run or uses field");
-        }
-      }
-    } catch {
-      throw new CreatorError("ci_invalid", `pinned factory workflow must be valid callable YAML: ${workflowPath}`);
-    }
-    digests.push(sha256(Buffer.from(workflow, "utf8")));
-  }
-  return digests;
-};
-
-const validateValue = (placeholder: Placeholder, rawValue: unknown): string => {
-  if (rawValue === undefined || rawValue === null) return "";
-  if (!["string", "number", "boolean"].includes(typeof rawValue)) {
-    throw new CreatorError("configuration_invalid", `${placeholder.key} must be a string, number, or boolean`);
-  }
-  const value = String(rawValue);
-  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value)) {
-    throw new CreatorError("configuration_invalid", `${placeholder.key} contains a control character`);
-  }
-  if (placeholder.enum && !placeholder.enum.includes(value)) {
-    throw new CreatorError("configuration_invalid", `${placeholder.key} must be one of: ${placeholder.enum.join(", ")}`);
-  }
-  return value;
-};
-
-const conditionMatches = (condition: PlaceholderCondition | undefined, values: Record<string, string>): boolean => {
-  if (!condition) return true;
-  const actual = values[condition.key] ?? "";
-  const matches = (expected: string | string[] | undefined): boolean => expected === undefined ? false : Array.isArray(expected) ? expected.includes(actual) : actual === expected;
-  if (condition.equals !== undefined) return matches(condition.equals);
-  return !matches(condition.not_equals);
-};
-
-const resolveConfig = async (
-  manifest: PlaceholderManifest,
-  configPath: string | undefined,
-  nonInteractive: boolean,
-  prompt: ((placeholder: Placeholder) => Promise<string>) | undefined,
-  factoryRoot?: string,
-  factorySha?: string,
-): Promise<CreatorConfig> => {
-  if ((factoryRoot !== undefined || factorySha !== undefined)
-      && (!factoryRoot || !factorySha || !configPath)) {
-    throw new CreatorError("factory_invalid", "factory defaults require --factory-root, --factory-sha, and external --config together");
-  }
-  if (factoryRoot && factorySha && configPath) {
-    const factory = path.resolve(factoryRoot);
-    const config = path.resolve(configPath);
-    const inside = (candidate: string, root: string): boolean => {
-      const relative = path.relative(root, candidate);
-      return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-    };
-    // Refuse both a lexical path in the checkout and an outside link back into it.
-    if (inside(config, factory)) {
-      throw new CreatorError("factory_invalid", "--config must be outside the factory checkout", { path: configPath });
-    }
-    const canonicalFactory = await realpath(factory).catch(() => { throw new CreatorError("factory_invalid", "--factory-root must be a real local checkout directory"); });
-    const canonicalConfig = await realpath(config).catch(() => { throw new CreatorError("invalid_json", "configuration cannot be read", { path: configPath }); });
-    if (inside(canonicalConfig, canonicalFactory)) {
-      throw new CreatorError("factory_invalid", "--config must be outside the factory checkout", { path: configPath });
-    }
-  }
-  let input: Record<string, unknown> = {};
-  if (configPath) input = valueFromInput(await parseJson(path.resolve(process.cwd(), configPath), "configuration"));
-  const knownKeys = new Set(manifest.placeholders.map((placeholder) => placeholder.key));
-  const unknownKeys = Object.keys(input).filter((key) => !knownKeys.has(key));
-  if (unknownKeys.length > 0) throw new CreatorError("configuration_invalid", `configuration contains unknown keys: ${unknownKeys.sort().join(", ")}`);
-  const factory = factoryRoot && factorySha ? await loadFactoryDefaults(factoryRoot, factorySha, input.FACTORY_SPEC, manifest) : undefined;
-  const organization = factory?.values ?? {};
-  if (organization.FACTORY_REQUIRED === "true" && Object.prototype.hasOwnProperty.call(input, "FACTORY_REQUIRED") && String(input.FACTORY_REQUIRED) !== "true") {
-    throw new CreatorError("factory_invalid", "project answers cannot disable organization FACTORY_REQUIRED");
-  }
-  const merged = { ...organization, ...input };
-  // Provider-specific context must not leak across a project-level provider change.
-  if (Object.prototype.hasOwnProperty.call(input, "TASK_TRACKER") && input.TASK_TRACKER !== organization.TASK_TRACKER) {
-    for (const key of ["TRACKER", "TRACKER_KEY", "EPIC_ID"]) if (!Object.prototype.hasOwnProperty.call(input, key)) delete merged[key];
-  }
-  if (Object.prototype.hasOwnProperty.call(input, "SECRETS_PROVIDER") && input.SECRETS_PROVIDER !== organization.SECRETS_PROVIDER
-      && !Object.prototype.hasOwnProperty.call(input, "SECRETS_PATH")) delete merged.SECRETS_PATH;
-  if (Object.hasOwn(input, "DOCS_DESTINATION") && input.DOCS_DESTINATION !== organization.DOCS_DESTINATION) {
-    for (const key of documentationFields) if (!Object.hasOwn(input, key)) delete merged[key];
-  }
-  const byKey = new Map(manifest.placeholders.map((placeholder) => [placeholder.key, placeholder]));
-  const values: Record<string, string> = {};
-  const resolving = new Set<string>();
-  const resolveKey = async (key: string): Promise<string> => {
-    if (Object.prototype.hasOwnProperty.call(values, key)) return values[key];
-    const placeholder = byKey.get(key);
-    if (!placeholder) throw new CreatorError("configuration_invalid", `condition references unknown key: ${key}`);
-    if (resolving.has(key)) throw new CreatorError("configuration_invalid", `placeholder conditions contain a cycle at ${key}`);
-    resolving.add(key);
-    const condition = placeholder.condition ?? placeholder.when;
-    const conditionValues = { ...values };
-    if (condition && !Object.prototype.hasOwnProperty.call(conditionValues, condition.key)) conditionValues[condition.key] = await resolveKey(condition.key);
-    const supplied = Object.prototype.hasOwnProperty.call(merged, placeholder.key);
-    const raw = supplied ? merged[placeholder.key] : placeholder.default;
-    if (!conditionMatches(condition, conditionValues)) {
-      values[placeholder.key] = "";
-    } else if (!supplied && (raw === undefined || raw === null || raw === "") && placeholder.required) {
-      values[placeholder.key] = !nonInteractive && prompt ? validateValue(placeholder, await prompt(placeholder)) : "";
-    } else {
-      values[placeholder.key] = validateValue(placeholder, raw);
-    }
-    resolving.delete(key);
-    return values[placeholder.key];
-  };
-  for (const placeholder of manifest.placeholders) await resolveKey(placeholder.key);
-
-  const missing = (): Placeholder[] => manifest.placeholders.filter((placeholder) => conditionMatches(placeholder.condition ?? placeholder.when, values) && placeholder.required && !values[placeholder.key]);
-  const missingKeys = missing().map((placeholder) => placeholder.key);
-  if (missingKeys.length > 0) {
-    throw new CreatorError("incomplete_configuration", `required configuration is missing: ${missingKeys.join(", ")}`);
-  }
-  if (values.FACTORY_REQUIRED === "true" && !values.FACTORY_SPEC) {
-    throw new CreatorError("incomplete_configuration", "FACTORY_SPEC is required when FACTORY_REQUIRED is true");
-  }
-  validateDocumentationConfig(values, input);
-  const trackerDisplay: Record<string, string> = { jira: "Jira", "github-issues": "GitHub Issues", "github-projects": "GitHub Projects", linear: "Linear", custom: "(custom)" };
-  if (!values.TRACKER && values.TASK_TRACKER) values.TRACKER = trackerDisplay[values.TASK_TRACKER] ?? values.TASK_TRACKER;
-  let factoryCiRef: string | undefined;
-  let workflowDigests: string[] = [];
-  if (factory && values.CI_SYSTEM.toLowerCase().includes("github") && values.CI_STACKS) {
-    workflowDigests = await validateFactoryWorkflows(factory.git, parseStacks(values.CI_STACKS));
-    factoryCiRef = values.FACTORY_SPEC;
-  }
-  const factoryIdentity = factory ? { spec: values.FACTORY_SPEC, sha: factorySha!, workflows: workflowDigests } : undefined;
-  const ordered = Object.fromEntries(Object.keys(values).sort().map((key) => [key, values[key]]));
-  return { values, digest: `sha256:${sha256(canonicalJson(factoryIdentity ? { values: ordered, factory: factoryIdentity } : ordered))}`, factoryCiRef, factoryIdentity };
-};
-
-const documentationFamilies = ["ARCHITECTURE", "CONSTRAINTS", "BUSINESS", "TECHNICAL"] as const;
-const documentationFields = ["DOCS_DESTINATION_ID", "DOCS_GIT_SOURCE", ...documentationFamilies.map((family) => `DOCS_${family}_SOURCE`),
-  "DOCS_INTEGRATION", "DOCS_ACCESS_MECHANISM", "DOCS_READ_CONTRACT", "DOCS_WRITE_CONTRACT", "DOCS_READBACK_CONTRACT"];
-
-const documentationUrl = (key: string, value: string): URL => {
-  if (!value || /[\s|<>`]/u.test(value)) throw new CreatorError("documentation_invalid", `${key} requires an exact HTTPS URL without whitespace or markup`);
-  let url: URL;
-  try { url = new URL(value); } catch { throw new CreatorError("documentation_invalid", `${key} requires an exact HTTPS URL`); }
-  if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash || url.href !== value) {
-    throw new CreatorError("documentation_invalid", `${key} requires an exact HTTPS URL without credentials, query, or fragment`);
-  }
-  return url;
-};
-
-const validateDocumentationConfig = (values: Record<string, string>, input: Record<string, unknown>): void => {
-  const profile = values.DOCS_DESTINATION;
-  const fields = profile === "local" ? [] : profile === "github-pages" ? ["DOCS_DESTINATION_ID", "DOCS_GIT_SOURCE"]
-    : profile === "website-readonly" ? ["DOCS_DESTINATION_ID", ...documentationFamilies.map((family) => `DOCS_${family}_SOURCE`)]
-    : ["DOCS_DESTINATION_ID", ...documentationFamilies.map((family) => `DOCS_${family}_SOURCE`), "DOCS_INTEGRATION", "DOCS_ACCESS_MECHANISM",
-      "DOCS_READ_CONTRACT", "DOCS_WRITE_CONTRACT", "DOCS_READBACK_CONTRACT"];
-  if (profile !== "local" && input.DOCS_DESTINATION !== profile) {
-    throw new CreatorError("documentation_invalid", `project answers must explicitly select DOCS_DESTINATION=${profile}; a factory default cannot authorize a project destination`);
-  }
-  for (const key of documentationFields) {
-    if (!fields.includes(key) && values[key]) throw new CreatorError("documentation_invalid", `${key} is not applicable to DOCS_DESTINATION=${profile}; clear stale destination fields`);
-    if (fields.includes(key) && (!Object.hasOwn(input, key) || !values[key])) {
-      throw new CreatorError("documentation_invalid", `${key} requires an explicit project answer for DOCS_DESTINATION=${profile}; factory defaults are only suggestions`);
-    }
-  }
-  if (profile === "local") return;
-  const destination = documentationUrl("DOCS_DESTINATION_ID", values.DOCS_DESTINATION_ID);
-  if (profile === "github-pages") {
-    documentationUrl("DOCS_GIT_SOURCE", values.DOCS_GIT_SOURCE);
-    return;
-  }
-  for (const family of documentationFamilies) {
-    const key = `DOCS_${family}_SOURCE`;
-    const source = documentationUrl(key, values[key]);
-    const base = destination.pathname.endsWith("/") ? destination.pathname : `${destination.pathname}/`;
-    if (source.origin !== destination.origin || (source.pathname !== destination.pathname && !source.pathname.startsWith(base))) {
-      throw new CreatorError("documentation_invalid", `${key} must be inside DOCS_DESTINATION_ID; correct the canonical target identity`);
-    }
-  }
-  if (profile === "external-contract") {
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,79}$/u.test(values.DOCS_INTEGRATION)) {
-      throw new CreatorError("documentation_invalid", "DOCS_INTEGRATION requires a named supported integration, not a secret or markup");
-    }
-    for (const key of ["DOCS_READ_CONTRACT", "DOCS_WRITE_CONTRACT", "DOCS_READBACK_CONTRACT"]) documentationUrl(key, values[key]);
-  }
-};
-
-const safeMode = (mode: string): number => {
-  const parsed = Number.parseInt(mode.slice(-4), 8);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 0o7777) throw new CreatorError("payload_invalid", `invalid payload mode: ${mode}`);
-  return parsed;
-};
-
-interface SourceFile {
-  path: string;
-  bytes: Buffer;
-  mode: number;
+function fail(code: string, message: string, relative?: string): never {
+  throw new CreatorError(code, message, { path: relative });
 }
-
-const ownershipEntries = (ownership: OwnershipManifest): Array<{ category: string; definition: OwnershipCategory; entry: OwnershipEntry }> =>
-  Object.entries(ownership.categories).flatMap(([category, definition]) => definition.paths.map((entry) => ({ category, definition, entry })));
-
-const pathMatchesEntry = (relativePath: string, entry: OwnershipEntry): boolean =>
-  relativePath === entry.path || (entry.kind === "directory" && relativePath.startsWith(`${entry.path}/`));
-
-const relocationDestination = (relativePath: string): string => {
-  if (relativePath === "docs/bindings.md" || relativePath.startsWith(".factory/")) return relativePath;
-  if (["checks", "hooks", "scripts", "templates"].some((directory) => relativePath === directory || relativePath.startsWith(`${directory}/`))) {
-    return `.factory/${relativePath}`;
-  }
-  if (relativePath === "docs" || relativePath.startsWith("docs/")) return `.factory/${relativePath}`;
-  return relativePath;
-};
-
-const relativeSource = (sourcePath: string, targetPath: string): string => {
-  const normalized = path.posix.normalize(path.posix.join(path.posix.dirname(sourcePath), targetPath));
-  return normalized.replace(/^\.\//u, "");
-};
-
-const renderMarkdown = (
-  text: string,
-  sourcePath: string,
-  destinationPath: string,
-  destinations: Map<string, string>,
-  removed: Set<string>,
-): string => text.replace(/\[([^\]]+)\]\(([^\s)]+)\)/gu, (whole, label: string, target: string) => {
-  if (target.startsWith("#") || target.startsWith("/") || target.includes("://")) return whole;
-  const [targetPath, anchor] = target.split("#", 2);
-  if (!targetPath) return whole;
-  const sourceTarget = relativeSource(sourcePath, targetPath);
-  const mapped = destinations.get(sourceTarget);
-  if (!mapped || removed.has(sourceTarget)) return label;
-  const rebased = path.posix.relative(path.posix.dirname(destinationPath), mapped) || path.posix.basename(mapped);
-  const plainLabel = label.startsWith("`") && label.endsWith("`") ? label.slice(1, -1) : label;
-  const displayed = plainLabel === sourceTarget || plainLabel === targetPath
-    ? label === plainLabel ? mapped : `\`${mapped}\`` : label;
-  return `[${displayed}](${rebased}${anchor === undefined ? "" : `#${anchor}`})`;
+const diagnostic = (code: string, message: string, relative?: string): Diagnostic => ({ code, message, ...(relative ? { path: relative } : {}) });
+const safeRelative = (relative: string): boolean => typeof relative === "string" && relative.length > 0 && !/[\\:\u0000-\u001f]/u.test(relative)
+  && relative.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+const metadata = async (filename: string) => lstat(filename).catch((error: NodeJS.ErrnoException) => {
+  if (error.code === "ENOENT") return undefined;
+  throw error;
 });
 
-const renderGeneratedAgentRoutes = (text: string): string => {
-  const start = text.indexOf("| Trigger / mode | Required topic (S → G) | Optional when relevant (S → G) |");
-  const end = text.indexOf("\n\n", start);
-  if (start < 0 || end < 0) throw new CreatorError("composition_invalid", "AGENT.md context route table is missing");
-  const table = text.slice(start, end).split("\n")
-    .filter((line) => !line.startsWith("| Archetype maintenance (`SELF`)") && !line.startsWith("| Project initialization (`SETUP`)"))
-    .map((line) => {
-      let generated = line
-        .replaceAll(/`[^`]+` → (`[^`]+`|not generated[^;|]*)/gu, (_, destination: string) => destination.startsWith("`") ? destination : "source-only; not a generated-project action")
-        .replaceAll("(`SELF` or `WORK`)", "(`WORK`)");
-      if (line.startsWith("| Provider setup")) generated = generated.replace("(`SETUP` or `WORK`)", "(`WORK`)").replace("for setup;", "for provider recovery;").replace(/source-only; not a generated-project action; source recipes[^|]*/u, "Use the selected binding for recovery ");
-      if (line.startsWith("| Release or deployment")) generated = generated.replace("source-only; not a generated-project action; ", "");
-      return generated;
-    })
-    .join("\n")
-    .replace("Required topic (S → G)", "Required topic (generated path)")
-    .replace("Optional when relevant (S → G)", "Optional when relevant (generated path)");
-  return text.slice(0, start).replace("`S` is this source archetype; `G` is the expected initialized project layout. `SETUP` before creator apply uses source paths; `WORK` uses generated paths. A created-but-unconfigured project routes `ONBOARDING` first: complete the runbook's first-session bootstrap and run `foundry onboard --complete` (the creator flips the gate; start.mjs stays read-only) before `WORK`. Do not apply the creator to this source repository.", "These routes use initialized-project paths. A created-but-unconfigured project routes `ONBOARDING` first: complete the runbook's first-session bootstrap and run `foundry onboard --complete` (the creator flips the gate; start.mjs stays read-only) before `WORK`.") + table + text.slice(end);
+// Reject symlink parents as well as leaf links. O_NOFOLLOW binds the final read to a regular file.
+const safeParents = async (root: string, relative: string): Promise<void> => {
+  if (!safeRelative(relative)) fail("unsafe_path", "unsafe relative path", relative);
+  let current = root;
+  for (const part of relative.split("/").slice(0, -1)) {
+    current = path.join(current, part);
+    const entry = await metadata(current);
+    if (entry && !entry.isDirectory()) fail("unsafe_path", "parent must be a real directory", relative);
+  }
 };
-
-const renderConsumerAgent = (text: string, projectName: string): string => renderGeneratedAgentRoutes(text)
-  .replace("# AGENT.md - Agent-first, language-agnostic development archetype\n", `# ${projectName} — Agent operating contract\n`)
-  .replace(/The \*\*primary\*\* document for agents and humans working in ([^\n]+)\. This is a template:[\s\S]*?It is not tied to any language or stack\./u, "The **primary** operating contract for agents and humans working in $1.")
-  .replace(/> If the harness supports session hooks,[\s\S]*?exact-version creator package is the primary project path\.\n\n/u, "")
-  .replace(/> Placeholder convention:[\s\S]*?when it does not apply\.\n\n/u, "")
-  .replace("## Project coordinates (fill in)", "## Project coordinates")
-  .replace("## Archetype documents", "## Project documents")
-  .replace("in pre-apply `SETUP` its source-template guide is not a selected provider. ", "")
-  .replace("In a generated project, resolve routed topic paths under `.factory/` as shown; root `AGENT.md` and `docs/bindings.md` remain at root.", "Resolve routed topic paths under `.factory/` as shown; root `AGENT.md` and `docs/bindings.md` remain at root.");
-
-const renderConsumerReadme = (config: CreatorConfig): string => `# ${config.values.PROJECT_NAME}
-
-${config.values.LANGUAGES_AND_FRAMEWORKS ? `${config.values.LANGUAGES_AND_FRAMEWORKS} repository.` : "Project repository."} The task provider is ${config.values.TASK_TRACKER}; its selected binding and documentation authority are in [docs/bindings.md](docs/bindings.md).
-
-## Start work
-
-1. Run \`node start.mjs\` and follow [AGENT.md](AGENT.md).
-2. Read [docs/bindings.md](docs/bindings.md), then the active task in the bound provider.
-3. Follow the [agent runbook](.factory/templates/agent-runbook.md) for implementation and verification. Use [.factory/docs/engineering-handbook.md](.factory/docs/engineering-handbook.md) for code and testing standards.
-
-Creator recovery metadata is retained at \`${STATE_FILE}\` so the installed creator can still apply, verify, and diagnose this project. Keep it with the generated files; do not delete it after setup.
-`;
-
-const renderTextFile = (
-  source: SourceFile,
-  destinationPath: string,
-  config: CreatorConfig,
-  textFiles: Set<string>,
-  destinations: Map<string, string>,
-  removed: Set<string>,
-): Buffer => {
-  if (!textFiles.has(source.path)) return source.bytes;
-  const text = source.bytes.toString("utf8");
-  if (!Buffer.from(text, "utf8").equals(source.bytes)) return source.bytes;
-  let rendered = text;
-  for (const [key, value] of Object.entries(config.values)) rendered = rendered.replaceAll(`<${key}>`, () => value);
-  if (source.path === ".github/workflows/sync-labels.yml") {
-    if (!rendered.includes("node scripts/typed-inherited-runtime/sync-github-labels.js")) {
-      throw new CreatorError("composition_invalid", "label workflow is missing its inherited runtime command");
-    }
-    rendered = rendered.replaceAll("scripts/typed-inherited", ".factory/scripts/typed-inherited");
-  }
-  if (source.path === ".github/workflows/governance.yml") {
-    if (!rendered.includes("node scripts/typed-inherited-runtime/check-pr-governance.js")) {
-      throw new CreatorError("composition_invalid", "governance workflow is missing its inherited runtime command");
-    }
-    rendered = rendered.replaceAll("scripts/typed-inherited", ".factory/scripts/typed-inherited");
-    // The generated project has no archetype compiler toolchain; its verified payload is already compiled.
-    if (destinationPath === ".github/workflows/governance.yml") {
-      const buildStep = "      - name: Verify committed typed runtime\n        run: |\n          npm install --global pnpm@12.4.2\n          pnpm install --frozen-lockfile --ignore-scripts\n          pnpm build\n";
-      if (!rendered.includes(buildStep)) throw new CreatorError("composition_invalid", "governance workflow build step differs");
-      rendered = rendered.replace(buildStep, "");
-    }
-  }
-  if (destinationPath.endsWith(".md")) rendered = renderMarkdown(rendered, source.path, destinationPath, destinations, removed);
-  if (source.path === "AGENT.md" && destinationPath === "AGENT.md") rendered = renderConsumerAgent(rendered, config.values.PROJECT_NAME);
-  if (source.path === "README.md" && destinationPath === "README.md") rendered = renderConsumerReadme(config);
-  for (const key of Object.keys(config.values)) {
-    if (rendered.includes(`<${key}>`)) throw new CreatorError("unresolved_placeholder", `generated file contains unresolved placeholder: ${key}`, { path: destinationPath });
-  }
-  return Buffer.from(rendered, "utf8");
-};
-
-const providerManifestPath = ".factory/provider-manifest.json";
-
-const providerCommand = (executable: string, args: string[]): string => [executable, ...args].map((part) => part.replaceAll("{workspace}", "<project-directory>")).join(" ");
-
-const providerSummary = (catalog: ProviderCatalog, runtimes: ProviderRuntime[], manifestPath = providerManifestPath): ProviderSummary => ({
-  catalog_version: catalog.catalog_version,
-  selected: runtimes.map(({ provider }) => ({
-    id: provider.id,
-    display_name: provider.display_name,
-    executable: provider.executable,
-    available: true,
-    capabilities: [...provider.capabilities],
-    workspace_files: provider.workspace.files.map((file) => file.path),
-    manual_prerequisites: [...provider.manual_prerequisites],
-    next_steps: [providerCommand(provider.executable, provider.launch.args)],
-  })),
-  ...(runtimes.length > 0 ? { manifest_path: manifestPath } : {}),
-});
-
-const providerConfigDigest = (config: CreatorConfig, selected: string[]): CreatorConfig => ({
-  values: config.values,
-  digest: `sha256:${sha256(canonicalJson({ agents: selected, values: Object.fromEntries(Object.keys(config.values).sort().map((key) => [key, config.values[key]])), ...(config.factoryIdentity ? { factory: config.factoryIdentity } : {}) }))}`,
-  factoryCiRef: config.factoryCiRef,
-  factoryIdentity: config.factoryIdentity,
-});
-
-const composeProviderFiles = (
-  catalog: ProviderCatalog,
-  runtimes: ProviderRuntime[],
-  sources: Map<string, SourceFile>,
-  config: CreatorConfig,
-  textFiles: Set<string>,
-  destinations: Map<string, string>,
-  removed: Set<string>,
-): { files: PlannedFile[]; summary: ProviderSummary } => {
-  const summary = providerSummary(catalog, runtimes);
-  if (runtimes.length === 0) return { files: [], summary };
-  const files: PlannedFile[] = [];
-  for (const { provider } of runtimes) {
-    for (const workspaceFile of provider.workspace.files) {
-      const source = sources.get(workspaceFile.template);
-      if (!source) throw new CreatorError("provider_invalid", `provider template is missing: ${workspaceFile.template}`, { path: workspaceFile.template });
-      const bytes = renderTextFile(source, workspaceFile.path, config, textFiles, destinations, removed);
-      files.push({ relativePath: workspaceFile.path, bytes, mode: 0o644, sha256: sha256(bytes), size: bytes.byteLength });
-    }
-  }
-  const manifest = {
-    schema_version: 1,
-    catalog_version: catalog.catalog_version,
-    providers: summary.selected.map(({ id, display_name, executable, capabilities, workspace_files, manual_prerequisites, next_steps }) => ({
-      id,
-      display_name,
-      executable,
-      capabilities,
-      workspace_files,
-      manual_prerequisites,
-      next_steps,
-    })),
-    handoff: { enabled_by_default: false, opt_in_flag: "--launch-agent" },
-  };
-  const bytes = canonicalJson(manifest);
-  files.push({ relativePath: providerManifestPath, bytes, mode: 0o644, sha256: sha256(bytes), size: bytes.byteLength });
-  return { files, summary };
-};
-const bindingHeader = `# Bindings - mandatory project providers
-
-These bindings are mandatory for every agent, regardless of harness.
-The shape of each instance is defined by:
-- [task provider contract](../providers/task/_contract.md)
-- [secrets provider contract](../providers/secrets/_contract.md)
-- [code-intelligence provider contract](../providers/code-intel/_contract.md) when selected
-- [CI recipe contract](../ci/_contract.md)
-The harness provides access and the binding provides the rules.
-
-## Documentation authority
-
-Read this map after AGENT.md and before relying on a documentation copy. It is
-the local Git-only default, not evidence that an external service is configured.
-Each row names the canonical local entrypoint for that family; optional detailed
-documents are not required merely because a family is listed.
-
-| Family | Canonical local-default entrypoint |
-| --- | --- |
-| Architecture | [AGENT.md](../AGENT.md) project coordinates and [engineering handbook](engineering-handbook.md) architecture standards; project-specific decisions only where recorded. |
-| Constraints | [AGENT.md](../AGENT.md) operating/approval rules and [workflow](workflow.md); [engineering handbook](engineering-handbook.md) security and migration standards. |
-| Business | [AGENT.md](../AGENT.md) project coordinates; add a repository link to actual product requirements when present. No detailed business source is assumed. |
-| Technical | [AGENT.md](../AGENT.md) stack/commands and [engineering handbook](engineering-handbook.md) code, testing, and CI standards. |
-
-For mixed or external documentation, the project owner must replace each
-affected row with the exact canonical URL or stable identifier and the access
-and recovery path. Keep this local map and AGENT.md as the minimal cold-start
-bootstrap. Label any retained export or summary "Derived - not authoritative",
-including source and last-confirmed revision. A derived copy never wins over
-its mapped canonical source. An external destination is not selected by this
-creator; do not infer one from a task, secret, or code-intelligence provider.
-
-Local project rules override the pinned organization baseline where they
-overlap. For a mapped external family, use that source rather than a divergent
-derived copy. If access fails or a link breaks, report the exact unavailable
-source, stop claims that depend on its current content, and ask the owner to
-restore access or repair the link; do not invent current context or silently
-fall back to a copy. If copies differ, reconcile them against the canonical
-source. When migrating, verify the replacement and access first, then update
-the row and relabel old copies; never leave two competing authorities. This
-map does not change task-provider confirmation/readback or outward-action gates.
-
-## Delegated routine delivery
-Explicit human implementation delegation covering the ticket and its effects authorizes scoped routine delivery, including non-protected branch push and PR creation, without status:approved or intermediate approval. Preserve native task references, required review, quality checks, and provider-confirmed checkpoints/readbacks. Delegation does not authorize human review approval, merge, deployment, publication, or destructive actions.
-
-## Protected \`status:approved\` gate
-The bound task provider may support delegated approval only through its fail-closed protocol: a current direct human instruction must name the exact issue and add status:approved; target-host evidence must bind that principal to maintainer/authorized-approver authority; the authenticated actor must have MAINTAIN or ADMIN; and exactly one scoped add attempt must be followed by target-host readback. Any mismatch, stale/ambiguous/missing instruction, insufficient permission, failed/unknown mutation, or readback mismatch stops the operation. When a separately requested label mutation lacks that evidence, stop that mutation and ask the human to apply the label directly. This label protocol is not a prerequisite for delegated routine delivery and does not apply the label to existing work.
-`;
-
-const documentationBinding = (values: Record<string, string>): string => {
-  const profile = values.DOCS_DESTINATION;
-  const start = bindingHeader.indexOf("## Documentation authority");
-  const end = bindingHeader.indexOf("## Protected `status:approved` gate");
-  const prefix = bindingHeader.slice(0, start);
-  const suffix = bindingHeader.slice(end);
-  const common = `
-Local project rules override the pinned organization baseline. A factory default is only a proposal: it cannot authorize access, document writes, publication, or migration. Never discover ambient credentials or put credential values in this binding. Before any remote operation, obtain explicit user authorization for its exact destination, action, and credential/session, verify supported access and readback, then record the resulting revision or publication evidence. Selection and creator plan/apply/verify perform no remote operation. If the canonical source is inaccessible or divergent from a derived copy, stop current-content claims and ask the owner to restore access or reconcile the copy; do not silently fall back. Migrate authority only after the new source and access are verified, and label old copies "Derived - not authoritative" with source and last-confirmed revision. This map does not change task-provider confirmation/readback or outward-action gates.
-
-For each accepted work unit, assess which canonical families changed or record a concise unaffected reason. Follow the [Documentation evidence procedure](engineering-handbook.md#documentation-evidence-for-affected-families) for Git revision, conditional external write/acknowledgment/fresh readback, or separate Pages publication proof. A declared external contract does not prove conditional-write support or a successful sync. Attach pending/blocked evidence and an exact next action to the existing bound-provider work-unit handoff; do not create another task lifecycle or block unrelated safe local work.
-`;
-  if (profile === "local") {
-    return bindingHeader.replace("## Protected `status:approved` gate", `## Documentation destination capabilities
-
-- Profile: local; destination identity: this repository's Git-tracked documentation.
-- Read: local Git content. Write: local Git content under ordinary review. Publish: not configured.
-- Families: architecture, constraints, business, and technical use the canonical local-default entrypoints above. No external credentials, migration, or publication are needed.
-${common}
-## Protected \`status:approved\` gate`);
-  }
-  const localMap = bindingHeader.slice(bindingHeader.indexOf("| Family |"), bindingHeader.indexOf("For mixed or external documentation"));
-  if (profile === "github-pages") {
-    return `${prefix}## Documentation authority
-
-The canonical source for every family remains local Git content. GitHub Pages is a publication target, not a directly writable documentation store.
-
-${localMap.trimEnd()}
-
-## Documentation destination capabilities
-
-- Profile: github-pages; publication destination: ${values.DOCS_DESTINATION_ID}.
-- Git source for publication: ${values.DOCS_GIT_SOURCE}. Match its repository, branch, and path to the intended local source before publication.
-- Read: local Git content. Write: local Git content under ordinary review; direct Pages document write: unsupported. Publish: only through a separately authorized Git-to-Pages workflow, not by selecting this profile.
-- Publication evidence: verify the target URL, deployment status, and published source commit/revision against the Git source; absent or stale evidence is not proof of a published change.
-${common}
-${suffix}`;
-  }
-  const rows = documentationFamilies.map((family) => `| ${family.charAt(0)}${family.slice(1).toLowerCase()} | ${values[`DOCS_${family}_SOURCE`]} |`).join("\n");
-  const writable = profile === "external-contract";
-  return `${prefix}## Documentation authority
-
-The following exact sources are canonical for their families. Retain this local map and AGENT.md as bootstrap pointers, not competing copies. Read the specified source through the supported integration; an unavailable source is not replaced by a local export.
-
-| Family | Canonical source |
-| --- | --- |
-${rows}
-
-## Documentation destination capabilities
-
-- Profile: ${profile}; destination identity: ${values.DOCS_DESTINATION_ID}.
-- Families served: architecture, constraints, business, technical.
-- Read: ${writable ? "contract-declared; verify the named integration and readback before relying on current content" : "public HTTPS, subject to actual access and current-content verification"}. Write: ${writable ? "contract-declared, only through the verified integration and an authorized operation with matching readback" : "unsupported"}. Publish: unsupported; no publication is inferred from writing.
-${writable ? `- Integration: ${values.DOCS_INTEGRATION}; access mechanism: ${values.DOCS_ACCESS_MECHANISM} (operator supplied, never discovered or stored here).
-- Supported-operation specifications: read ${values.DOCS_READ_CONTRACT}; write ${values.DOCS_WRITE_CONTRACT}; readback/revision ${values.DOCS_READBACK_CONTRACT}. These are declarations, not an installed adapter or live proof. If any operation, access, exact identity, or readback is unavailable, stop and ask the owner for a supported path; do not write or claim success.` : "- This website is read-only. An arbitrary or unsupported website cannot be selected as a writable provider; configure a supported external contract separately."}
-${common}
-${suffix}`;
-};
-
-const providerFragment = (sources: Map<string, SourceFile>, capability: string, name: string): SourceFile => {
-  const selected = `providers/${capability}/${name}.md`;
-  const fallback = `providers/${capability}/custom.md`;
-  const source = sources.get(selected) ?? (name !== "_contract" ? sources.get(fallback) : undefined);
-  if (!source) throw new CreatorError("provider_invalid", `no provider fragment exists for ${capability}/${name}`);
-  return source;
-};
-
-const parseStacks = (value: string): string[] => {
-  if (!value.trim()) return [];
-  const stacks = value.split(",").map((stack) => stack.trim().toLowerCase());
-  if (stacks.some((stack) => !stack)) throw new CreatorError("ci_invalid", "CI_STACKS contains an empty selection");
-  if (new Set(stacks).size !== stacks.length) throw new CreatorError("ci_invalid", `CI_STACKS contains a duplicate selection: ${stacks.find((stack, index) => stacks.indexOf(stack) !== index)}`);
-  return stacks;
-};
-
-const composeBindings = (
-  sources: Map<string, SourceFile>,
-  config: CreatorConfig,
-  destinations: Map<string, string>,
-  removed: Set<string>,
-): Buffer => {
-  const task = config.values.TASK_TRACKER;
-  const secrets = config.values.SECRETS_PROVIDER || "none";
-  const codeIntel = config.values.CODE_INTELLIGENCE || "none";
-  if (!task) throw new CreatorError("configuration_invalid", "TASK_TRACKER is required for binding composition");
-  const parts = [renderMarkdown(documentationBinding(config.values), "docs/bindings.md", "docs/bindings.md", destinations, removed).trimEnd(),
-    `## Bound task identity
-
-- Task provider (TASK_TRACKER): ${task}
-- Tracker (TRACKER): ${config.values.TRACKER}
-- Project/board (TRACKER_KEY): ${config.values.TRACKER_KEY || "not configured; resolve before durable task operations"}
-
-Use only this provider and tracker for every durable harness task/TODO. Confirm each native operation and read back the intended task identity, state, and handoff before claiming success. Missing identity or readback blocks the operation; local files and task UIs are not fallback stores.`];
-  for (const [capability, name] of [["task", task], ["secrets", secrets]] as const) {
-    const source = providerFragment(sources, capability, name);
-    parts.push(renderTextFile(source, "docs/bindings.md", config, new Set([source.path]), destinations, removed).toString("utf8").trimEnd());
-  }
-  if (codeIntel !== "none") {
-    const source = providerFragment(sources, "code-intel", codeIntel);
-    parts.push(renderTextFile(source, "docs/bindings.md", config, new Set([source.path]), destinations, removed).toString("utf8").trimEnd());
-  }
-  return Buffer.from(`${parts.join("\n\n")}\n`, "utf8");
-};
-
-const nativeTaskReferences: Record<string, string> = {
-  jira: "Jira: <TICKET_ID>",
-  linear: "Linear: <TICKET_ID>",
-  custom: "Task: <TICKET_ID>",
-};
-
-const composePrTaskReference = (bytes: Buffer, task: string): Buffer => {
-  const reference = nativeTaskReferences[task];
-  if (!reference) return bytes;
-  const text = bytes.toString("utf8");
-  const marker = /(<!-- provider-governance:start -->)[\s\S]*?(<!-- provider-governance:end -->)/u;
-  if (!marker.test(text)) throw new CreatorError("composition_invalid", "pull-request template is missing its provider-governance section");
-  return Buffer.from(text.replace(marker, `$1\n${reference}\n<!-- Explicit human delegation covering this task and its effects authorizes routine delivery; separate human decisions remain gated. -->\n$2`), "utf8");
-};
-
-const composeCi = (sources: Map<string, SourceFile>, config: CreatorConfig): Buffer | undefined => {
-  const system = config.values.CI_SYSTEM || "";
-  const stacks = parseStacks(config.values.CI_STACKS || "");
-  if (!system.toLowerCase().includes("github") || stacks.length === 0) return undefined;
-  const recipes = sources.get("ci/recipes.json");
-  if (!recipes) throw new CreatorError("ci_invalid", "CI recipe catalog is missing");
-  let catalog: Record<string, string>;
-  try { catalog = JSON.parse(recipes.bytes.toString("utf8")) as Record<string, string>; } catch (error) { throw new CreatorError("ci_invalid", `CI recipe catalog is invalid: ${(error as Error).message}`); }
-  const unknown = stacks.filter((stack) => !Object.prototype.hasOwnProperty.call(catalog, stack));
-  if (unknown.length > 0) throw new CreatorError("ci_invalid", `CI_STACKS contains unknown selection(s): ${unknown.join(", ")}`);
-  if (config.factoryCiRef) {
-    const [repository, tag] = config.factoryCiRef.split("@");
-    return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => `  ${stack}:\n    uses: ${repository}/.github/workflows/${stack}.yml@${tag}`).join("\n")}\n`, "utf8");
-  }
-  return Buffer.from(`name: CI\n\non:\n  push:\n  pull_request:\n\njobs:\n${stacks.map((stack) => catalog[stack]).join("\n")}\n`, "utf8");
-};
-
-const readPayloadFiles = async (
-  manifest: PayloadManifest,
-  payloadRoot: string,
-  config: CreatorConfig,
-  ownership: OwnershipManifest,
-  providerCatalog: ProviderCatalog,
-  providerRuntimes: ProviderRuntime[],
-): Promise<{ files: PlannedFile[]; sourceFiles: Map<string, SourceFile>; removedSourcePaths: Set<string>; providerSummary: ProviderSummary }> => {
-  if (manifest.files.length > MAX_STATE_FILES) throw new CreatorError("payload_invalid", "payload contains too many files");
-  const sourceFiles = new Map<string, SourceFile>();
-  for (const entry of manifest.files) {
-    assertSafeRelative(entry.path);
-    const source = path.join(payloadRoot, entry.path);
-    // npm renames packaged .gitignore files to .npmignore. Accept only this
-    // exact transport alias; the manifest path, bytes, and restored mode stay authoritative.
-    const npmTransport = entry.path === ".gitignore" ? path.join(payloadRoot, ".npmignore") : undefined;
-    const sourcePath = (await lstat(source).catch(() => undefined)) ? source : npmTransport ?? source;
-    const sourceStat = await lstat(sourcePath).catch(() => undefined);
-    if (!sourceStat?.isFile() || sourceStat.isSymbolicLink()) throw new CreatorError("payload_invalid", `payload file is not a regular file: ${entry.path}`, { path: entry.path });
-    const sourceBytes = await readFile(sourcePath);
-    const sourceMode = sourceStat.mode & 0o7777;
-    const expectedMode = safeMode(entry.mode);
-    // npm-compatible package stores normalize non-bin executable files to 0644.
-    // The packaged manifest remains authoritative for the mode restored in the target.
-    const packageModeNormalized = sourceMode === 0o644 && expectedMode === 0o755;
-    if (sourceBytes.byteLength !== entry.size || sha256(sourceBytes) !== entry.sha256 || (sourceMode !== expectedMode && !packageModeNormalized)) {
-      throw new CreatorError("payload_mismatch", `packaged payload bytes or mode differ from the manifest: ${entry.path}`, { path: entry.path });
-    }
-    sourceFiles.set(entry.path, { path: entry.path, bytes: sourceBytes, mode: expectedMode });
-  }
-  const textFiles = new Set(ownership.text_files);
-  const removedSourcePaths = new Set<string>();
-  const removedEntries = ownershipEntries(ownership).filter(({ definition }) => definition.disposition === "removed");
-  for (const sourcePath of sourceFiles.keys()) {
-    if (removedEntries.some(({ entry }) => pathMatchesEntry(sourcePath, entry))) removedSourcePaths.add(sourcePath);
-  }
-  const destinations = new Map<string, string>();
-  const retainedEntries = ownershipEntries(ownership).filter(({ definition }) => definition.disposition === "inherited");
-  for (const source of sourceFiles.values()) {
-    const retained = retainedEntries.some(({ entry }) => pathMatchesEntry(source.path, entry));
-    if (retained) destinations.set(source.path, relocationDestination(source.path));
-  }
-  const workflow = composeCi(sourceFiles, config);
-  destinations.set("docs/bindings.md", "docs/bindings.md");
-  if (workflow) destinations.set(".github/workflows/ci.yml", ".github/workflows/ci.yml");
-  if (config.values.OPENCODE_PLUGIN === "true") destinations.set(".opencode/plugins/factory-start.ts", ".opencode/plugins/factory-start.ts");
-  const files: PlannedFile[] = [];
-  for (const source of sourceFiles.values()) {
-    if (!destinations.has(source.path)) continue;
-    const destinationPath = destinations.get(source.path)!;
-    const rendered = renderTextFile(source, destinationPath, config, textFiles, destinations, removedSourcePaths);
-    const bytes = source.path === "templates/pull-request.md" || source.path === ".github/pull_request_template.md"
-      ? composePrTaskReference(rendered, config.values.TASK_TRACKER) : rendered;
-    files.push({ relativePath: destinationPath, bytes, mode: source.mode, sha256: sha256(bytes), size: bytes.byteLength });
-  }
-  const generatedPaths = new Set(ownershipEntries(ownership).filter(({ definition }) => definition.disposition === "generated").map(({ entry }) => entry.path));
-  if (generatedPaths.has("docs/bindings.md")) {
-    const bytes = composeBindings(sourceFiles, config, destinations, removedSourcePaths);
-    files.push({ relativePath: "docs/bindings.md", bytes, mode: 0o644, sha256: sha256(bytes), size: bytes.byteLength });
-  }
-  if (workflow && generatedPaths.has(".github/workflows/ci.yml")) files.push({ relativePath: ".github/workflows/ci.yml", bytes: workflow, mode: 0o644, sha256: sha256(workflow), size: workflow.byteLength });
-  if (config.values.OPENCODE_PLUGIN === "true" && generatedPaths.has(".opencode/plugins/factory-start.ts")) {
-    const source = sourceFiles.get("hooks/opencode/factory-start.ts");
-    if (!source) throw new CreatorError("composition_invalid", "OpenCode plugin source is missing");
-    const bytes = renderTextFile(source, ".opencode/plugins/factory-start.ts", config, textFiles, destinations, removedSourcePaths);
-    files.push({ relativePath: ".opencode/plugins/factory-start.ts", bytes, mode: source.mode, sha256: sha256(bytes), size: bytes.byteLength });
-  }
-  const composedProviders = composeProviderFiles(
-    providerCatalog,
-    providerRuntimes,
-    sourceFiles,
-    config,
-    textFiles,
-    destinations,
-    removedSourcePaths,
-  );
-  files.push(...composedProviders.files);
-  for (const sourcePath of sourceFiles.keys()) {
-    if (!removedSourcePaths.has(sourcePath) && !destinations.has(sourcePath)) throw new CreatorError("ownership_invalid", `payload file is not classified by ownership: ${sourcePath}`, { path: sourcePath });
-  }
-  if (files.length > MAX_STATE_FILES) throw new CreatorError("payload_invalid", "composed payload contains too many files");
-  const totalBytes = files.reduce((total, file) => total + file.size, 0);
-  if (totalBytes > MAX_STATE_BYTES) throw new CreatorError("payload_invalid", "payload exceeds the bounded creator state limit");
-  return { files, sourceFiles, removedSourcePaths, providerSummary: composedProviders.summary };
-};
-
-const readState = async (target: string, relativePath: string): Promise<CreatorState | undefined> => {
-  const statePath = path.join(target, relativePath);
+const regular = async (root: string, relative: string): Promise<{ bytes: Buffer; mode: number }> => {
+  await safeParents(root, relative);
+  const filename = path.join(root, relative);
+  if (!(await lstat(filename)).isFile()) fail("unsafe_file", "expected a regular file, not a link/directory/device", relative);
+  const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    const entry = await lstat(statePath);
-    if (!entry.isFile() || entry.isSymbolicLink() || (entry.mode & 0o7777) !== 0o600 || entry.size > MAX_STATE_BYTES) {
-      throw new CreatorError("state_invalid", "creator state must be a bounded regular 0600 file", { path: relativePath });
-    }
-    const raw = await readFile(statePath, "utf8");
-    let value: CreatorState;
-    try {
-      value = JSON.parse(raw) as CreatorState;
-    } catch (error) {
-      throw new CreatorError("state_invalid", `creator state is not valid JSON: ${(error as Error).message}`, { path: relativePath });
-    }
-    if (!isObject(value) || value.schema_version !== CREATOR_SCHEMA_VERSION || !Array.isArray(value.owned_files) ||
-      typeof value.payload_version !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(value.payload_digest) ||
-      !/^sha256:[0-9a-f]{64}$/u.test(value.config_digest) ||
-      (value.onboarded !== undefined && typeof value.onboarded !== "boolean") ||
-      value.owned_files.some((file) => !isObject(file) || typeof file.path !== "string" ||
-        !/^0[0-7]{3}$/u.test(file.mode) || !Number.isSafeInteger(file.size) || file.size < 0 ||
-        typeof file.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(file.sha256))) {
-      throw new CreatorError("state_invalid", "creator state has an unsupported shape", { path: relativePath });
-    }
-    if (value.owned_files.length > MAX_STATE_FILES || !Buffer.from(raw).equals(canonicalJson(value))) {
-      throw new CreatorError("state_invalid", "creator state is not canonical or lists too many files", { path: relativePath });
-    }
-    const paths = new Set<string>();
-    for (const file of value.owned_files) {
-      try { assertSafeRelative(file.path); } catch { throw new CreatorError("state_invalid", "creator state contains an unsafe path", { path: relativePath }); }
-      if (paths.has(file.path) || file.path === CREATOR_DIRECTORY || file.path.startsWith(`${CREATOR_DIRECTORY}/`) ||
-        file.path === LEGACY_DIRECTORY || file.path.startsWith(`${LEGACY_DIRECTORY}/`)) {
-        throw new CreatorError("state_invalid", "creator state contains duplicate or reserved ownership", { path: relativePath });
-      }
-      paths.add(file.path);
-    }
+    const entry = await handle.stat();
+    if (!entry.isFile() || entry.size > MAX_BYTES) fail("unsafe_file", "expected a bounded regular file", relative);
+    return { bytes: await handle.readFile(), mode: entry.mode & 0o7777 };
+  } finally { await handle.close(); }
+};
+const verifyLocalGit = async (target: string): Promise<void> => {
+  const expected = path.join(target, ".git");
+  const before = await metadata(expected);
+  if (!before?.isDirectory() || await realpath(expected) !== expected) fail("local_git_uncertain", "accepted local Git directory is missing, linked or unsafe", ".git");
+  const observed = await runFile("git", ["-C", target, "rev-parse", "--absolute-git-dir", "--show-toplevel"], { timeout: 30_000, env: gitEnvironment() })
+    .catch(() => fail("local_git_uncertain", "accepted local Git directory is not a readable repository", ".git"));
+  const after = await metadata(expected);
+  if (!after?.isDirectory() || before.dev !== after.dev || before.ino !== after.ino || observed.stdout !== `${expected}\n${target}\n`
+    || await realpath(expected) !== expected) fail("local_git_uncertain", "local Git boundary changed or resolves outside the accepted destination", ".git");
+};
+const parseJson = (bytes: Buffer, label: string): unknown => {
+  try {
+    // JSON.parse enforces JSON syntax; YAML's duplicate-key diagnostic closes JSON.parse's last-key-wins hole.
+    const value: unknown = JSON.parse(bytes.toString("utf8"));
+    if (parseDocument(bytes.toString("utf8"), { uniqueKeys: true }).errors.length) throw new Error("duplicate or invalid keys");
     return value;
-  } catch (error) {
-    if (error instanceof CreatorError) throw error;
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw new CreatorError("state_invalid", `cannot read creator state: ${(error as Error).message}`, { path: relativePath });
-  }
+  } catch { return fail("invalid_json", `${label} must be JSON without duplicate keys`); }
 };
-
-const creatorDirectoryStatus = async (target: string, relativePath: string): Promise<{ safe: boolean; diagnostic?: Diagnostic }> => {
-  for (const parent of [...parentPaths(`${relativePath}/state.json`)].reverse()) {
-    const entry = await lstat(path.join(target, parent)).catch(() => undefined);
-    if (entry?.isSymbolicLink()) return { safe: false, diagnostic: diagnostic("symlink_escape", "creator state directory must not be a symlink", parent) };
-    if (entry && !entry.isDirectory()) return { safe: false, diagnostic: diagnostic("path_conflict", "creator state path must be a directory", parent) };
-  }
-  return { safe: true };
+const keys = (value: unknown, expected: string[], label: string): Record<string, unknown> => {
+  if (!object(value) || Object.keys(value).sort().join("\0") !== [...expected].sort().join("\0")) fail("configuration_invalid", `${label} has missing or unknown fields`);
+  return value as Record<string, unknown>;
 };
-
-const collectEntries = async (directory: string, relative = ""): Promise<Array<{ path: string; directory: boolean; symlink: boolean }>> => {
-  const result: Array<{ path: string; directory: boolean; symlink: boolean }> = [];
-  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) => compareStrings(left.name, right.name))) {
-    const entryPath = normalizePath(path.posix.join(relative, entry.name));
-    if (entry.isSymbolicLink()) result.push({ path: entryPath, directory: false, symlink: true });
-    else if (entry.isDirectory()) {
-      result.push({ path: entryPath, directory: true, symlink: false });
-      result.push(...await collectEntries(path.join(directory, entry.name), entryPath));
-    } else result.push({ path: entryPath, directory: false, symlink: false });
-  }
+const text = (value: unknown, label: string): string => {
+  if (typeof value !== "string" || !value.trim() || value.length > 4096 || /[\u0000-\u001f\u007f<>`]/u.test(value)) fail("configuration_invalid", `${label} must be nonempty plain text without controls or markup`);
+  return (value as string).trim();
+};
+const https = (value: unknown, label: string): string => {
+  const result = text(value, label);
+  let url: URL;
+  try { url = new URL(result); } catch { return fail("configuration_invalid", `${label} requires an exact HTTPS URL`); }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || /\s/u.test(result)) fail("configuration_invalid", `${label} requires an exact credential-free HTTPS URL`);
   return result;
 };
-
-const parentPaths = (relativePath: string): Set<string> => {
-  const result = new Set<string>();
-  let current = path.posix.dirname(relativePath);
-  while (current && current !== ".") {
-    result.add(current);
-    current = path.posix.dirname(current);
+const textList = (value: unknown, label: string): string[] => {
+  if (!Array.isArray(value) || !value.length || value.length > 32) fail("configuration_invalid", `${label} requires an explicit nonempty list`);
+  return (value as unknown[]).map((entry) => text(entry, label));
+};
+export const validateConfig = (raw: unknown): CreatorConfig => {
+  const value = keys(raw, ["schema_version", "profile", "project", "binding", "hosts", "initialize_git", "readiness_record",
+    ...(object(raw) && raw.adoption !== undefined ? ["adoption"] : [])], "configuration");
+  if (value.schema_version !== 2 || value.profile !== "matt-first") fail("configuration_version", "requires schema_version 2 / matt-first; legacy configuration is not converted");
+  const project = keys(value.project, ["name"], "project");
+  const binding = keys(value.binding, ["provider", "repository", "project", "access", "recovery", "permissions", "approval_gates", "documentation"], "binding");
+  const documentation = keys(binding.documentation, ["architecture", "constraints", "business", "technical"], "documentation authority");
+  const docs = Object.fromEntries(Object.entries(documentation).map(([family, location]) => {
+    const source = text(location, `${family} source`);
+    if (!safeRelative(source) && !source.startsWith("https://")) fail("configuration_invalid", "documentation source requires a safe repository path or exact HTTPS URL");
+    if (source.startsWith("https://")) https(source, `${family} source`);
+    return [family, source];
+  })) as CreatorConfig["binding"]["documentation"];
+  if (!Array.isArray(value.hosts) || !value.hosts.length || value.hosts.length > 16) fail("configuration_invalid", "select at least one exact manual host");
+  const seen = new Set<string>();
+  const hosts = (value.hosts as unknown[]).map((entry) => {
+    const host = keys(entry, ["id", "version", "route"], "host");
+    const id = text(host.id, "host id");
+    if (!/^[a-z][a-z0-9-]*$/u.test(id) || seen.has(id) || host.route !== "manual") fail("route_unavailable", "fresh foundation supports explicitly selected unique manual routes only; no native downgrade");
+    seen.add(id);
+    return { id, version: text(host.version, "host version"), route: "manual" as const };
+  });
+  if (typeof value.initialize_git !== "boolean") fail("configuration_invalid", "initialize_git requires explicit true or false");
+  const repository = https(binding.repository, "task repository");
+  const readiness = https(value.readiness_record, "readiness record");
+  if (!readiness.startsWith(`${repository}/`)) fail("configuration_invalid", "readiness record must belong to the accepted task repository");
+  let adoption: CreatorConfig["adoption"];
+  if (value.adoption !== undefined) {
+    const selected = keys(value.adoption, ["startup", "shared_files", "adopt_files", "rule_reviews"], "adoption");
+    if (!["start.mjs", ".factory/start.mjs"].includes(String(selected.startup)) || value.initialize_git !== false) fail("configuration_invalid", "adoption selects an exact startup and never initializes existing Git");
+    const paths = (raw: unknown, label: string): string[] => {
+      if (!Array.isArray(raw) || raw.length > 1000 || raw.some((entry) => typeof entry !== "string" || !safeRelative(entry)) || new Set(raw).size !== raw.length) fail("configuration_invalid", `invalid/duplicate ${label}`);
+      return raw as string[];
+    };
+    const shared = paths(selected.shared_files, "shared files");
+    if (shared.some((entry) => !["AGENT.md", "docs/bindings.md", ".gitignore"].includes(entry))) fail("configuration_invalid", "only the envelope, stable binding and ignore file have shared-block integrations");
+    if (!Array.isArray(selected.rule_reviews) || selected.rule_reviews.length > 1000) fail("configuration_invalid", "adoption requires exact rule reviews");
+    const reviews = selected.rule_reviews.map((raw) => {
+      const review = keys(raw, ["path", "sha256", "mode", "compatible", "resolution"], "rule review");
+      if (typeof review.path !== "string" || !safeRelative(review.path) || !/^[a-f0-9]{64}$/u.test(String(review.sha256))
+        || !/^0[0-7]{3}$/u.test(String(review.mode)) || typeof review.compatible !== "boolean") fail("configuration_invalid", "rule review requires exact path/hash/mode and compatibility decision");
+      return { path: review.path as string, sha256: review.sha256 as string, mode: review.mode as string,
+        compatible: review.compatible as boolean, resolution: text(review.resolution, "rule reconciliation") };
+    });
+    if (new Set(reviews.map((review) => review.path)).size !== reviews.length) fail("configuration_invalid", "duplicate rule review");
+    adoption = { startup: selected.startup as "start.mjs" | ".factory/start.mjs", shared_files: shared,
+      adopt_files: paths(selected.adopt_files, "matching-file adoptions"), rule_reviews: reviews };
   }
-  return result;
+  return {
+    schema_version: 2, profile: "matt-first", project: { name: text(project.name, "project name") },
+    binding: { provider: text(binding.provider, "task provider"), repository, project: https(binding.project, "task project/board"),
+      access: text(binding.access, "access route"), recovery: text(binding.recovery, "access recovery"),
+      permissions: textList(binding.permissions, "permissions"), approval_gates: textList(binding.approval_gates, "approval gates"), documentation: docs },
+    hosts, initialize_git: value.initialize_git as boolean, readiness_record: readiness,
+    ...(adoption ? { adoption } : {}),
+  };
+};
+const resolveTarget = async (raw: string): Promise<{ absolute: string; existed: boolean; identity: PreparedPlan["baseline"] }> => {
+  if (!raw || raw.replaceAll("\\", "/").split("/").includes("..")) fail("invalid_target", "target traversal or empty target is not allowed");
+  const absolute = path.resolve(raw);
+  const entry = await metadata(absolute);
+  if (entry && !entry.isDirectory()) fail("unsafe_target", "target must be a real directory", absolute);
+  const parent = entry ? absolute : path.dirname(absolute);
+  const parentEntry = await metadata(parent);
+  if (!parentEntry?.isDirectory() || await realpath(parent) !== parent) fail("unsafe_target", "target and parent must resolve without symlinks; parent must exist", parent);
+  if ((parentEntry.mode & 0o222) === 0) fail("target_unwritable", "target parent has no write permissions", parent);
+  return { absolute, existed: Boolean(entry), identity: { existed: Boolean(entry), dev: parentEntry.dev, ino: parentEntry.ino, mode: parentEntry.mode } };
+};
+const plannedFile = (relativePath: string, bytes: Buffer, mode = 0o644): PlannedFile => ({ relativePath, bytes, mode, sha256: hash(bytes), size: bytes.length });
+const fileIdentity = (file: PlannedFile): PayloadFile => ({ path: file.relativePath, mode: file.mode.toString(8).padStart(4, "0"), size: file.size, sha256: file.sha256 });
+const operation = (file: PlannedFile, action: Operation["action"], reason: string): Operation => ({ ...fileIdentity(file), action, reason });
+
+const loadManifest = async (): Promise<{ manifest: PayloadManifest; candidate: Record<string, unknown>; sources: Map<string, PlannedFile> }> => {
+  const manifest = parseJson((await regular(__dirname, "payload-manifest.json")).bytes, "payload manifest") as PayloadManifest;
+  if (!object(manifest) || manifest.schema_version !== 2 || manifest.profile !== "matt-first" || manifest.payload_version !== "2.0.0" || !Array.isArray(manifest.files) || !manifest.files.length || manifest.files.length > 1000) fail("payload_invalid", "requires a schema-2 Matt-first payload");
+  const expected = `sha256:${hash(Buffer.from(JSON.stringify({ payload_version: manifest.payload_version, files: manifest.files })))}`;
+  if (expected !== manifest.payload_digest) fail("payload_invalid", "payload manifest digest mismatch");
+  const candidate = parseJson((await regular(__dirname, "candidate.json")).bytes, "candidate") as Record<string, unknown>;
+  if (!object(candidate) || candidate.schema_version !== 2 || candidate.payload_digest !== manifest.payload_digest || !object(candidate.engine_files)
+    || !digestPattern.test(String(candidate.candidate_digest)) || digest({ ...candidate, candidate_digest: undefined }) !== candidate.candidate_digest) fail("candidate_invalid", "candidate identity mismatch");
+  for (const [relative, expectedHash] of Object.entries(candidate.engine_files)) {
+    if (!safeRelative(relative) || hash((await regular(__dirname, relative)).bytes) !== expectedHash) fail("candidate_invalid", "packaged engine bytes differ", relative);
+  }
+  const sources = new Map<string, PlannedFile>();
+  let total = 0;
+  for (const file of manifest.files) {
+    if (!safeRelative(file.path) || !["100644", "100755", "0644", "0755"].includes(file.mode) || !Number.isSafeInteger(file.size) || file.size < 0 || !/^[a-f0-9]{64}$/u.test(file.sha256)) fail("payload_invalid", "invalid payload identity");
+    const source = await regular(path.join(__dirname, "payload"), file.path);
+    const mode = parseInt(file.mode.slice(-3), 8);
+    if (source.bytes.length !== file.size || hash(source.bytes) !== file.sha256 || (source.mode !== mode && !(source.mode === 0o644 && mode === 0o755))) fail("payload_mismatch", "payload bytes or mode differ", file.path);
+    total += source.bytes.length;
+    const sourcePath = file.path.startsWith("foundation/matt-first/") ? file.path.slice("foundation/matt-first/".length) : file.path;
+    if (sources.has(sourcePath)) fail("payload_invalid", "duplicate composition input", sourcePath);
+    sources.set(sourcePath, plannedFile(sourcePath, source.bytes, mode));
+  }
+  if (total > MAX_BYTES) fail("payload_invalid", "payload is too large");
+  return { manifest, candidate, sources };
+};
+const composeBindings = (config: CreatorConfig): Buffer => Buffer.from(`# Accepted repository binding\n\nThis is the sole binding, not an access certificate. Read [the integration envelope](../AGENT.md).\n\n## Task authority\n\n- Provider: ${config.binding.provider}\n- Repository: ${config.binding.repository}\n- Project/board: ${config.binding.project}\n- Access route: ${config.binding.access}\n- Recovery: ${config.binding.recovery}\n\nRead fresh native identity, state, owner, parent/dependencies and canonical checkpoint before work. Confirm each durable operation and freshly read back the exact target, intended content and state. An unknown effect requires exact-target inspection before retry. No local task fallback or takeover from silence. Use the provider's current forms/conventions and actual native capabilities; no implicit label creation or manual relation downgrade.\n\n## Accepted validation/work permissions\n\n${config.binding.permissions.map((item) => `- ${item}`).join("\n")}\n\n## Human gates\n\n${config.binding.approval_gates.map((item) => `- ${item}`).join("\n")}\n\nNo procedure grants protected approval, merge, deployment, migration, publication, global configuration or expanded scope.\n\n## Documentation authority\n\n${Object.entries(config.binding.documentation).map(([family, source]) => `- ${family}: ${source}`).join("\n")}\n\nGit code/docs and tracker task/spec/decision/checkpoint/evidence are distinct authorities. External documentation requires its declared access/recovery and separately permitted supported write/acknowledgment/fresh readback; a derived copy is not fallback authority.\n\n## Selected manual hosts\n\n${config.hosts.map((host) => `- ${host.id} ${host.version}: explicit readable-source loading (manual); native registration not selected.`).join("\n")}\n\n## Readiness\n\nRecord: ${config.readiness_record}\n\nInstallation does not test access, perform tracker writes, launch a validator or start planning. Separately invoke an independent manual discovery check, verify permitted provider identity/write/readback, identify the proposed planning action and stop. Required missing observations mean setup incomplete. Results bind exact content, host/version, workspace and access; recheck affected evidence after change. Local installer state is ownership/recovery evidence only.\n`);
+// A shared file's full identity is a protected context, never whole-file ownership.
+const integrateAdoption = async (prepared: PreparedPlan, files: PlannedFile[]): Promise<void> => {
+  const config = prepared.config!;
+  const adoption = config.adoption!;
+  const target = prepared.target;
+  if (!prepared.targetExisted) fail("adoption_target_missing", "adoption requires an existing inspected repository");
+  await verifyLocalGit(target);
+  let previous: Pick<CreatorState, "owned_files"> | undefined;
+  await safeParents(target, STATE_FILE);
+  if (await metadata(path.join(target, STATE_FILE))) {
+    const stored = await regular(target, STATE_FILE);
+    const value = parseJson(stored.bytes, "installation state");
+    if (!object(value) || value.schema_version !== 2 || value.profile !== "matt-first" || !Array.isArray(value.owned_files)
+      || stored.mode !== 0o600) fail("ownership_reconciliation_required", "inspect invalid/legacy installation state before adoption", STATE_FILE);
+    previous = value as unknown as CreatorState;
+  }
+  if (!previous && await metadata(path.join(target, STAGING_DIRECTORY))) {
+    const stored = await regular(target, `${STAGING_DIRECTORY}/journal.json`);
+    const journal = parseJson(stored.bytes, "recovery journal");
+    if (!object(journal) || stored.mode !== 0o600 || journal.schema_version !== 2 || journal.profile !== "matt-first"
+      || !Array.isArray(journal.baseline)) fail("journal_invalid", "adoption recovery requires its scoped baseline", STAGING_DIRECTORY);
+    previous = { owned_files: journal.baseline as OwnedFile[] };
+  }
+  if (previous && (previous.owned_files.some((entry) => !object(entry) || typeof entry.path !== "string" || !safeRelative(entry.path))
+    || new Set(previous.owned_files.map((entry) => entry.path)).size !== previous.owned_files.length)) fail("ownership_reconciliation_required", "invalid/duplicate owned boundaries", STATE_FILE);
+  prepared.before = [];
+  prepared.ownership = [];
+  const before = async (relative: string): Promise<PlannedFile | undefined> => {
+    await safeParents(target, relative);
+    const owned = previous?.owned_files.find((entry) => entry.path === relative);
+    if (owned?.before === "absent") return undefined;
+    const base = owned ? await regular(target, `${STAGING_DIRECTORY}/before/${relative}`) :
+      await metadata(path.join(target, relative)) ? await regular(target, relative) : undefined;
+    if (!base) return undefined;
+    const file = plannedFile(relative, base.bytes, base.mode);
+    if (owned && JSON.stringify(fileIdentity(file)) !== JSON.stringify(owned.before)) fail("baseline_invalid", "private baseline differs from accepted ownership", relative);
+    return file;
+  };
+  const reviewed = new Map(adoption.rule_reviews.map((review) => [review.path, review]));
+  for (const relative of new Set(["AGENT.md", "docs/bindings.md", ...reviewed.keys()])) {
+    const base = await before(relative);
+    if (!base) {
+      if (reviewed.has(relative)) fail("rule_review_stale", "explicitly reviewed authority is missing; reconcile and accept a new plan", relative);
+      continue;
+    }
+    const review = reviewed.get(relative);
+    if (!review || !review.compatible) fail("rule_conflict", "existing authority requires an exact explicit compatible-rule reconciliation; a pointer cannot override it", relative);
+    if (base.sha256 !== review.sha256 || fileIdentity(base).mode !== review.mode) fail("rule_review_stale", "reviewed rule bytes or mode changed; reconcile and accept a new plan", relative);
+  }
+  const startup = files.find((file) => file.relativePath === "start.mjs")!;
+  startup.relativePath = adoption.startup;
+  const envelope = files.find((file) => file.relativePath === "AGENT.md")!;
+  Object.assign(envelope, plannedFile("AGENT.md", Buffer.from(envelope.bytes.toString("utf8").replace("node start.mjs", `node ${adoption.startup}`))));
+  for (let index = 0; index < files.length; index++) {
+    let file = files[index];
+    const base = await before(file.relativePath);
+    let boundary: OwnedFile["boundary"] = "file";
+    let block: OwnedFile["block"];
+    if (base) {
+      prepared.before.push(base);
+      if (adoption.shared_files.includes(file.relativePath)) {
+        boundary = "block";
+        const begin = file.relativePath === ".gitignore" ? "# BEGIN AGENT FOUNDRY" : "<!-- BEGIN AGENT FOUNDRY -->";
+        const end = file.relativePath === ".gitignore" ? "# END AGENT FOUNDRY" : "<!-- END AGENT FOUNDRY -->";
+        // No delimiter is inferred as ownership, including an apparently valid existing block.
+        if (base.bytes.includes(Buffer.from("BEGIN AGENT FOUNDRY")) || base.bytes.includes(Buffer.from("END AGENT FOUNDRY"))) fail("block_conflict", "existing/malformed/duplicate Foundry delimiters require explicit reconciliation", file.relativePath);
+        const ownedBytes = Buffer.concat([Buffer.from(`${begin}\n`), file.bytes, Buffer.from(`${end}\n`)]);
+        const separator = base.bytes.length && base.bytes.at(-1) !== 10 ? Buffer.from("\n") : Buffer.alloc(0);
+        block = { begin, end, sha256: hash(ownedBytes), context_sha256: base.sha256 };
+        file = files[index] = plannedFile(file.relativePath, Buffer.concat([base.bytes, separator, ownedBytes]), base.mode);
+      } else if (!adoption.adopt_files.includes(file.relativePath) || !base.bytes.equals(file.bytes) || base.mode !== file.mode) {
+        fail("ownership_uncertain", "preexisting file is not owned; only explicitly accepted identical content may be adopted", file.relativePath);
+      }
+    }
+    prepared.ownership.push({ ...fileIdentity(file), boundary, before: base ? fileIdentity(base) : "absent", ...(block ? { block } : {}) });
+  }
+  for (const relative of [...adoption.shared_files, ...adoption.adopt_files]) {
+    if (!files.some((file) => file.relativePath === relative)) fail("configuration_invalid", "selected integration is not a candidate output", relative);
+  }
+  prepared.ownership.sort((a, b) => a.path.localeCompare(b.path, "en"));
 };
 
-const fileOperation = (file: PlannedFile, action: OperationAction, reason: string): Operation => ({
-  path: file.relativePath,
-  action,
-  mode: file.mode.toString(8).padStart(4, "0"),
-  size: file.size,
-  sha256: file.sha256,
-  reason,
-});
-
-// `onboarded` is project-mutable state, not derived from the payload: a fresh create records `false`
-// (routes ONBOARDING); an existing state's value is preserved verbatim so re-apply/verify never undo a
-// completed onboarding and never add the field to a pre-0.3.0 state (absent stays absent => WORK).
-const stateBytesFor = (manifest: PayloadManifest, config: CreatorConfig, files: PlannedFile[], onboarded?: boolean): Buffer => canonicalJson({
-  schema_version: CREATOR_SCHEMA_VERSION,
-  payload_version: manifest.payload_version,
-  payload_digest: manifest.payload_digest,
-  config_digest: config.digest,
-  owned_files: files.map((file) => ({
-    path: file.relativePath,
-    mode: file.mode.toString(8).padStart(4, "0"),
-    size: file.size,
-    sha256: file.sha256,
-  })),
-  ...(onboarded === undefined ? {} : { onboarded }),
-});
-
-const expectedStateFile = (stateBytes: Buffer): PlannedFile => ({
-  relativePath: STATE_FILE,
-  bytes: stateBytes,
-  mode: 0o600,
-  sha256: sha256(stateBytes),
-  size: stateBytes.byteLength,
-});
-
-const baseEnvelope = (command: Command, target: string, manifest: PayloadManifest): CreatorEnvelope => ({
-  schema_version: CREATOR_SCHEMA_VERSION,
-  command,
-  status: "planned",
-  target,
-  payload: { version: manifest.payload_version, digest: manifest.payload_digest },
-  operations: [],
-  diagnostics: [],
-});
-
-const addPathDiagnostics = async (target: string, relativePath: string, diagnostics: Diagnostic[]): Promise<void> => {
-  const segments = relativePath.split("/");
-  let current = target;
-  for (const segment of segments.slice(0, -1)) {
-    current = path.join(current, segment);
-    const entry = await lstat(current).catch(() => undefined);
-    if (entry?.isSymbolicLink()) diagnostics.push(diagnostic("symlink_escape", "payload parent is a symlink", relativePath));
-    else if (entry && !entry.isDirectory()) diagnostics.push(diagnostic("path_conflict", "payload parent is not a directory", relativePath));
+const readPayloadFiles = async (sources: Map<string, PlannedFile>, manifest: PayloadManifest, candidate: Record<string, unknown>, config: CreatorConfig, prepared: PreparedPlan): Promise<{ files: PlannedFile[]; nextAction: NonNullable<CreatorEnvelope["next_action"]> }> => {
+  const files: PlannedFile[] = [];
+  for (const [relative, source] of sources) {
+    const destination = relative === "envelope.md" ? "AGENT.md" : relative === "procedures.md" ? ".factory/procedures.md"
+      : relative.startsWith("upstream/") ? `.factory/skills/matt-pocock/${relative.slice(9)}`
+        : relative.startsWith("skills/") ? `.factory/${relative}` : relative === "start.mjs" ? relative : undefined;
+    if (destination) files.push(plannedFile(destination, source.bytes, source.mode));
+    else if (relative !== "upstream-lock.json") fail("composition_invalid", "unclassified payload input", relative);
   }
+  for (const required of ["AGENT.md", "start.mjs", ".factory/procedures.md", ".factory/skills/foundry-checkpoint/SKILL.md", ".factory/skills/foundry-resume/SKILL.md", ".factory/skills/matt-pocock/LICENSE"]) {
+    if (!files.some((file) => file.relativePath === required)) fail("composition_invalid", "required source missing", required);
+  }
+  const lockSource = sources.get("upstream-lock.json");
+  if (!lockSource) fail("composition_invalid", "upstream lock missing");
+  const lock = parseJson(lockSource!.bytes, "upstream lock") as { repository: string; revision: string; files: PayloadFile[] };
+  if (lock.repository !== "mattpocock/skills" || lock.revision !== UPSTREAM || !Array.isArray(lock.files)) fail("composition_invalid", "wrong upstream baseline");
+  for (const entry of lock.files) {
+    const source = sources.get(`upstream/${entry.path}`);
+    if (!source || source.sha256 !== entry.sha256 || source.size !== entry.size || source.mode !== parseInt(entry.mode.slice(-3), 8)) fail("composition_invalid", "upstream lock mismatch", entry.path);
+  }
+  if (sources.size !== lock.files.length + 6) fail("composition_invalid", "unexpected upstream selection");
+  files.push(plannedFile("docs/bindings.md", composeBindings(config)));
+  files.push(plannedFile(".gitignore", Buffer.from("# Local installer ownership/recovery bytes; not task authority\n/.factory/creator/\n")));
+  if (config.adoption) await integrateAdoption(prepared, files);
+  files.sort((a, b) => a.relativePath.localeCompare(b.relativePath, "en"));
+  const entries = ["grill-with-docs", "wayfinder", "to-spec", "to-tickets", "implement", "code-review"].map((name) => `.factory/skills/matt-pocock/skills/engineering/${name}/SKILL.md`)
+    .concat([".factory/skills/foundry-checkpoint/SKILL.md", ".factory/skills/foundry-resume/SKILL.md"]);
+  for (const entry of entries) if (!files.some((file) => file.relativePath === entry)) fail("composition_invalid", "indexed method missing", entry);
+  const nextAction = { procedure: "grill-with-docs", source: entries[0], authority: "Explicit planning selection or a delegation covering its objective and effects; do not start during setup.", started: false as const };
+  const provenance = {
+    schema_version: 2, profile: "matt-first", candidate, payload: { version: manifest.payload_version, digest: manifest.payload_digest },
+    configuration: config, config_digest: digest(config), startup: config.adoption?.startup ?? "start.mjs", binding: "docs/bindings.md", catalog: ".factory/procedures.md",
+    sources: { repository: lock.repository, revision: lock.revision, lock_digest: `sha256:${lockSource!.sha256}`, adaptations: [], license: ".factory/skills/matt-pocock/LICENSE" },
+    method_entries: entries, files: files.map(fileIdentity), adapters: config.hosts.map((host) => ({ ...host, discovery: "explicit AGENT.md and indexed readable paths", projections: [] })),
+    ...(config.adoption ? { ownership: prepared.ownership } : {}),
+    readiness_record: config.readiness_record,
+    next_action: nextAction,
+  };
+  files.push(plannedFile(PROVENANCE, json(provenance)));
+  return { files: files.sort((a, b) => a.relativePath.localeCompare(b.relativePath, "en")), nextAction };
 };
 
 export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan> => {
-  const { manifest, payloadRoot, placeholders, ownership, providerCatalog } = await loadManifest();
+  const { manifest, candidate, sources } = await loadManifest();
   const target = await resolveTarget(options.target);
-  const envelope = baseEnvelope(options.command, target.absolute, manifest);
-  const diagnostics: Diagnostic[] = [];
-  const creatorDirectory = await creatorDirectoryStatus(target.absolute, CREATOR_DIRECTORY);
-  const legacyDirectory = await creatorDirectoryStatus(target.absolute, LEGACY_DIRECTORY);
-  for (const directory of [creatorDirectory, legacyDirectory]) if (directory.diagnostic) diagnostics.push(directory.diagnostic);
-  // A VCS-initialized checkout is the documented primary apply target (README Quickstart), so the
-  // target's own `.git` directory is never creator-owned and must be ignored by every downstream check
-  // (staging/state/legacy/unknown-file). Segment-safe match keeps `.gitignore` (a creator payload file).
-  const targetEntries = (target.existed ? await collectEntries(target.absolute) : [])
-    .filter((entry) => entry.path !== ".git" && !entry.path.startsWith(".git/"));
-  for (const staging of [STAGING_DIRECTORY, `${LEGACY_DIRECTORY}/.staging`]) {
-    if (targetEntries.some((entry) => entry.path === staging || entry.path.startsWith(`${staging}/`))) {
-      diagnostics.push(diagnostic("staging_interrupted", "an interrupted staging directory requires recovery", staging));
-    }
-  }
-  const hasNewState = targetEntries.some((entry) => entry.path === STATE_FILE);
-  const hasLegacyState = targetEntries.some((entry) => entry.path === LEGACY_STATE_FILE);
-  if (hasNewState && hasLegacyState) diagnostics.push(diagnostic("state_conflict", "both creator state locations exist", LEGACY_STATE_FILE));
-  const legacyState = hasLegacyState && !hasNewState;
-  const statePath = legacyState ? LEGACY_STATE_FILE : STATE_FILE;
-  const state = target.existed && creatorDirectory.safe && legacyDirectory.safe && !(hasNewState && hasLegacyState)
-    ? await readState(target.absolute, statePath) : undefined;
-  if (state && !legacyState && (state.payload_version !== manifest.payload_version || state.payload_digest !== manifest.payload_digest)) {
-    diagnostics.push(diagnostic("payload_mismatch", "creator state does not match the packaged payload"));
-  }
-  if (targetEntries.some((entry) => entry.path.startsWith(`${LEGACY_DIRECTORY}/`) && entry.path !== LEGACY_STATE_FILE && entry.path !== `${LEGACY_DIRECTORY}/.staging` && !entry.path.startsWith(`${LEGACY_DIRECTORY}/.staging/`))) {
-    diagnostics.push(diagnostic("state_conflict", "legacy creator directory contains unexpected entries", LEGACY_DIRECTORY));
-  }
-
-  let config: CreatorConfig | undefined = options.resolvedConfig;
-  if (!config) {
-    try {
-      config = await resolveConfig(placeholders, options.configPath, options.nonInteractive ?? false, options.prompt, options.factoryRoot, options.factorySha);
-    } catch (error) {
-      if (error instanceof CreatorError) diagnostics.push(diagnostic(error.code, error.message, error.path));
-      else throw error;
-    }
-  }
-  envelope.config_digest = config?.digest;
-
-  if (!config) {
-    envelope.status = "error";
-    envelope.diagnostics = sortDiagnostics(diagnostics);
-    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes: [] };
-  }
-
-  let providerRuntimes: ProviderRuntime[] = [];
-  let selectedProviders: string[] = [];
+  const envelope: CreatorEnvelope = {
+    schema_version: 2, command: options.command, status: "planned", target: target.absolute, profile: "matt-first",
+    payload: { version: manifest.payload_version, digest: manifest.payload_digest }, candidate,
+    operations: [], diagnostics: [], setup: "incomplete", integrity: "not-checked",
+  };
+  const prepared: PreparedPlan = { envelope, target: target.absolute, targetExisted: target.existed, files: [], options: { ...options }, baseline: target.identity };
   try {
-    let rawSelection: string | undefined = options.agent;
-    if (options.agent === undefined && options.agents === undefined && !options.nonInteractive && options.prompt) {
-      try {
-        rawSelection = await options.prompt({ key: "AGENTS", prompt: "Agent providers", default: "none", required: false, multi: true, enum: providerCatalog.providers.map((provider) => provider.id) });
-      } catch {
-        rawSelection = "none";
+    const sourceMarker = await metadata(path.join(target.absolute, "MAINTAINERS.md"));
+    if (sourceMarker?.isFile() && (await regular(target.absolute, "MAINTAINERS.md")).bytes.toString("utf8").startsWith("# MAINTAINERS - Agent Foundry source governance\n")) fail("source_self", "never apply the creator to its source SELF", "MAINTAINERS.md");
+    if (!options.configPath) fail("configuration_required", "supply an explicit schema-2 configuration with --config; detection is not acceptance");
+    const configFilename = path.resolve(options.configPath!);
+    const config = validateConfig(parseJson((await regular(path.dirname(configFilename), path.basename(configFilename))).bytes, "configuration"));
+    envelope.configuration = config;
+    prepared.config = config;
+    envelope.config_digest = digest(config);
+    envelope.effects = { local_git: config.initialize_git ? "initialize" : "none", external: [], recovery_baseline: "Empty destination; every named output was absent. Private staged bytes and applying/committed journal are retained for inspected recovery; no automatic deletion, restoration or crash-atomicity claim." };
+    envelope.readiness = { record: config.readiness_record, required: config.hosts.flatMap((host) => [`${host.id}@${host.version}: independent manual entrypoint/method/resource discovery and passive next-action stop`, `${host.id}@${host.version}: permitted tracker identity/access/write and fresh exact readback`]), observed_by_installer: false };
+    const { files, nextAction } = await readPayloadFiles(sources, manifest, candidate, config, prepared);
+    const provenance = files.find((file) => file.relativePath === PROVENANCE)!;
+    envelope.next_action = nextAction;
+    const state: CreatorState = { schema_version: 2, profile: "matt-first", payload_digest: manifest.payload_digest, config_digest: envelope.config_digest,
+      candidate_digest: candidate.candidate_digest as string, provenance_digest: `sha256:${provenance.sha256}`,
+      owned_files: files.map((file) => prepared.ownership?.find((entry) => entry.path === file.relativePath)
+        ?? { ...fileIdentity(file), boundary: "file", before: "absent" }), local_git: config.initialize_git ? "initialize" : "none" };
+    prepared.stateBytes = json(state);
+    const stateFile = plannedFile(STATE_FILE, prepared.stateBytes, 0o600);
+    prepared.files = [...files, stateFile];
+    envelope.effects.recovery_files = prepared.files.map((file) => ({ ...fileIdentity(file), path: `${STAGING_DIRECTORY}/files/${file.relativePath}` }));
+    envelope.effects.journal = { path: `${STAGING_DIRECTORY}/journal.json`, mode: "0600" };
+    await safeParents(target.absolute, STATE_FILE);
+    if (await metadata(path.join(target.absolute, LEGACY_DIRECTORY))) fail("legacy_readoption_required", "legacy creator state/staging requires separately accepted re-adoption", LEGACY_DIRECTORY);
+    if (await metadata(path.join(target.absolute, STAGING_DIRECTORY))) {
+      const interrupted = await inspectJournal(prepared);
+      envelope.applied = interrupted.applied;
+      envelope.pending = interrupted.pending;
+      envelope.recovery = interrupted.recovery;
+      if (interrupted.recovery.status !== "committed"
+        || JSON.stringify(interrupted.files) !== JSON.stringify(prepared.files.map(fileIdentity))) {
+        fail("staging_interrupted", "inspect journal and actual destinations before authorized recovery; do not replay apply", STAGING_DIRECTORY);
       }
     }
-    selectedProviders = parseProviderSelection(rawSelection, options.agents, providerCatalog);
-    if (options.launchAgent && selectedProviders.length !== 1) throw new Error("--launch-agent requires exactly one selected agent provider");
-    providerRuntimes = await inspectProviderAvailability(providerCatalog, selectedProviders);
-    config = providerConfigDigest(config, selectedProviders);
-    envelope.providers = providerSummary(providerCatalog, providerRuntimes);
-    envelope.config_digest = config.digest;
-  } catch (error) {
-    const providerError = error instanceof Error ? error : new Error(String(error));
-    diagnostics.push(diagnostic((error as { code?: string }).code ?? "provider_invalid", providerError.message));
-    envelope.status = "error";
-    envelope.diagnostics = sortDiagnostics(diagnostics);
-    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes: [] };
-  }
-
-  let composed: { files: PlannedFile[]; sourceFiles: Map<string, SourceFile>; removedSourcePaths: Set<string>; providerSummary: ProviderSummary };
-  try {
-    composed = await readPayloadFiles(manifest, payloadRoot, config, ownership, providerCatalog, providerRuntimes);
+    const existingState = await metadata(path.join(target.absolute, STATE_FILE));
+    if (existingState) {
+      const stored = await regular(target.absolute, STATE_FILE);
+      const parsed = parseJson(stored.bytes, "installation state");
+      if (!object(parsed) || parsed.schema_version !== 2 || parsed.profile !== "matt-first") fail("legacy_readoption_required", "unknown/schema-1 state is not converted", STATE_FILE);
+      if (stored.mode !== 0o600 || !stored.bytes.equals(prepared.stateBytes)) fail("ownership_reconciliation_required", "state/config/candidate differs; inspect and accept a scoped update/recovery plan", STATE_FILE);
+      if (!(await metadata(path.join(target.absolute, STAGING_DIRECTORY)))) fail("journal_invalid", "local ledger is missing its retained committed recovery evidence", STAGING_DIRECTORY);
+      prepared.state = state;
+    } else if (!config.adoption && target.existed && (await readdir(target.absolute)).length) {
+      fail("fresh_target_not_empty", "fresh setup requires an empty destination; adoption is not implicit");
+    }
+    for (const file of prepared.files) {
+      await safeParents(target.absolute, file.relativePath);
+      const entry = await metadata(path.join(target.absolute, file.relativePath));
+      if (!entry) {
+        if (existingState) fail("owned_file_missing", "owned file missing; recovery requires inspection", file.relativePath);
+        envelope.operations.push(operation(file, "create", "accepted fresh file; previous boundary absent"));
+      } else {
+        if (!prepared.state && config.adoption) {
+          const owned = prepared.ownership?.find((entry) => entry.path === file.relativePath);
+          if (!owned || owned.before === "absent") fail("ownership_uncertain", "matching bytes do not establish ownership", file.relativePath);
+          const before = prepared.before!.find((entry) => entry.relativePath === file.relativePath)!;
+          envelope.operations.push({ ...operation(file, owned.boundary === "block" ? "change-block" : "adopt", "explicit scoped adoption; protected before bytes/mode/context"),
+            ownership: owned, preview: { encoding: "base64", before: before.bytes.toString("base64"), after: file.bytes.toString("base64") } });
+          continue;
+        }
+        if (!prepared.state) fail("ownership_uncertain", "matching bytes do not establish ownership", file.relativePath);
+        const current = await regular(target.absolute, file.relativePath);
+        if (current.mode !== file.mode || !current.bytes.equals(file.bytes)) fail("owned_file_drift", "owned bytes or mode differ; no overwrite", file.relativePath);
+        envelope.operations.push(operation(file, "noop", "exact owned file unchanged"));
+      }
+    }
+    if (config.initialize_git && prepared.state) await verifyLocalGit(target.absolute);
+    prepared.directories = [];
+    if (config.adoption) {
+      const seen = new Set<string>();
+      for (const file of prepared.files) {
+        const parts = file.relativePath.split("/").slice(0, -1);
+        for (let count = 1; count <= parts.length; count++) {
+          const relative = parts.slice(0, count).join("/");
+          if (seen.has(relative)) continue;
+          seen.add(relative);
+          const entry = await metadata(path.join(target.absolute, relative));
+          if (entry) {
+            if (!entry.isDirectory()) fail("unsafe_path", "touched parent must be a real directory", relative);
+            prepared.directories.push({ path: relative, dev: entry.dev, ino: entry.ino, mode: entry.mode });
+          }
+        }
+      }
+      envelope.effects.recovery_baseline = "Scoped accepted file/block preimages and surrounding context only; unrelated application and Git remain project-owned. Private before/files/displaced evidence retained; no automatic restoration or crash-atomicity.";
+      envelope.effects.recovery_files.push(...(prepared.before ?? []).map((file) => ({ ...fileIdentity(file), path: `${STAGING_DIRECTORY}/before/${file.relativePath}` })));
+    }
+    const top = target.existed ? (await readdir(target.absolute)).sort() : [];
+    envelope.plan_digest = digest({ target: target.absolute, baseline: target.identity, top: config.adoption ? undefined : top, directories: prepared.directories, candidate: candidate.candidate_digest, config: envelope.config_digest, operations: envelope.operations, effects: envelope.effects });
+    envelope.status = prepared.state ? "noop" : options.command === "dry-run" ? "dry-run" : "planned";
   } catch (error) {
     if (!(error instanceof CreatorError)) throw error;
-    envelope.status = "error";
-    envelope.diagnostics = sortDiagnostics([...diagnostics, diagnostic(error.code, error.message, error.path)]);
-    return { envelope, target: target.absolute, targetExisted: target.existed, files: [], config, state, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes };
+    envelope.status = "conflict";
+    envelope.diagnostics.push(diagnostic(error.code, error.message, error.path));
   }
-  const files = composed.files;
-  envelope.providers = composed.providerSummary;
-  const oldOwned = new Map((state?.owned_files ?? []).map((file) => [file.path, file]));
-  const desiredPaths = new Set(files.map((file) => file.relativePath));
-  const removablePaths = new Set(composed.removedSourcePaths);
-  const knownStatePaths = new Set([CREATOR_DIRECTORY, STATE_FILE, STAGING_DIRECTORY, LEGACY_DIRECTORY, LEGACY_STATE_FILE]);
-  const allowedDirectories = new Set<string>([
-    CREATOR_DIRECTORY,
-    ...parentPaths(STATE_FILE),
-    ...files.flatMap((file) => [...parentPaths(file.relativePath)]),
-    ...[...removablePaths].flatMap((file) => [...parentPaths(file)]),
-  ]);
-  for (const entry of targetEntries) {
-    if (knownStatePaths.has(entry.path) || entry.path.startsWith(`${STAGING_DIRECTORY}/`) || entry.path.startsWith(`${LEGACY_DIRECTORY}/.staging/`)) continue;
-    if (entry.directory && allowedDirectories.has(entry.path)) continue;
-    if (desiredPaths.has(entry.path) || oldOwned.has(entry.path) || removablePaths.has(entry.path)) continue;
-    diagnostics.push(diagnostic("unknown_file_conflict", "target contains a file or directory not owned by the creator", entry.path));
+  return prepared;
+};
+
+const recoveryBaseline = (prepared: PreparedPlan): string | OwnedFile[] =>
+  prepared.config?.adoption ? prepared.ownership! : "all named destination files absent";
+
+const inspectJournal = async (prepared: PreparedPlan) => {
+  const relative = `${STAGING_DIRECTORY}/journal.json`;
+  const stored = await regular(prepared.target, relative).catch(() => fail("journal_invalid", "recovery journal is missing or unreadable", relative));
+  const journal = parseJson(stored.bytes, "recovery journal");
+  if (stored.mode !== 0o600 || !object(journal) || journal.schema_version !== 2 || journal.profile !== "matt-first" || !Array.isArray(journal.files)
+    || journal.files.length > 1000 || !["applying", "committed"].includes(String(journal.status))
+    || typeof journal.plan_digest !== "string" || !digestPattern.test(journal.plan_digest)
+    || JSON.stringify(journal.baseline) !== JSON.stringify(recoveryBaseline(prepared))
+    || JSON.stringify(journal.candidate) !== JSON.stringify(prepared.envelope.candidate)
+    || !Array.isArray(journal.applied)
+    || !journal.applied.every((entry, index) => entry === prepared.files[index]?.relativePath)
+    || journal.applied.length > prepared.files.length
+    || (journal.status === "committed" && journal.applied.length !== prepared.files.length)
+    || !(prepared.config!.initialize_git
+      ? (journal.status === "committed" ? ["verified"] : ["not-started", "attempted", "verified"])
+      : ["not-selected"]).includes(String(journal.local_git))) fail("journal_invalid", "recovery identity, mode, baseline or effect boundary differs from accepted configuration", relative);
+  const files: PayloadFile[] = [];
+  const seen = new Set<string>();
+  for (const entry of journal.files) {
+    if (!object(entry) || typeof entry.path !== "string" || !safeRelative(entry.path) || seen.has(entry.path)
+      || typeof entry.mode !== "string" || !/^0[0-7]{3}$/u.test(entry.mode) || typeof entry.size !== "number"
+      || !Number.isSafeInteger(entry.size) || entry.size < 0 || typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(entry.sha256)) fail("journal_invalid", "invalid/duplicate recovery file boundary", relative);
+    seen.add(entry.path);
+    files.push({ path: entry.path, mode: entry.mode, size: entry.size, sha256: entry.sha256 });
   }
-  if (!state && targetEntries.some((entry) => !knownStatePaths.has(entry.path) && !entry.path.startsWith(`${STAGING_DIRECTORY}/`) && !removablePaths.has(entry.path))) {
-    diagnostics.push(diagnostic("unknown_file_conflict", "a non-empty target has no creator ownership state"));
-  }
-  if (legacyState && state) {
-    if (state.config_digest !== config.digest || state.owned_files.some((file) => !desiredPaths.has(file.path) && !removablePaths.has(file.path))) {
-      diagnostics.push(diagnostic("state_conflict", "legacy migration requires unchanged configuration and known ownership", LEGACY_STATE_FILE));
-    }
-    for (const owned of state.owned_files) {
-      const entry = await lstat(path.join(target.absolute, owned.path)).catch(() => undefined);
-      if (!entry?.isFile() || entry.isSymbolicLink() || (entry.mode & 0o7777).toString(8).padStart(4, "0") !== owned.mode ||
-        entry.size !== owned.size || sha256(await readFile(path.join(target.absolute, owned.path))) !== owned.sha256) {
-        diagnostics.push(diagnostic("owned_file_drift", "legacy migration requires unchanged owned files", owned.path));
-      }
-    }
-  }
-  const operations: Operation[] = [];
+  if (JSON.stringify(files) !== JSON.stringify(prepared.files.map(fileIdentity))) fail("journal_invalid", "recovery file inventory differs from accepted candidate/configuration", relative);
+  const applied: string[] = [];
+  const pending: string[] = [];
   for (const file of files) {
-    await addPathDiagnostics(target.absolute, file.relativePath, diagnostics);
-    const destination = path.join(target.absolute, file.relativePath);
-    const existing = await lstat(destination).catch(() => undefined);
-    const owned = oldOwned.get(file.relativePath);
-    if (existing?.isSymbolicLink()) {
-      operations.push(fileOperation(file, "conflict", "symlink"));
-      diagnostics.push(diagnostic("owned_file_drift", "owned payload path is a symlink", file.relativePath));
-      continue;
-    }
-    if (existing && !existing.isFile()) {
-      operations.push(fileOperation(file, "conflict", "path-conflict"));
-      diagnostics.push(diagnostic("owned_file_drift", "owned payload path is not a regular file", file.relativePath));
-      continue;
-    }
-    if (!existing) {
-      operations.push(fileOperation(file, "create", "missing"));
-      continue;
-    }
-    const existingBytes = await readFile(destination);
-    const same = sha256(existingBytes) === file.sha256 && (existing.mode & 0o7777) === file.mode;
-    if (same) operations.push(fileOperation(file, "noop", "unchanged"));
-    else if (owned && (legacyState || state?.config_digest !== config.digest) &&
-      owned.sha256 === sha256(existingBytes) && owned.mode === (existing.mode & 0o7777).toString(8).padStart(4, "0")) {
-      operations.push(fileOperation(file, "update", "configuration-changed"));
-    } else {
-      operations.push(fileOperation(file, "conflict", "owned-file-drift"));
-      diagnostics.push(diagnostic("owned_file_drift", "owned file bytes or mode differ from the planned output", file.relativePath));
-    }
-  }
-
-  const removalOperation = async (relativePath: string, reason: string, expectedSha?: string): Promise<void> => {
-    if (desiredPaths.has(relativePath)) return;
-    const destination = path.join(target.absolute, relativePath);
-    const existing = await lstat(destination).catch(() => undefined);
-    if (!existing) return;
-    if (existing.isSymbolicLink() || !existing.isFile()) {
-      operations.push({ path: relativePath, action: "conflict", mode: "0000", size: 0, sha256: "", reason: "path-conflict" });
-      diagnostics.push(diagnostic("removed_file_drift", "owned cleanup path is not a regular file", relativePath));
-      return;
-    }
-    const bytes = await readFile(destination);
-    const digest = sha256(bytes);
-    if (expectedSha && digest !== expectedSha) {
-      operations.push({ path: relativePath, action: "conflict", mode: (existing.mode & 0o7777).toString(8).padStart(4, "0"), size: bytes.byteLength, sha256: digest, reason: "removed-file-drift" });
-      diagnostics.push(diagnostic("removed_file_drift", "cleanup refused to remove a changed application file", relativePath));
-      return;
-    }
-    operations.push({ path: relativePath, action: "remove", mode: (existing.mode & 0o7777).toString(8).padStart(4, "0"), size: bytes.byteLength, sha256: digest, reason });
-  };
-  for (const [relativePath, owned] of oldOwned) await removalOperation(relativePath, "no-longer-owned", owned.sha256);
-  for (const relativePath of composed.removedSourcePaths) {
-    const source = composed.sourceFiles.get(relativePath);
-    await removalOperation(relativePath, "ownership-removed", source ? sha256(source.bytes) : undefined);
-  }
-  if (legacyState && state) await removalOperation(LEGACY_STATE_FILE, "legacy-state-migration", sha256(await readFile(path.join(target.absolute, LEGACY_STATE_FILE))));
-
-  // Preserve an existing onboarding value (true/false/absent); only a fresh create seeds `false`.
-  const onboarded = state ? state.onboarded : false;
-  const stateBytes = stateBytesFor(manifest, config, files, onboarded);
-  const stateFile = expectedStateFile(stateBytes);
-  const existingState = await lstat(path.join(target.absolute, STATE_FILE)).catch(() => undefined);
-  const stateSame = existingState?.isFile() && sha256(await readFile(path.join(target.absolute, STATE_FILE))) === stateFile.sha256;
-  operations.push(fileOperation(stateFile, stateSame ? "noop" : (existingState ? "update" : "create"), stateSame ? "unchanged" : "state"));
-
-  const sortedOperations = sortOperations(operations);
-  const hasConflict = diagnostics.some((item) => ["unknown_file_conflict", "staging_interrupted", "payload_mismatch", "state_conflict", "symlink_escape", "path_conflict", "owned_file_drift", "removed_file_drift"].includes(item.code)) || sortedOperations.some((operation) => operation.action === "conflict");
-  envelope.operations = sortedOperations;
-  envelope.diagnostics = sortDiagnostics(diagnostics);
-  envelope.status = hasConflict ? "conflict" : sortedOperations.every((operation) => operation.action === "noop") ? "noop" : options.command === "dry-run" ? "dry-run" : "planned";
-  return { envelope, target: target.absolute, targetExisted: target.existed, files: [...files, stateFile], stateBytes, config, state, legacyState, failAfter: options.failAfter, interruptAfter: options.interruptAfter, providerRuntimes };
-};
-
-const pathFor = (target: string, relativePath: string): string => path.join(target, relativePath);
-
-const removeEmptyParents = async (target: string, relativePath: string): Promise<void> => {
-  let current = path.dirname(pathFor(target, relativePath));
-  const stop = path.resolve(target);
-  while (current !== stop && current.startsWith(`${stop}${path.sep}`)) {
     try {
-      await rmdir(current);
-    } catch {
-      break;
-    }
-    current = path.dirname(current);
+      const current = await regular(prepared.target, file.path);
+      if (current.mode === parseInt(file.mode, 8) && current.bytes.length === file.size && hash(current.bytes) === file.sha256) {
+        applied.push(file.path);
+      } else pending.push(file.path);
+    } catch { pending.push(file.path); }
   }
+  if (journal.status === "committed") {
+    for (const file of files) {
+      // Report ordinary destination drift through the existing owned-file checks.
+      if (pending.includes(file.path)) continue;
+      const stagedPath = `${STAGING_DIRECTORY}/files/${file.path}`;
+      const staged = await regular(prepared.target, stagedPath).catch(() => fail("journal_invalid", "retained staged recovery file is missing or unreadable", stagedPath));
+      if (staged.mode !== parseInt(file.mode, 8) || staged.bytes.length !== file.size || hash(staged.bytes) !== file.sha256) fail("journal_invalid", "retained staged recovery bytes or mode differ", `${STAGING_DIRECTORY}/files/${file.path}`);
+    }
+    for (const file of prepared.before ?? []) {
+      const baselinePath = `${STAGING_DIRECTORY}/before/${file.relativePath}`;
+      const baseline = await regular(prepared.target, baselinePath);
+      if (baseline.mode !== file.mode || !baseline.bytes.equals(file.bytes)) fail("baseline_invalid", "retained preimage bytes or mode differ", baselinePath);
+    }
+  }
+  return { files, applied, pending, recovery: { journal: relative, status: String(journal.status), local_git: String(journal.local_git),
+    candidate: journal.candidate, baseline: journal.baseline } };
 };
 
-export const applyPlan = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
-  if (prepared.envelope.status === "conflict" || prepared.envelope.status === "error") {
-    throw new CreatorError("plan_rejected", "apply refused a plan containing conflicts or errors", { plan: prepared });
+const verifyDisk = async (prepared: PreparedPlan): Promise<void> => {
+  for (const file of prepared.files) {
+    const current = await regular(prepared.target, file.relativePath);
+    if (current.mode !== file.mode || hash(current.bytes) !== file.sha256) fail("integrity_failed", "installed bytes or mode differ", file.relativePath);
   }
-  if (prepared.envelope.status === "noop") return { ...prepared.envelope, command: "apply", status: "noop" };
-  const stagingPath = pathFor(prepared.target, STAGING_DIRECTORY);
-  const backupPath = path.join(stagingPath, "backup");
-  const changed = prepared.envelope.operations.filter((operation) => operation.action === "create" || operation.action === "update" || operation.action === "remove");
-  const existedBefore = new Map<string, boolean>();
-  let committed = 0;
+};
+export const applyPlan = async (preview: PreparedPlan, acceptedDigest: string): Promise<CreatorEnvelope> => {
+  if (!acceptedDigest || acceptedDigest !== preview.envelope.plan_digest || preview.envelope.status === "conflict") throw new CreatorError("acceptance_required", "apply requires acceptance of this exact conflict-free plan digest", { plan: preview });
+  const prepared = await preparePlan(preview.options);
+  if (prepared.envelope.plan_digest !== acceptedDigest || prepared.envelope.status === "conflict") throw new CreatorError("plan_stale", "candidate, configuration or destination changed since preview; reconcile and accept a new plan", { plan: prepared });
+  if (prepared.state) return { ...prepared.envelope, command: "apply", status: "noop", integrity: "verified" };
+  let root: AnchoredDirectory | undefined;
+  let journalHandle: FileHandle | undefined;
+  let stageOwned = false;
+  const applied: string[] = [];
+  const journal = { schema_version: 2, profile: "matt-first", status: "applying", plan_digest: acceptedDigest, candidate: prepared.envelope.candidate,
+    baseline: recoveryBaseline(prepared), files: prepared.files.map(fileIdentity), local_git: prepared.config!.initialize_git ? "not-started" : "not-selected", applied,
+    displaced: [] as string[] };
+  const journalPath = `${STAGING_DIRECTORY}/journal.json`;
+  const updateJournal = async (): Promise<void> => {
+    const held = await journalHandle!.stat();
+    await root!.parent(journalPath, false, async (leaf) => {
+      const named = await lstat(leaf);
+      if (!named.isFile() || held.dev !== named.dev || held.ino !== named.ino) fail("journal_replaced", "journal pathname was replaced; held recovery bytes retained without following replacement", journalPath);
+    });
+    const bytes = json(journal);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const { bytesWritten } = await journalHandle!.write(bytes, offset, bytes.length - offset, offset);
+      if (bytesWritten === 0) fail("journal_write_failed", "journal write made no progress; recovery evidence is incomplete", journalPath);
+      offset += bytesWritten;
+    }
+    await journalHandle!.truncate(bytes.length);
+    await journalHandle!.sync();
+  };
   try {
-    await mkdir(prepared.target, { recursive: true });
-    const creatorDirectory = await creatorDirectoryStatus(prepared.target, CREATOR_DIRECTORY);
-    if (!creatorDirectory.safe) {
-      throw new CreatorError(creatorDirectory.diagnostic?.code ?? "path_conflict", creatorDirectory.diagnostic?.message ?? "creator state path is unsafe", { plan: prepared, path: CREATOR_DIRECTORY });
-    }
-    await mkdir(path.dirname(stagingPath), { recursive: true });
-    await mkdir(stagingPath);
-    await mkdir(backupPath);
-    for (const file of prepared.files) {
-      const staged = pathFor(stagingPath, file.relativePath);
-      await mkdir(path.dirname(staged), { recursive: true });
-      await writeFile(staged, file.bytes, { mode: file.mode });
-      await chmod(staged, file.mode);
-      const stagedStat = await stat(staged);
-      if (stagedStat.size !== file.size || sha256(await readFile(staged)) !== file.sha256 || (stagedStat.mode & 0o7777) !== file.mode) {
-        throw new CreatorError("staging_verification_failed", `staged bytes or mode differ for ${file.relativePath}`, { path: file.relativePath });
-      }
-    }
-    if (prepared.interruptAfter) {
-      throw new CreatorError("staging_interrupted", "injected interruption left staging for doctor recovery", { plan: prepared, preserveStaging: true });
-    }
-    for (const operation of changed) {
-      const destination = pathFor(prepared.target, operation.path);
-      const backup = pathFor(backupPath, operation.path);
-      const current = await lstat(destination).catch(() => undefined);
-      existedBefore.set(operation.path, Boolean(current));
-      if (current) {
-        await mkdir(path.dirname(backup), { recursive: true });
-        if (!current.isFile()) throw new CreatorError("path_conflict", `cannot transactionally back up non-file: ${operation.path}`, { path: operation.path });
-        await copyFile(destination, backup);
-        await chmod(backup, current.mode & 0o7777);
-      }
-      if (operation.action === "remove") {
-        await unlink(destination);
-        await removeEmptyParents(prepared.target, operation.path);
-      } else {
-        const staged = pathFor(stagingPath, operation.path);
-        await mkdir(path.dirname(destination), { recursive: true });
-        await rename(staged, destination);
-      }
-      committed += 1;
-      if (prepared.failAfter && committed >= prepared.failAfter) {
-        throw new CreatorError("injected_failure", `injected failure after ${committed} committed operation(s)`, { plan: prepared });
-      }
-    }
-    await rm(stagingPath, { recursive: true, force: true });
-    return { ...prepared.envelope, command: "apply", status: changed.length === 0 ? "noop" : "applied" };
-  } catch (error) {
-    if (error instanceof CreatorError && error.preserveStaging) throw error;
-    let restored = true;
-    for (const operation of changed.slice(0, committed).reverse()) {
-      const destination = pathFor(prepared.target, operation.path);
-      const backup = pathFor(backupPath, operation.path);
+    if (!prepared.targetExisted) {
+      const parent = await AnchoredDirectory.open(path.dirname(prepared.target), prepared.baseline);
       try {
-        if (existedBefore.get(operation.path)) {
-          await rm(destination, { force: true });
-          await mkdir(path.dirname(destination), { recursive: true });
-          await rename(backup, destination);
-        } else {
-          await rm(destination, { force: true });
-          await removeEmptyParents(prepared.target, operation.path);
-        }
-      } catch {
-        restored = false;
+        root = await parent.parent(path.basename(prepared.target), false, async (leaf) => {
+          await mkdir(leaf, { mode: 0o755 });
+          const created = await lstat(leaf);
+          return AnchoredDirectory.open(leaf, created);
+        });
+      } finally { await parent.close(); }
+    } else root = await AnchoredDirectory.open(prepared.target, prepared.baseline);
+    await root.matchesRoot(prepared.target);
+    if (!prepared.config!.adoption && (await readdir(root.location)).length) fail("plan_stale", "fresh destination changed before acquisition; existing content is not authorized");
+    for (const directory of prepared.directories ?? []) {
+      await root.parent(`${directory.path}/.foundry-pin`, false, async (_leaf, held) => {
+        const entry = await held.handle.stat();
+        if (entry.dev !== directory.dev || entry.ino !== directory.ino || entry.mode !== directory.mode) fail("plan_stale", "accepted parent directory changed", directory.path);
+      });
+    }
+    // The staging leaf is acquired exclusively. A competing apply never acquires or cleans another transaction.
+    await root.acquire(STAGING_DIRECTORY, 0o700);
+    stageOwned = true;
+    journalHandle = await root.parent(journalPath, false, (leaf) => open(leaf, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600));
+    await updateJournal();
+    for (const [prefix, stagedFiles] of [["before", prepared.before ?? []], ["files", prepared.files]] as const) {
+      for (const file of stagedFiles) {
+      await root.parent(`${STAGING_DIRECTORY}/${prefix}/${file.relativePath}`, true, async (leaf) => {
+        const staged = await open(leaf, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, file.mode);
+        try { await staged.writeFile(file.bytes); await staged.chmod(file.mode); }
+        finally { await staged.close(); }
+      });
+      await root.verify({ ...file, relativePath: `${STAGING_DIRECTORY}/${prefix}/${file.relativePath}` });
       }
     }
-    try {
-      await rm(stagingPath, { recursive: true, force: true });
-      if (prepared.legacyState) await removeEmptyParents(prepared.target, STATE_FILE);
-      if (!prepared.targetExisted) await rm(prepared.target, { recursive: true, force: true });
-    } catch {
-      restored = false;
+    for (const file of prepared.files) {
+      await root.matchesRoot(prepared.target);
+      const before = prepared.before?.find((entry) => entry.relativePath === file.relativePath);
+      if (before) {
+        await root.verify(before);
+        if (before.sha256 !== file.sha256 || before.mode !== file.mode) {
+          // Move, never overwrite/delete the named preimage. A racing replacement is retained
+          // privately and diagnosed; exclusive linking cannot overwrite a new destination.
+          const displaced = `${STAGING_DIRECTORY}/displaced/${file.relativePath}`;
+          await root.parent(displaced, true, (backup) =>
+            root!.parent(file.relativePath, false, (destination) => rename(destination, backup)));
+          journal.displaced.push(file.relativePath);
+          await updateJournal();
+          await root.verify({ ...before, relativePath: displaced });
+        } else {
+          applied.push(file.relativePath);
+          await updateJournal();
+          continue;
+        }
+      }
+      await root.parent(`${STAGING_DIRECTORY}/files/${file.relativePath}`, false, (source) =>
+        root!.parent(file.relativePath, true, (destination) => link(source, destination)));
+      applied.push(file.relativePath);
+      await updateJournal();
+      if (prepared.options.interruptAfter && applied.length >= prepared.options.interruptAfter) fail("staging_interrupted", "injected interruption; exact journal/staged bytes retained");
+      if (prepared.options.failAfter && applied.length >= prepared.options.failAfter) fail("apply_failed", "injected handled failure; no unsafe compare-then-delete rollback");
     }
-    const wrapped = error instanceof CreatorError ? error : new CreatorError("apply_failed", (error as Error).message);
-    throw new CreatorError(wrapped.code, wrapped.message, { plan: prepared, preserveStaging: !restored });
-  }
-};
-
-// Flip the onboarding gate in the target's creator state. Keeps every state write inside the creator
-// (start.mjs stays read-only): re-read + validate, set `onboarded: true`, and rewrite canonically,
-// changing ONLY that field. Fails closed when state is missing/invalid; idempotent noop when already onboarded.
-export const onboard = async (options: { target: string }): Promise<CreatorEnvelope> => {
-  const target = await resolveTarget(options.target);
-  const state = await readState(target.absolute, STATE_FILE);
-  if (!state) {
-    throw new CreatorError("state_missing", "no creator state to complete onboarding; run foundry apply first", { path: STATE_FILE });
-  }
-  const envelope: CreatorEnvelope = {
-    schema_version: CREATOR_SCHEMA_VERSION,
-    command: "onboard",
-    status: "onboarded",
-    target: target.absolute,
-    payload: { version: state.payload_version, digest: state.payload_digest },
-    operations: [],
-    diagnostics: [],
-  };
-  if (state.onboarded !== false) {
-    // Already onboarded (`true` or field absent): never rewrite; report an idempotent noop.
-    return { ...envelope, status: "noop", diagnostics: [diagnostic("already_onboarded", "project is already onboarded; nothing to complete", STATE_FILE)] };
-  }
-  state.onboarded = true;
-  const bytes = canonicalJson(state);
-  const statePath = pathFor(target.absolute, STATE_FILE);
-  const temporary = `${statePath}.onboard-${process.pid}`;
-  await writeFile(temporary, bytes, { mode: 0o600 });
-  await chmod(temporary, 0o600);
-  await rename(temporary, statePath);
-  return { ...envelope, operations: [fileOperation(expectedStateFile(bytes), "update", "onboarding-complete")] };
-};
-
-export const doctor = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
-  const diagnostics = [...prepared.envelope.diagnostics];
-  if (prepared.envelope.config_digest === undefined) diagnostics.push(diagnostic("incomplete_configuration", "doctor could not validate the target without complete configuration"));
-  if (prepared.legacyState && prepared.envelope.status !== "conflict") diagnostics.push(diagnostic("migration_pending", "legacy creator state requires a verified apply migration", LEGACY_STATE_FILE));
-  else if (prepared.envelope.operations.some((operation) => operation.action !== "noop") && diagnostics.length === 0) diagnostics.push(diagnostic("changes_pending", "creator plan has unapplied changes"));
-  return {
-    ...prepared.envelope,
-    command: "doctor",
-    status: diagnostics.length > 0 ? "unhealthy" : "healthy",
-    diagnostics: sortDiagnostics(diagnostics),
-  };
-};
-
-export const verify = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
-  const missing = prepared.envelope.operations.some((operation) => operation.action !== "noop");
-  const conflict = prepared.envelope.status === "conflict" || prepared.envelope.status === "error";
-  return {
-    ...prepared.envelope,
-    command: "verify",
-    status: conflict ? "failed" : missing ? "not-created" : "verified",
-    diagnostics: prepared.legacyState && !conflict ? sortDiagnostics([...prepared.envelope.diagnostics, diagnostic("migration_pending", "legacy creator state requires a verified apply migration", LEGACY_STATE_FILE)]) : prepared.envelope.diagnostics,
-  };
-};
-
-export const launchSelectedAgent = async (prepared: PreparedPlan): Promise<HandoffResult> => {
-  if (prepared.providerRuntimes.length !== 1) throw new CreatorError("handoff_invalid", "agent handoff requires exactly one selected provider", { plan: prepared });
-  const runtime = prepared.providerRuntimes[0];
-  try {
-    const result = await launchProvider(runtime, prepared.target);
-    return {
-      status: result.code === 0 ? "launched" : "failed",
-      provider: runtime.provider.id,
-      argv: result.argv,
-      exit_code: result.code,
-      signal: result.signal,
-      message: result.code === 0 ? "agent exited successfully" : "agent exited unsuccessfully; repository readiness is reported separately",
-    };
+    for (const file of prepared.files) await root.verify(file);
+    await root.matchesRoot(prepared.target);
+    if (prepared.config!.initialize_git) {
+      // Both Git roots stay descriptor-bound. No inherited GIT_* setting can redirect this effect.
+      const gitDirectory = await root.acquire(".git", 0o755);
+      journal.local_git = "attempted";
+      await updateJournal();
+      await runFile("git", [`--git-dir=${gitDirectory.location}`, `--work-tree=${root.location}`, "-c", "init.templateDir=", "init", "--quiet", "--initial-branch=main"], { timeout: 30_000, env: gitEnvironment() });
+      await root.matchesRoot(prepared.target);
+      await root.parent(".git/HEAD", false, async (leaf) => {
+        if (!(await lstat(leaf)).isFile()) fail("local_git_uncertain", "Git HEAD boundary is missing or unsafe", ".git/HEAD");
+      });
+      await verifyLocalGit(prepared.target);
+      journal.local_git = "verified";
+    }
+    journal.status = "committed";
+    await updateJournal();
+    await root.matchesRoot(prepared.target);
+    return { ...prepared.envelope, command: "apply", status: "applied", integrity: "verified", applied, pending: [],
+      recovery: { journal: journalPath, status: journal.status, local_git: journal.local_git, candidate: journal.candidate, baseline: journal.baseline } };
   } catch (error) {
-    return {
-      status: "failed",
-      provider: runtime.provider.id,
-      argv: [runtime.executable_path, ...runtime.provider.launch.args.map((arg) => arg.replaceAll("{workspace}", prepared.target))],
-      exit_code: 1,
-      signal: null,
-      message: `agent could not be launched: ${(error as Error).message}`,
-    };
-  }
+    const issue = error instanceof CreatorError ? error : new CreatorError("apply_failed", (error as Error).message);
+    // A portable compare-then-unlink cannot exclude a concurrent replacement. Preserve rather than delete.
+    prepared.envelope = { ...prepared.envelope, status: stageOwned ? "partial" : "conflict", integrity: "failed", applied,
+      pending: prepared.files.filter((file) => !applied.includes(file.relativePath)).map((file) => file.relativePath),
+      recovery: { journal: journalPath, status: journal.status, local_git: journal.local_git, candidate: journal.candidate, baseline: journal.baseline },
+      rollback: { attempted: false, restored: false, message: "No automatic deletion/restoration: concurrent edits cannot be safely excluded. Inspect retained journal/staged bytes and actual touched paths before separately authorized recovery." } };
+    throw new CreatorError(issue.code, issue.message, { plan: prepared, path: issue.path });
+  } finally { await journalHandle?.close(); await root?.close(); }
 };
-
-export const envelopeJson = (envelope: CreatorEnvelope): string => `${JSON.stringify({
-  schema_version: envelope.schema_version,
-  command: envelope.command,
-  status: envelope.status,
-  target: envelope.target,
-  payload: envelope.payload,
-  ...(envelope.config_digest ? { config_digest: envelope.config_digest } : {}),
-  ...(envelope.providers ? { providers: envelope.providers } : {}),
-  operations: sortOperations(envelope.operations),
-  diagnostics: sortDiagnostics(envelope.diagnostics),
-  ...(envelope.verification ? { verification: envelope.verification } : {}),
-  ...(envelope.handoff ? { handoff: envelope.handoff } : {}),
-  ...(envelope.rollback ? { rollback: envelope.rollback } : {}),
-}, null, 2)}\n`;
-
-export const errorEnvelope = (command: Command, target: string, error: CreatorError): CreatorEnvelope => {
-  const envelope = error.plan?.envelope ?? {
-    schema_version: CREATOR_SCHEMA_VERSION,
-    command,
-    status: "error",
-    target,
-    payload: { version: "unknown", digest: "unknown" },
-    operations: [],
-    diagnostics: [],
-  };
-  return {
-    ...envelope,
-    command,
-    status: "error",
-    diagnostics: sortDiagnostics([...envelope.diagnostics, diagnostic(error.code, error.message, error.path)]),
-    rollback: error.plan ? { attempted: true, restored: !error.preserveStaging, message: error.preserveStaging ? "staging was preserved for doctor recovery" : "creator-owned changes were rolled back" } : undefined,
-  };
+export const verify = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
+  if (prepared.envelope.status !== "noop") return { ...prepared.envelope, command: "verify", status: "verification-failed", integrity: "failed" };
+  await verifyDisk(prepared);
+  return { ...prepared.envelope, command: "verify", status: "verified", integrity: "verified" };
 };
+export const doctor = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
+  const checked = await verify(prepared);
+  const partial = checked.recovery && checked.recovery.status !== "committed";
+  return { ...checked, command: "doctor", status: partial ? "partial" : checked.integrity === "verified" ? "healthy" : "unhealthy" };
+};
+export const envelopeJson = (envelope: CreatorEnvelope): string => json(envelope).toString("utf8");
+export const errorEnvelope = (command: Command, target: string, error: CreatorError): CreatorEnvelope => ({
+  ...(error.plan?.envelope ?? { schema_version: 2, command, target, profile: "matt-first", payload: { version: "unknown", digest: "unknown" }, operations: [], diagnostics: [], setup: "incomplete" }),
+  command, status: error.plan?.envelope.status === "partial" ? "partial" : error.plan?.envelope.status === "failed" ? "failed" : "error",
+  diagnostics: [...(error.plan?.envelope.diagnostics ?? []), diagnostic(error.code, error.message, error.path)],
+});

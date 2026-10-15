@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -21,7 +21,7 @@ test("installed runner executes an exact offline tarball through its installed C
     await execFileAsync("pnpm", ["pack", "--ignore-scripts", "--pack-destination", packages], { cwd: root });
     const tarball = path.join(packages, (await readdir(packages)).find((entry) => entry.endsWith(".tgz")) ?? "");
     assert.ok(tarball.endsWith(".tgz"), "pnpm pack did not produce a tarball");
-    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "installed runner", TASK_TRACKER: "github-issues" } }));
+    await writeFile(config, await readFile(path.join(root, "test/fixtures/matt-first.json")));
     const environment = allowlistedEnvironment({ PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: os.tmpdir(), FACTORY_SECRET: "must-not-pass" });
     assert.deepEqual(Object.keys(environment).sort(), ["HOME", "PATH", "TMPDIR"]);
 
@@ -29,7 +29,8 @@ test("installed runner executes an exact offline tarball through its installed C
     const result = JSON.parse(execution.stdout);
 
     assert.equal(result.creator.status, "applied");
-    assert.equal(result.creator.verification, "verified");
+    assert.equal(result.creator.integrity, "verified");
+    assert.equal(result.creator.setup, "incomplete");
     assert.deepEqual(result.identity.package, { name: "@eff3ct/agent-foundry", version: "0.3.1" });
     for (const digest of [result.identity.tarball_digest, result.identity.payload_digest, result.identity.tree_digest]) assert.match(digest, /^sha256:[0-9a-f]{64}$/u);
   } finally {

@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import os from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const seed = "org-community-defaults";
 const files = ["ISSUE_TEMPLATE/bug.yml", "ISSUE_TEMPLATE/feature.yml", "PULL_REQUEST_TEMPLATE.md"];
@@ -46,24 +42,4 @@ test("source-only defaults are inventoried and guide maps only these paths", asy
   }
   assert.match(guide, /create it only if absent; if present, compare bytes/iu);
   assert.match(guide, /A different file, symlink, or unreviewed destination\s+is a \*\*stop\*\*/iu);
-});
-
-test("offline creator removes source-only defaults from a fresh generated project", async () => {
-  const parent = await mkdtemp(path.join(os.tmpdir(), "community-defaults-"));
-  const target = path.join(parent, "project");
-  const config = path.join(parent, "answers.json");
-  try {
-    await writeFile(config, JSON.stringify({ values: { PROJECT_NAME: "Example project", TASK_TRACKER: "github-issues" } }));
-    const args = ["--target", target, "--config", config, "--non-interactive"];
-    const cli = path.join(root, "dist/index.js");
-    const run = async (command) => JSON.parse((await execFileAsync(process.execPath, [cli, command, ...args], { cwd: root })).stdout);
-    assert.equal((await run("apply")).status, "applied");
-    assert.equal((await run("verify")).status, "verified");
-    await assert.rejects(stat(path.join(target, seed)), { code: "ENOENT" });
-    assert.match(await readFile(path.join(target, ".github/ISSUE_TEMPLATE/bug.yml"), "utf8"), /name: Bug report/u);
-    assert.ok(await stat(path.join(target, ".factory/docs/org-factory.md")));
-    assert.equal((await run("apply")).status, "noop");
-  } finally {
-    await rm(parent, { recursive: true, force: true });
-  }
 });

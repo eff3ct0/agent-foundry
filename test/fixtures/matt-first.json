@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "profile": "matt-first",
+  "project": { "name": "Disposable Matt-first validation" },
+  "binding": {
+    "provider": "github-issues",
+    "repository": "https://github.com/eff3ct0/agent-foundry",
+    "project": "https://github.com/orgs/eff3ct0/projects/1",
+    "access": "Existing permitted gh CLI access; installation never probes credentials.",
+    "recovery": "Stop affected work and request exact binding/access repair from the owner.",
+    "permissions": ["Read issue 407; separately invoked readiness comment and exact fresh readback only under its covering validation delegation."],
+    "approval_gates": ["No approval labels, project work, merge, migration, publication, global or credential changes."],
+    "documentation": {
+      "architecture": "AGENT.md",
+      "constraints": "AGENT.md",
+      "business": "AGENT.md",
+      "technical": "AGENT.md"
+    }
+  },
+  "hosts": [{ "id": "plain", "version": "fixture-only", "route": "manual" }],
+  "initialize_git": false,
+  "readiness_record": "https://github.com/eff3ct0/agent-foundry/issues/407"
+}

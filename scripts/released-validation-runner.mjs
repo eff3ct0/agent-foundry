@@ -83,10 +83,10 @@ export const runReleasedValidationCase = async ({ releasePackage, matrixCase, co
     await writeFile(configPath, JSON.stringify(configuration), "utf8");
     const result = await runCreator({ tarballPath: text(releasePackage.tarball_path, "release tarball path"), targetPath, configPath, environment: allowlistedEnvironment(environment) });
     evidence.identity = validateIdentity(result?.identity);
-    if (result?.creator?.status !== "applied" || result.creator.verification !== "verified") fail("installed creator did not verify the release package");
+    if (result?.creator?.status !== "applied" || result.creator.integrity !== "verified") fail("installed creator did not verify release file integrity");
     commandResult.status = "passed";
     commandResult.exit_code = 0;
-    commandResult.output = "creator applied and verified";
+    commandResult.output = "creator file integrity verified; host/provider readiness not exercised";
   } catch (error) {
     evidence.failure = sanitizeEvidenceText(error instanceof Error ? error.message : "released validation failed", 256);
     commandResult.output = evidence.failure;
