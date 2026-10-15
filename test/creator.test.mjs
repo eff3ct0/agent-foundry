@@ -254,12 +254,13 @@ test("short journal writes still produce complete committed recovery evidence", 
 });
 
 test("missing or inconsistent private recovery evidence cannot be reported healthy", async (t) => {
-  for (const defect of ["staged-file", "journal-mode", "candidate", "baseline", "local-git"]) {
+  for (const defect of ["staging-directory", "staged-file", "journal-mode", "candidate", "baseline", "local-git"]) {
     const { target, configPath } = await fixture(t);
     const plan = await creator.preparePlan({ command: "apply", target, configPath });
     await creator.applyPlan(plan, plan.envelope.plan_digest);
     const journalPath = path.join(target, ".factory/creator/.staging/journal.json");
-    if (defect === "staged-file") await rm(path.join(target, ".factory/creator/.staging/files/AGENT.md"));
+    if (defect === "staging-directory") await rm(path.join(target, ".factory/creator/.staging"), { recursive: true });
+    else if (defect === "staged-file") await rm(path.join(target, ".factory/creator/.staging/files/AGENT.md"));
     else if (defect === "journal-mode") await chmod(journalPath, 0o644);
     else {
       const journal = JSON.parse(await readFile(journalPath));
@@ -321,5 +322,60 @@ test("interactive consent accepts only affirmation and leaves denied, EOF and in
       assert.equal(result.status, "cancelled", action);
       await assert.rejects(lstat(target), { code: "ENOENT" });
     }
+  }
+});
+
+test("acquired staging and ancestor directories cannot be replaced to receive transaction writes", async (t) => {
+  for (const boundary of ["staging-acquisition", "ancestor-after-journal"]) {
+    const { directory, target, configPath } = await fixture(t);
+    await mkdir(target);
+    const victim = path.join(directory, "victim");
+    await mkdir(victim);
+    await writeFile(path.join(victim, "sentinel.txt"), "unchanged\n");
+    let replaced = false;
+    let replacement;
+    const watcher = watch(target, { recursive: true }, (event, filename) => {
+      const selected = boundary === "staging-acquisition"
+        ? filename === ".factory/creator/.staging"
+        : event === "change" && filename === ".factory/creator/.staging/journal.json";
+      if (!replaced && selected) {
+        replaced = true;
+        replacement = path.join(target, boundary === "staging-acquisition" ? ".factory/creator/.staging" : ".factory");
+        renameSync(replacement, path.join(directory, "original"));
+        renameSync(victim, replacement);
+      }
+    });
+    t.after(() => watcher.close());
+    const plan = await creator.preparePlan({ command: "apply", target, configPath });
+    await creator.applyPlan(plan, plan.envelope.plan_digest).catch(() => undefined);
+    assert.equal(replaced, true, boundary);
+    assert.deepEqual(await readdir(replacement), ["sentinel.txt"], boundary);
+    assert.equal(await readFile(path.join(replacement, "sentinel.txt"), "utf8"), "unchanged\n");
+  }
+});
+
+test("unsafe Git-boundary replacements are refused by doctor, verify, apply and startup", async (t) => {
+  for (const replacement of ["symlink", "file", "empty-directory", "outside-worktree"]) {
+    const { directory, target, configPath } = await fixture(t, { initialize_git: true });
+    const plan = await creator.preparePlan({ command: "apply", target, configPath });
+    await creator.applyPlan(plan, plan.envelope.plan_digest);
+    const git = path.join(target, ".git");
+    if (replacement === "outside-worktree") {
+      const outside = path.join(directory, "outside");
+      await mkdir(outside);
+      await writeFile(path.join(git, "config"), `[core]\nrepositoryformatversion = 0\nbare = false\nworktree = ${JSON.stringify(outside)}\n`);
+    } else {
+      renameSync(git, path.join(directory, "original-git"));
+      if (replacement === "symlink") await symlink(path.join(directory, "original-git"), git);
+      else if (replacement === "file") await writeFile(git, "not a repository\n");
+      else await mkdir(git);
+    }
+    const damaged = await creator.preparePlan({ command: "doctor", target, configPath });
+    assert.equal((await creator.doctor(damaged)).integrity, "failed", replacement);
+    assert.equal((await creator.verify(damaged)).integrity, "failed", replacement);
+    await assert.rejects(creator.applyPlan(damaged, damaged.envelope.plan_digest ?? ""), { code: "acceptance_required" });
+    const startup = await exec(process.execPath, [path.join(target, "start.mjs"), "--json"], { cwd: target }).catch((error) => error);
+    assert.equal(startup.code, 1, replacement);
+    assert.equal(JSON.parse(startup.stdout).mode, "UNSAFE", replacement);
   }
 });

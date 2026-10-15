@@ -18,6 +18,8 @@ const UPSTREAM = "49dd158d1076134a641b33efb035946536778336";
 const MAX_BYTES = 10 * 1024 * 1024;
 const digestPattern = /^sha256:[a-f0-9]{64}$/u;
 const runFile = promisify(execFile);
+const gitEnvironment = (): NodeJS.ProcessEnv => ({ PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP,
+  TMPDIR: process.env.TMPDIR, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull });
 const hash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 const json = (value: unknown): Buffer => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const digest = (value: unknown): string => `sha256:${hash(json(value))}`;
@@ -113,6 +115,16 @@ const regular = async (root: string, relative: string): Promise<{ bytes: Buffer;
     if (!entry.isFile() || entry.size > MAX_BYTES) fail("unsafe_file", "expected a bounded regular file", relative);
     return { bytes: await handle.readFile(), mode: entry.mode & 0o7777 };
   } finally { await handle.close(); }
+};
+const verifyLocalGit = async (target: string): Promise<void> => {
+  const expected = path.join(target, ".git");
+  const before = await metadata(expected);
+  if (!before?.isDirectory() || await realpath(expected) !== expected) fail("local_git_uncertain", "accepted local Git directory is missing, linked or unsafe", ".git");
+  const observed = await runFile("git", ["-C", target, "rev-parse", "--absolute-git-dir", "--show-toplevel"], { timeout: 30_000, env: gitEnvironment() })
+    .catch(() => fail("local_git_uncertain", "accepted local Git directory is not a readable repository", ".git"));
+  const after = await metadata(expected);
+  if (!after?.isDirectory() || before.dev !== after.dev || before.ino !== after.ino || observed.stdout !== `${expected}\n${target}\n`
+    || await realpath(expected) !== expected) fail("local_git_uncertain", "local Git boundary changed or resolves outside the accepted destination", ".git");
 };
 const parseJson = (bytes: Buffer, label: string): unknown => {
   try {
@@ -304,6 +316,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
       const parsed = parseJson(stored.bytes, "installation state");
       if (!object(parsed) || parsed.schema_version !== 2 || parsed.profile !== "matt-first") fail("legacy_readoption_required", "unknown/schema-1 state is not converted", STATE_FILE);
       if (stored.mode !== 0o600 || !stored.bytes.equals(prepared.stateBytes)) fail("ownership_reconciliation_required", "state/config/candidate differs; inspect and accept a scoped update/recovery plan", STATE_FILE);
+      if (!(await metadata(path.join(target.absolute, STAGING_DIRECTORY)))) fail("journal_invalid", "local ledger is missing its retained committed recovery evidence", STAGING_DIRECTORY);
       prepared.state = state;
     } else if (target.existed && (await readdir(target.absolute)).length) {
       fail("fresh_target_not_empty", "fresh setup requires an empty destination; adoption is not implicit");
@@ -321,7 +334,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
         envelope.operations.push(operation(file, "noop", "exact owned file unchanged"));
       }
     }
-    if (config.initialize_git && prepared.state && !(await metadata(path.join(target.absolute, ".git")))) fail("local_git_missing", "accepted local Git effect is missing; inspect before recovery", ".git");
+    if (config.initialize_git && prepared.state) await verifyLocalGit(target.absolute);
     const top = target.existed ? (await readdir(target.absolute)).sort() : [];
     envelope.plan_digest = digest({ target: target.absolute, baseline: target.identity, top, candidate: candidate.candidate_digest, config: envelope.config_digest, operations: envelope.operations, effects: envelope.effects });
     envelope.status = prepared.state ? "noop" : options.command === "dry-run" ? "dry-run" : "planned";
@@ -425,12 +438,12 @@ export const applyPlan = async (preview: PreparedPlan, acceptedDigest: string): 
           const created = await lstat(leaf);
           return AnchoredDirectory.open(leaf, created);
         });
-      } finally { await parent.handle.close(); }
+      } finally { await parent.close(); }
     } else root = await AnchoredDirectory.open(prepared.target, prepared.baseline);
     await root.matchesRoot(prepared.target);
     if ((await readdir(root.location)).length) fail("plan_stale", "fresh destination changed before acquisition; existing content is not authorized");
     // The staging leaf is acquired exclusively. A competing apply never acquires or cleans another transaction.
-    await root.parent(STAGING_DIRECTORY, true, (leaf) => mkdir(leaf, { mode: 0o700 }));
+    await root.acquire(STAGING_DIRECTORY, 0o700);
     stageOwned = true;
     journalHandle = await root.parent(journalPath, false, (leaf) => open(leaf, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600));
     await updateJournal();
@@ -455,19 +468,16 @@ export const applyPlan = async (preview: PreparedPlan, acceptedDigest: string): 
     await root.matchesRoot(prepared.target);
     if (prepared.config!.initialize_git) {
       // Both Git roots stay descriptor-bound. No inherited GIT_* setting can redirect this effect.
-      const environment: NodeJS.ProcessEnv = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP,
-        TMPDIR: process.env.TMPDIR, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull };
-      await root.parent(".git", false, (leaf) => mkdir(leaf, { mode: 0o755 }));
-      const gitDirectory = await root.parent(".git", false, (leaf) => AnchoredDirectory.open(leaf));
-      try {
-        journal.local_git = "attempted";
-        await updateJournal();
-        await runFile("git", [`--git-dir=${gitDirectory.location}`, `--work-tree=${root.location}`, "-c", "init.templateDir=", "init", "--quiet", "--initial-branch=main"], { timeout: 30_000, env: environment });
-        await root.matchesRoot(prepared.target);
-        const initialized = await runFile("git", ["-C", prepared.target, "rev-parse", "--absolute-git-dir"], { timeout: 30_000, env: environment });
-        if (initialized.stdout.trim() !== path.join(prepared.target, ".git")) fail("local_git_uncertain", "local Git readback differs from accepted target", ".git");
-        journal.local_git = "verified";
-      } finally { await gitDirectory.handle.close(); }
+      const gitDirectory = await root.acquire(".git", 0o755);
+      journal.local_git = "attempted";
+      await updateJournal();
+      await runFile("git", [`--git-dir=${gitDirectory.location}`, `--work-tree=${root.location}`, "-c", "init.templateDir=", "init", "--quiet", "--initial-branch=main"], { timeout: 30_000, env: gitEnvironment() });
+      await root.matchesRoot(prepared.target);
+      await root.parent(".git/HEAD", false, async (leaf) => {
+        if (!(await lstat(leaf)).isFile()) fail("local_git_uncertain", "Git HEAD boundary is missing or unsafe", ".git/HEAD");
+      });
+      await verifyLocalGit(prepared.target);
+      journal.local_git = "verified";
     }
     journal.status = "committed";
     await updateJournal();
@@ -482,7 +492,7 @@ export const applyPlan = async (preview: PreparedPlan, acceptedDigest: string): 
       recovery: { journal: journalPath, status: journal.status, local_git: journal.local_git, candidate: journal.candidate, baseline: journal.baseline },
       rollback: { attempted: false, restored: false, message: "No automatic deletion/restoration: concurrent edits cannot be safely excluded. Inspect retained journal/staged bytes and actual touched paths before separately authorized recovery." } };
     throw new CreatorError(issue.code, issue.message, { plan: prepared, path: issue.path });
-  } finally { await journalHandle?.close(); await root?.handle.close(); }
+  } finally { await journalHandle?.close(); await root?.close(); }
 };
 export const verify = async (prepared: PreparedPlan): Promise<CreatorEnvelope> => {
   if (prepared.envelope.status !== "noop") return { ...prepared.envelope, command: "verify", status: "verification-failed", integrity: "failed" };

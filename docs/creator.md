@@ -147,6 +147,9 @@ New-destination acquisition retains the accepted parent until the root is opened
 checks its identity and rechecks emptiness before staging. Journal updates finish
 all positional writes before truncation/sync; a zero-progress write fails rather
 than claiming committed recovery evidence.
+Acquired descendant handles, including staging and local Git, remain open through
+the transaction. Reuse checks the named inode; new parents are created exclusively.
+A substituted real directory is not silently adopted as a transaction directory.
 
 The exact private staged-file identities and 0600 journal path are shown before
 consent. `.factory/creator/.staging/journal.json` records the accepted candidate,
@@ -158,6 +161,10 @@ even before installed startup exists. It does not blindly replay or erase them.
 Read-only diagnosis validates retained staged bytes/modes, the journal's private
 mode, accepted candidate/file inventory, absence baseline and local-Git boundary.
 Missing or inconsistent committed recovery evidence cannot report healthy/USABLE.
+When local Git was selected, plan/verify/doctor/startup also perform a read-only
+Git-root readback with ambient Git overrides excluded. A linked, non-repository
+or outside-resolving `.git` cannot yield a healthy/verified no-op. Startup still
+does not initialize Git, write a tracker, launch a method or grant authority.
 
 A filesystem compare-then-unlink cannot exclude concurrent edits. This fresh
 path therefore preserves partial files/staging on handled failure or interruption

@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { lstat, mkdir, open, realpath, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, realpath, type FileHandle } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 export class FilesystemConflict extends Error {}
@@ -7,6 +7,7 @@ export class FilesystemConflict extends Error {}
 // Descriptor-relative paths prevent replacement of a root/ancestor from redirecting writes.
 // The host capability is checked before mutation; absence is an explicit gate, not a lexical fallback.
 export class AnchoredDirectory {
+  private readonly children = new Map<string, AnchoredDirectory>();
   constructor(readonly handle: FileHandle, readonly descriptorRoot: string) {}
   get location(): string { return `${this.descriptorRoot}/${this.handle.fd}`; }
 
@@ -22,21 +23,46 @@ export class AnchoredDirectory {
     } catch (error) { await handle.close(); throw error; }
   }
 
-  async parent<T>(relative: string, create: boolean, action: (leaf: string) => Promise<T>): Promise<T> {
-    if (!relative || /[\\:\u0000-\u001f]/u.test(relative) || relative.split("/").some((part) => !part || part === "." || part === "..")) throw new FilesystemConflict(`invalid anchored path: ${relative}`);
-    let directory: AnchoredDirectory = this;
+  private async createChild(name: string, mode: number): Promise<AnchoredDirectory> {
+    const location = `${this.location}/${name}`;
+    await mkdir(location, { mode });
+    const child = await AnchoredDirectory.open(location, await lstat(location));
     try {
-      for (const part of relative.split("/").slice(0, -1)) {
-        const next = `${directory.location}/${part}`;
-        if (create) await mkdir(next, { mode: 0o755 }).catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== "EEXIST") throw error;
-        });
-        const child = await AnchoredDirectory.open(next);
-        if (directory !== this) await directory.handle.close();
-        directory = child;
-      }
-      return await action(`${directory.location}/${relative.split("/").at(-1)!}`);
-    } finally { if (directory !== this) await directory.handle.close(); }
+      if ((await readdir(child.location)).length) throw new FilesystemConflict(`new directory changed before acquisition: ${name}`);
+      this.children.set(name, child);
+      return child;
+    } catch (error) { await child.close(); throw error; }
+  }
+
+  private async child(name: string, create: boolean): Promise<AnchoredDirectory> {
+    const held = this.children.get(name);
+    if (held) {
+      const named = await lstat(`${this.location}/${name}`);
+      const identity = await held.handle.stat();
+      if (!named.isDirectory() || named.dev !== identity.dev || named.ino !== identity.ino) throw new FilesystemConflict(`acquired directory was replaced: ${name}`);
+      return held;
+    }
+    if (create) return this.createChild(name, 0o755);
+    const opened = await AnchoredDirectory.open(`${this.location}/${name}`);
+    this.children.set(name, opened);
+    return opened;
+  }
+
+  async parent<T>(relative: string, create: boolean, action: (leaf: string, parent: AnchoredDirectory) => Promise<T>): Promise<T> {
+    if (!relative || /[\\:\u0000-\u001f]/u.test(relative) || relative.split("/").some((part) => !part || part === "." || part === "..")) throw new FilesystemConflict(`invalid anchored path: ${relative}`);
+    const parts = relative.split("/");
+    let directory: AnchoredDirectory = this;
+    for (const part of parts.slice(0, -1)) directory = await directory.child(part, create);
+    return action(`${directory.location}/${parts.at(-1)!}`, directory);
+  }
+
+  async acquire(relative: string, mode: number): Promise<AnchoredDirectory> {
+    return this.parent(relative, true, (_leaf, parent) => parent.createChild(relative.split("/").at(-1)!, mode));
+  }
+
+  async close(): Promise<void> {
+    try { await Promise.all([...this.children.values()].map((child) => child.close())); }
+    finally { await this.handle.close(); }
   }
 
   async matchesRoot(absolute: string): Promise<void> {

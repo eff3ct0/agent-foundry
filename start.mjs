@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { devNull } from "node:os";
+import { promisify } from "node:util";
+
+const runFile = promisify(execFile);
 
 export const STARTUP_SCHEMA_VERSION = 2;
 export const SELF = "SELF";
@@ -43,6 +48,17 @@ const readJson = async (root, relative) => {
   const value = JSON.parse(file.bytes.toString("utf8"));
   if (!file.bytes.equals(Buffer.from(`${JSON.stringify(value, null, 2)}\n`))) throw new Error(`noncanonical or duplicate JSON: ${relative}`);
   return { value, ...file };
+};
+const verifyLocalGit = async (root) => {
+  const expected = path.join(root, ".git");
+  const before = await metadata(expected);
+  if (!before?.isDirectory() || await realpath(expected) !== expected) throw new Error("accepted local Git boundary is missing, linked or unsafe");
+  const environment = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP,
+    TMPDIR: process.env.TMPDIR, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull };
+  const observed = await runFile("git", ["-C", root, "rev-parse", "--absolute-git-dir", "--show-toplevel"], { timeout: 30_000, env: environment });
+  const after = await metadata(expected);
+  if (!after?.isDirectory() || before.dev !== after.dev || before.ino !== after.ino || observed.stdout !== `${expected}\n${root}\n`
+    || await realpath(expected) !== expected) throw new Error("local Git boundary changed or resolves outside the accepted destination");
 };
 const identityValid = (file) => object(file) && safeRelative(file.path) && /^0[0-7]{3}$/u.test(file.mode)
   && Number.isSafeInteger(file.size) && file.size >= 0 && /^[a-f0-9]{64}$/u.test(file.sha256);
@@ -103,7 +119,7 @@ export const detectMode = async (root) => {
         || !recoveryJournal.files.some((file) => file.path === STATE)
         || JSON.stringify(recoveryJournal.files.filter((file) => file.path !== STATE)) !== JSON.stringify(expected)
         || recoveryJournal.local_git !== (provenance.configuration.initialize_git ? "verified" : "not-selected")) throw new Error("recovery evidence differs from installed candidate/configuration/file boundaries");
-      if (provenance.configuration.initialize_git && !(await metadata(path.join(resolved, ".git")))?.isDirectory()) throw new Error("verified local Git boundary is missing or unsafe");
+      if (provenance.configuration.initialize_git) await verifyLocalGit(resolved);
     }
     const seen = new Set();
     for (const file of provenance.files) {
@@ -117,6 +133,7 @@ export const detectMode = async (root) => {
     }
     let ownership = "missing: read-only discovery allowed; managed mutation needs inspected accepted ownership establishment";
     if (await metadata(path.join(resolved, STATE))) {
+      if (!recoveryJournal) throw new Error("local ledger is missing its retained committed recovery evidence");
       const { value: state, mode } = await readJson(resolved, STATE);
       if (mode !== 0o600 || state.schema_version !== 2 || state.profile !== "matt-first" || state.provenance_digest !== `sha256:${hash(provenanceBytes)}`
         || state.config_digest !== provenance.config_digest || state.candidate_digest !== provenance.candidate.candidate_digest
