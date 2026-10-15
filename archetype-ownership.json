@@ -76,6 +76,7 @@
       "paths": [
         {"path": "archetype-ownership.json", "kind": "file"},
         {"path": "MAINTAINERS.md", "kind": "file"},
+        {"path": "validation/411-greeting", "kind": "directory"},
         {"path": "odd/tasks/issue-368-npm-readback-diagnostics.md", "kind": "file"},
         {"path": "odd/tasks/v030-254-review-evidence.md", "kind": "file"},
         {"path": "odd/tasks/v030-255-handoff.md", "kind": "file"},
