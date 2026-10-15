@@ -134,7 +134,9 @@ export const detectMode = async (root) => {
     let ownership = "missing: read-only discovery allowed; managed mutation needs inspected accepted ownership establishment";
     if (await metadata(path.join(resolved, STATE))) {
       if (!recoveryJournal) throw new Error("local ledger is missing its retained committed recovery evidence");
-      const { value: state, mode } = await readJson(resolved, STATE);
+      const { value: state, mode, bytes: stateBytes } = await readJson(resolved, STATE);
+      const boundary = recoveryJournal.files.find((file) => file.path === STATE);
+      if (!boundary || mode !== parseInt(boundary.mode, 8) || stateBytes.length !== boundary.size || hash(stateBytes) !== boundary.sha256) throw new Error("present ledger differs from its committed recovery identity; no ownership inference");
       if (mode !== 0o600 || state.schema_version !== 2 || state.profile !== "matt-first" || state.provenance_digest !== `sha256:${hash(provenanceBytes)}`
         || state.config_digest !== provenance.config_digest || state.candidate_digest !== provenance.candidate.candidate_digest
         || !Array.isArray(state.owned_files) || state.owned_files.length !== provenance.files.length + 1) throw new Error("ledger does not match installed provenance; no ownership inference");

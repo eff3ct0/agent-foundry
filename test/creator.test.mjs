@@ -254,7 +254,7 @@ test("short journal writes still produce complete committed recovery evidence", 
 });
 
 test("missing or inconsistent private recovery evidence cannot be reported healthy", async (t) => {
-  for (const defect of ["staging-directory", "staged-file", "journal-mode", "candidate", "baseline", "local-git"]) {
+  for (const defect of ["ledger-payload", "ledger-git", "staging-directory", "staged-file", "journal-mode", "candidate", "baseline", "local-git"]) {
     const { target, configPath } = await fixture(t);
     const plan = await creator.preparePlan({ command: "apply", target, configPath });
     await creator.applyPlan(plan, plan.envelope.plan_digest);
@@ -262,7 +262,15 @@ test("missing or inconsistent private recovery evidence cannot be reported healt
     if (defect === "staging-directory") await rm(path.join(target, ".factory/creator/.staging"), { recursive: true });
     else if (defect === "staged-file") await rm(path.join(target, ".factory/creator/.staging/files/AGENT.md"));
     else if (defect === "journal-mode") await chmod(journalPath, 0o644);
-    else {
+    else if (defect.startsWith("ledger-")) {
+      const statePath = path.join(target, ".factory/creator/state.json");
+      const state = JSON.parse(await readFile(statePath));
+      if (defect === "ledger-payload") state.payload_digest = `sha256:${"0".repeat(64)}`;
+      else state.local_git = "initialize";
+      const replacement = `${statePath}.replacement`;
+      await writeFile(replacement, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+      renameSync(replacement, statePath);
+    } else {
       const journal = JSON.parse(await readFile(journalPath));
       if (defect === "candidate") journal.candidate.candidate_digest = `sha256:${"0".repeat(64)}`;
       if (defect === "baseline") journal.baseline = "unknown";

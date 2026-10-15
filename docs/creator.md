@@ -161,6 +161,8 @@ even before installed startup exists. It does not blindly replay or erase them.
 Read-only diagnosis validates retained staged bytes/modes, the journal's private
 mode, accepted candidate/file inventory, absence baseline and local-Git boundary.
 Missing or inconsistent committed recovery evidence cannot report healthy/USABLE.
+A present ledger must match its complete committed recovery identity, including
+metadata-only atomic replacements. Ledger-absent clone discovery remains read-only.
 When local Git was selected, plan/verify/doctor/startup also perform a read-only
 Git-root readback with ambient Git overrides excluded. A linked, non-repository
 or outside-resolving `.git` cannot yield a healthy/verified no-op. Startup still
