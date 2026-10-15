@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -22,7 +22,7 @@ test("passive startup refuses linked and legacy state without changing it", asyn
 test("source marker preserves SELF protection independently of installed configuration", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "foundry-407-self-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  await writeFile(path.join(directory, "MAINTAINERS.md"), "source governance\n");
+  await writeFile(path.join(directory, "MAINTAINERS.md"), await readFile(new URL("../MAINTAINERS.md", import.meta.url)));
   const result = await detectMode(directory);
   assert.equal(result.mode, "SELF");
   assert.notEqual(result.integrity, "verified");

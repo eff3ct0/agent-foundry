@@ -1,4 +1,4 @@
-# Matt-first fresh setup — source-local breaking cutover
+# Matt-first fresh setup and unrelated-repository adoption
 
 This work-in-progress source replaces the legacy installer contract in one engine.
 It is not a published version, a transfer-ready delivery, or qualification of all
@@ -10,7 +10,7 @@ Never apply the creator to this source SELF repository.
 
 Build the source with `pnpm build`. Use its exact `dist/index.js` or an explicitly
 identified isolated installed package, not a moving registry version. Place the
-accepted JSON configuration outside the empty disposable destination:
+accepted JSON configuration outside the disposable destination:
 
 ```sh
 node dist/index.js plan --target /tmp/accepted-empty-project --config setup.json --non-interactive
@@ -26,13 +26,12 @@ engine rereads candidate/configuration/target; a changed input invalidates the
 acceptance. Interactive apply shows the same complete preview and asks once;
 no/EOF/interrupt leaves the plan unapplied. Noninteractive apply requires
 `--accept-plan`; `--yes` is not a compatibility alias.
-
-The target must be empty or absent with an existing real parent directory.
-Nonempty unrelated repositories require the separate adoption path, not fresh
-classification. Recognized exact schema-2 ownership permits an unchanged no-op;
-missing ledger, drift, changed candidate/config, schema-1 or either legacy
-state/staging footprint requires inspected accepted recovery/re-adoption. No
-matching-bytes ownership or whole-directory deletion is inferred.
+Without `adoption`, the target must be empty or absent with an existing real
+parent directory. Nonempty repositories require explicit adoption configuration.
+Recognized exact schema-2 ownership permits an unchanged no-op; missing ledger,
+drift, changed candidate/config, schema-1 or either legacy state/staging footprint
+requires inspected accepted recovery/re-adoption. Matching bytes are not ownership;
+neither a directory name nor proximity authorizes replacement or deletion.
 
 ## Schema-2 configuration
 
@@ -79,6 +78,81 @@ no host pointers/projections or plugin content. `initialize_git: true` accepts
 only local `git init` at the target, with no template, remote, commit, push or
 launch. Git environment overrides are excluded; the actual Git directory is
 read back. An uncertain Git operation retains recovery evidence.
+
+## Adopt an unrelated existing repository
+
+Inspect the actual application, Git metadata, instructions/standards, binding and
+documentation authority, workflows, startup programs, existing method sources and
+unrelated `.factory` content. Preserve exact private before bytes and modes.
+Detection is not permission. Reconcile logically conflicting rules before accepting
+a plan; an appended pointer cannot override project authority.
+
+Add an explicit `adoption` object to the same configuration:
+
+```json
+{
+  "startup": ".factory/start.mjs",
+  "shared_files": ["AGENT.md", "docs/bindings.md", ".gitignore"],
+  "adopt_files": [],
+  "rule_reviews": [
+    {
+      "path": "AGENT.md",
+      "sha256": "EXACT_SHA256_OF_REVIEWED_PREEXISTING_BYTES",
+      "mode": "0644",
+      "compatible": true,
+      "resolution": "Record the actual owner/delegation-backed nonconflicting reconciliation."
+    }
+  ]
+}
+```
+
+Every existing `AGENT.md` and `docs/bindings.md` needs its own exact rule review;
+also name other inspected rules whose compatibility matters. Review decisions are
+explicit accepted inputs, not machine proof of semantic compatibility. An absent,
+negative or stale required review blocks the plan. A real conflict must be resolved
+in project-owned content and reviewed again, not hidden behind `compatible: true`.
+Adoption requires an existing real local Git repository and `initialize_git: false`;
+it never initializes, commits, changes remotes or pushes that repository.
+
+Only the three named shared paths support appended integration blocks. Markdown
+uses `<!-- BEGIN AGENT FOUNDRY -->` / `<!-- END AGENT FOUNDRY -->`; `.gitignore`
+uses equivalent `#` delimiters. Original bytes (including a missing final newline)
+and modes are preserved as context, not acquired as whole-file ownership. Any
+preexisting delimiter requires reconciliation; a marker alone proves no ownership.
+Other collisions block unless `adopt_files` explicitly selects identical bytes and
+mode. This establishes a specific file baseline, never directory ownership or
+permission to overwrite changed content. Unknown unrelated content is allowed.
+
+Select `.factory/start.mjs` when root `start.mjs` belongs to the application.
+The installed envelope and provenance record `node .factory/start.mjs`; no alias
+replaces the root program. Selecting root startup does not authorize replacement
+of an unrelated root file. The stable `docs/bindings.md` remains the sole binding;
+its existing authority survives outside the accepted integration block.
+
+Preview lists exact file/block actions, owned delimiters/block digest, before
+identity/mode, protected context digest and base64 before/after bytes for existing
+integrations. Review these locally; private project/recovery bytes do not belong
+in public evidence. The accepted digest binds these effects, configuration,
+candidate, target and existing touched-parent identities. Recheck before writes;
+stale bytes/mode/context or unsafe paths require a newly reconciled accepted plan.
+Decline leaves the target unchanged. No force or whole-directory takeover exists.
+
+Schema-2 ownership records `boundary: block` separately from its full protected
+file context and its exact `before` identity. Private `.staging/before` snapshots
+preserve preimages; `.staging/files` contains selected output; the journal records
+the scoped baseline and applied/displaced paths. Shared-file application first
+moves the named preimage into private `.staging/displaced`, verifies it, then links
+the output exclusively. A racing replacement is retained, not overwritten/deleted;
+an intervening destination prevents the exclusive link. Interrupted effects remain
+partial and inspectable, never crash-atomic or automatically rolled back. Stop
+commits/transfer of partial recovery material until it is safely excluded.
+Full update, authorized recovery/retirement and legacy migration remain separate
+units. Keep every preimage/journal needed for those actions.
+
+Use the same independent manual/provider discovery and passive stop requirements
+below in the actual adopted application. Fresh-only fixture proof cannot qualify
+adoption. Required denied/missing observations leave setup incomplete with actual
+applied effects; optional unselected native routes are not silently required.
 
 ## Selected output and immutable identity
 

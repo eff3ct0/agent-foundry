@@ -62,8 +62,14 @@ const verifyLocalGit = async (root) => {
 };
 const identityValid = (file) => object(file) && safeRelative(file.path) && /^0[0-7]{3}$/u.test(file.mode)
   && Number.isSafeInteger(file.size) && file.size >= 0 && /^[a-f0-9]{64}$/u.test(file.sha256);
+const ownershipValid = (file) => identityValid(file) && ["file", "block"].includes(file.boundary)
+  && (file.before === "absent" || (identityValid(file.before) && file.before.path === file.path))
+  && (file.boundary !== "block" || (file.before !== "absent" && object(file.block)
+    && typeof file.block.begin === "string" && typeof file.block.end === "string"
+    && /^[a-f0-9]{64}$/u.test(file.block.sha256) && file.block.context_sha256 === file.before.sha256));
 
-export const isTemplate = async (root) => (await metadata(path.join(root, "MAINTAINERS.md")))?.isFile() === true;
+export const isTemplate = async (root) => (await metadata(path.join(root, "MAINTAINERS.md")))?.isFile() === true
+  && (await regular(root, "MAINTAINERS.md")).bytes.toString("utf8").startsWith("# MAINTAINERS - Agent Foundry source governance\n");
 export const detectMode = async (root) => {
   const resolved = path.resolve(root);
   const result = { mode: INCOMPLETE, status: "incomplete", integrity: "not-checked", setup: "incomplete", diagnostics: [], applied: [], pending: [] };
@@ -81,7 +87,9 @@ export const detectMode = async (root) => {
       const { value: journal, mode } = await readJson(resolved, `${STAGING}/journal.json`);
       if (mode !== 0o600 || journal.schema_version !== 2 || journal.profile !== "matt-first" || !["applying", "committed"].includes(journal.status)
         || !object(journal.candidate) || !/^sha256:[a-f0-9]{64}$/u.test(journal.plan_digest)
-        || journal.baseline !== "all named destination files absent" || !["not-selected", "not-started", "attempted", "verified"].includes(journal.local_git)
+        || !(journal.baseline === "all named destination files absent" || (Array.isArray(journal.baseline)
+          && journal.baseline.every(ownershipValid) && new Set(journal.baseline.map((file) => file.path)).size === journal.baseline.length))
+        || !["not-selected", "not-started", "attempted", "verified"].includes(journal.local_git)
         || !Array.isArray(journal.files) || journal.files.length > 1000 || !journal.files.every(identityValid)
         || new Set(journal.files.map((file) => file.path)).size !== journal.files.length
         || !Array.isArray(journal.applied) || journal.applied.length > journal.files.length
@@ -119,6 +127,7 @@ export const detectMode = async (root) => {
         || !recoveryJournal.files.some((file) => file.path === STATE)
         || JSON.stringify(recoveryJournal.files.filter((file) => file.path !== STATE)) !== JSON.stringify(expected)
         || recoveryJournal.local_git !== (provenance.configuration.initialize_git ? "verified" : "not-selected")) throw new Error("recovery evidence differs from installed candidate/configuration/file boundaries");
+      if (provenance.configuration.adoption && JSON.stringify(recoveryJournal.baseline) !== JSON.stringify(provenance.ownership)) throw new Error("scoped recovery baseline differs from accepted provenance");
       if (provenance.configuration.initialize_git) await verifyLocalGit(resolved);
     }
     const seen = new Set();
@@ -128,7 +137,9 @@ export const detectMode = async (root) => {
       const current = await regular(resolved, file.path);
       if (current.mode !== parseInt(file.mode, 8) || current.bytes.length !== file.size || hash(current.bytes) !== file.sha256) throw new Error(`installed bytes or mode differ: ${file.path}`);
     }
-    for (const required of ["AGENT.md", "start.mjs", "docs/bindings.md", ".factory/procedures.md", ".factory/skills/matt-pocock/LICENSE", ".factory/skills/foundry-checkpoint/SKILL.md", ".factory/skills/foundry-resume/SKILL.md", ...provenance.method_entries]) {
+    if (!["start.mjs", ".factory/start.mjs"].includes(provenance.startup)
+      || provenance.startup !== (provenance.configuration.adoption?.startup ?? "start.mjs")) throw new Error("startup path differs from accepted configuration");
+    for (const required of ["AGENT.md", provenance.startup, "docs/bindings.md", ".factory/procedures.md", ".factory/skills/matt-pocock/LICENSE", ".factory/skills/foundry-checkpoint/SKILL.md", ".factory/skills/foundry-resume/SKILL.md", ...provenance.method_entries]) {
       if (!seen.has(required)) throw new Error(`required indexed source absent: ${required}`);
     }
     let ownership = "missing: read-only discovery allowed; managed mutation needs inspected accepted ownership establishment";
@@ -142,13 +153,25 @@ export const detectMode = async (root) => {
         || !Array.isArray(state.owned_files) || state.owned_files.length !== provenance.files.length + 1) throw new Error("ledger does not match installed provenance; no ownership inference");
       const owned = new Set();
       for (const file of state.owned_files) {
-        if (!identityValid(file) || file.boundary !== "file" || file.before !== "absent" || owned.has(file.path)) throw new Error("invalid owned file boundary");
+        if (!ownershipValid(file) || owned.has(file.path)) throw new Error("invalid owned file/block boundary");
         owned.add(file.path);
         const current = await regular(resolved, file.path);
         if (current.mode !== parseInt(file.mode, 8) || hash(current.bytes) !== file.sha256 || current.bytes.length !== file.size) throw new Error(`owned file drift: ${file.path}`);
+        if (file.before !== "absent") {
+          const before = await regular(resolved, `${STAGING}/before/${file.path}`);
+          if (before.mode !== parseInt(file.before.mode, 8) || before.bytes.length !== file.before.size || hash(before.bytes) !== file.before.sha256) throw new Error(`private baseline differs: ${file.path}`);
+          if (file.boundary === "block") {
+            const begin = Buffer.from(`${file.block.begin}\n`);
+            const index = current.bytes.indexOf(begin);
+            if (index < 0 || current.bytes.indexOf(begin, index + begin.length) !== -1
+              || !current.bytes.subarray(0, before.bytes.length).equals(before.bytes)
+              || hash(current.bytes.subarray(index)) !== file.block.sha256) throw new Error(`owned block/context differs: ${file.path}`);
+          }
+        }
       }
       if (owned.size !== seen.size + 1 || !owned.has(PROVENANCE) || [...seen].some((relative) => !owned.has(relative))) throw new Error("ledger file set differs from provenance");
-      ownership = "exact schema-2 file boundaries verified; no directory ownership";
+      if (provenance.configuration.adoption && JSON.stringify(state.owned_files.filter((file) => file.path !== PROVENANCE)) !== JSON.stringify(provenance.ownership)) throw new Error("ledger boundaries differ from accepted provenance");
+      ownership = "exact schema-2 file/block boundaries and protected context verified; no directory ownership";
     }
     const finalRoot = await metadata(resolved);
     if (!finalRoot?.isDirectory() || finalRoot.dev !== rootIdentity.dev || finalRoot.ino !== rootIdentity.ino || await realpath(resolved) !== resolved) throw new Error("workspace identity changed during read-only diagnosis");

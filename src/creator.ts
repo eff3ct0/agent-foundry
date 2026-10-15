@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { link, lstat, mkdir, open, readdir, realpath, type FileHandle } from "node:fs/promises";
+import { link, lstat, mkdir, open, readdir, realpath, rename, type FileHandle } from "node:fs/promises";
 import { AnchoredDirectory } from "./creator-filesystem";
 import path from "node:path";
 import { devNull } from "node:os";
@@ -43,14 +43,27 @@ export interface CreatorConfig {
   hosts: Array<{ id: string; version: string; route: "manual" }>;
   initialize_git: boolean;
   readiness_record: string;
+  adoption?: {
+    startup: "start.mjs" | ".factory/start.mjs";
+    shared_files: string[]; adopt_files: string[];
+    rule_reviews: Array<{ path: string; sha256: string; mode: string; compatible: boolean; resolution: string }>;
+  };
 }
 interface CreatorState {
   schema_version: 2; profile: "matt-first"; payload_digest: string; config_digest: string;
-  candidate_digest: string; provenance_digest: string; owned_files: Array<PayloadFile & { boundary: "file"; before: "absent" }>;
+  candidate_digest: string; provenance_digest: string; owned_files: OwnedFile[];
   local_git: "initialize" | "none";
 }
+interface OwnedFile extends PayloadFile {
+  boundary: "file" | "block"; before: "absent" | PayloadFile;
+  block?: { begin: string; end: string; sha256: string; context_sha256: string };
+}
 export interface Diagnostic { code: string; message: string; path?: string }
-export interface Operation extends PayloadFile { action: "create" | "noop" | "conflict"; reason: string }
+export interface Operation extends PayloadFile {
+  action: "create" | "change-block" | "adopt" | "noop" | "conflict"; reason: string;
+  ownership?: OwnedFile;
+  preview?: { encoding: "base64"; before: string; after: string };
+}
 export interface CreatorEnvelope {
   schema_version: number; command: Command; status: string; target: string;
   profile: "matt-first"; payload: { version: string; digest: string };
@@ -75,6 +88,8 @@ export interface PreparedPlan {
   envelope: CreatorEnvelope; target: string; targetExisted: boolean; files: PlannedFile[];
   stateBytes?: Buffer; state?: CreatorState; config?: CreatorConfig;
   options: CreatorOptions;
+  before?: PlannedFile[]; ownership?: OwnedFile[];
+  directories?: Array<{ path: string; dev: number; ino: number; mode: number }>;
   baseline: { existed: boolean; dev: number; ino: number; mode: number };
 }
 export class CreatorError extends Error {
@@ -154,7 +169,8 @@ const textList = (value: unknown, label: string): string[] => {
   return (value as unknown[]).map((entry) => text(entry, label));
 };
 export const validateConfig = (raw: unknown): CreatorConfig => {
-  const value = keys(raw, ["schema_version", "profile", "project", "binding", "hosts", "initialize_git", "readiness_record"], "configuration");
+  const value = keys(raw, ["schema_version", "profile", "project", "binding", "hosts", "initialize_git", "readiness_record",
+    ...(object(raw) && raw.adoption !== undefined ? ["adoption"] : [])], "configuration");
   if (value.schema_version !== 2 || value.profile !== "matt-first") fail("configuration_version", "requires schema_version 2 / matt-first; legacy configuration is not converted");
   const project = keys(value.project, ["name"], "project");
   const binding = keys(value.binding, ["provider", "repository", "project", "access", "recovery", "permissions", "approval_gates", "documentation"], "binding");
@@ -178,12 +194,35 @@ export const validateConfig = (raw: unknown): CreatorConfig => {
   const repository = https(binding.repository, "task repository");
   const readiness = https(value.readiness_record, "readiness record");
   if (!readiness.startsWith(`${repository}/`)) fail("configuration_invalid", "readiness record must belong to the accepted task repository");
+  let adoption: CreatorConfig["adoption"];
+  if (value.adoption !== undefined) {
+    const selected = keys(value.adoption, ["startup", "shared_files", "adopt_files", "rule_reviews"], "adoption");
+    if (!["start.mjs", ".factory/start.mjs"].includes(String(selected.startup)) || value.initialize_git !== false) fail("configuration_invalid", "adoption selects an exact startup and never initializes existing Git");
+    const paths = (raw: unknown, label: string): string[] => {
+      if (!Array.isArray(raw) || raw.length > 1000 || raw.some((entry) => typeof entry !== "string" || !safeRelative(entry)) || new Set(raw).size !== raw.length) fail("configuration_invalid", `invalid/duplicate ${label}`);
+      return raw as string[];
+    };
+    const shared = paths(selected.shared_files, "shared files");
+    if (shared.some((entry) => !["AGENT.md", "docs/bindings.md", ".gitignore"].includes(entry))) fail("configuration_invalid", "only the envelope, stable binding and ignore file have shared-block integrations");
+    if (!Array.isArray(selected.rule_reviews) || selected.rule_reviews.length > 1000) fail("configuration_invalid", "adoption requires exact rule reviews");
+    const reviews = selected.rule_reviews.map((raw) => {
+      const review = keys(raw, ["path", "sha256", "mode", "compatible", "resolution"], "rule review");
+      if (typeof review.path !== "string" || !safeRelative(review.path) || !/^[a-f0-9]{64}$/u.test(String(review.sha256))
+        || !/^0[0-7]{3}$/u.test(String(review.mode)) || typeof review.compatible !== "boolean") fail("configuration_invalid", "rule review requires exact path/hash/mode and compatibility decision");
+      return { path: review.path as string, sha256: review.sha256 as string, mode: review.mode as string,
+        compatible: review.compatible as boolean, resolution: text(review.resolution, "rule reconciliation") };
+    });
+    if (new Set(reviews.map((review) => review.path)).size !== reviews.length) fail("configuration_invalid", "duplicate rule review");
+    adoption = { startup: selected.startup as "start.mjs" | ".factory/start.mjs", shared_files: shared,
+      adopt_files: paths(selected.adopt_files, "matching-file adoptions"), rule_reviews: reviews };
+  }
   return {
     schema_version: 2, profile: "matt-first", project: { name: text(project.name, "project name") },
     binding: { provider: text(binding.provider, "task provider"), repository, project: https(binding.project, "task project/board"),
       access: text(binding.access, "access route"), recovery: text(binding.recovery, "access recovery"),
       permissions: textList(binding.permissions, "permissions"), approval_gates: textList(binding.approval_gates, "approval gates"), documentation: docs },
     hosts, initialize_git: value.initialize_git as boolean, readiness_record: readiness,
+    ...(adoption ? { adoption } : {}),
   };
 };
 const resolveTarget = async (raw: string): Promise<{ absolute: string; existed: boolean; identity: PreparedPlan["baseline"] }> => {
@@ -228,7 +267,86 @@ const loadManifest = async (): Promise<{ manifest: PayloadManifest; candidate: R
   return { manifest, candidate, sources };
 };
 const composeBindings = (config: CreatorConfig): Buffer => Buffer.from(`# Accepted repository binding\n\nThis is the sole binding, not an access certificate. Read [the integration envelope](../AGENT.md).\n\n## Task authority\n\n- Provider: ${config.binding.provider}\n- Repository: ${config.binding.repository}\n- Project/board: ${config.binding.project}\n- Access route: ${config.binding.access}\n- Recovery: ${config.binding.recovery}\n\nRead fresh native identity, state, owner, parent/dependencies and canonical checkpoint before work. Confirm each durable operation and freshly read back the exact target, intended content and state. An unknown effect requires exact-target inspection before retry. No local task fallback or takeover from silence. Use the provider's current forms/conventions and actual native capabilities; no implicit label creation or manual relation downgrade.\n\n## Accepted validation/work permissions\n\n${config.binding.permissions.map((item) => `- ${item}`).join("\n")}\n\n## Human gates\n\n${config.binding.approval_gates.map((item) => `- ${item}`).join("\n")}\n\nNo procedure grants protected approval, merge, deployment, migration, publication, global configuration or expanded scope.\n\n## Documentation authority\n\n${Object.entries(config.binding.documentation).map(([family, source]) => `- ${family}: ${source}`).join("\n")}\n\nGit code/docs and tracker task/spec/decision/checkpoint/evidence are distinct authorities. External documentation requires its declared access/recovery and separately permitted supported write/acknowledgment/fresh readback; a derived copy is not fallback authority.\n\n## Selected manual hosts\n\n${config.hosts.map((host) => `- ${host.id} ${host.version}: explicit readable-source loading (manual); native registration not selected.`).join("\n")}\n\n## Readiness\n\nRecord: ${config.readiness_record}\n\nInstallation does not test access, perform tracker writes, launch a validator or start planning. Separately invoke an independent manual discovery check, verify permitted provider identity/write/readback, identify the proposed planning action and stop. Required missing observations mean setup incomplete. Results bind exact content, host/version, workspace and access; recheck affected evidence after change. Local installer state is ownership/recovery evidence only.\n`);
-const readPayloadFiles = (sources: Map<string, PlannedFile>, manifest: PayloadManifest, candidate: Record<string, unknown>, config: CreatorConfig): { files: PlannedFile[]; nextAction: NonNullable<CreatorEnvelope["next_action"]> } => {
+// A shared file's full identity is a protected context, never whole-file ownership.
+const integrateAdoption = async (prepared: PreparedPlan, files: PlannedFile[]): Promise<void> => {
+  const config = prepared.config!;
+  const adoption = config.adoption!;
+  const target = prepared.target;
+  if (!prepared.targetExisted) fail("adoption_target_missing", "adoption requires an existing inspected repository");
+  await verifyLocalGit(target);
+  let previous: Pick<CreatorState, "owned_files"> | undefined;
+  await safeParents(target, STATE_FILE);
+  if (await metadata(path.join(target, STATE_FILE))) {
+    const stored = await regular(target, STATE_FILE);
+    const value = parseJson(stored.bytes, "installation state");
+    if (!object(value) || value.schema_version !== 2 || value.profile !== "matt-first" || !Array.isArray(value.owned_files)
+      || stored.mode !== 0o600) fail("ownership_reconciliation_required", "inspect invalid/legacy installation state before adoption", STATE_FILE);
+    previous = value as unknown as CreatorState;
+  }
+  if (!previous && await metadata(path.join(target, STAGING_DIRECTORY))) {
+    const stored = await regular(target, `${STAGING_DIRECTORY}/journal.json`);
+    const journal = parseJson(stored.bytes, "recovery journal");
+    if (!object(journal) || stored.mode !== 0o600 || journal.schema_version !== 2 || journal.profile !== "matt-first"
+      || !Array.isArray(journal.baseline)) fail("journal_invalid", "adoption recovery requires its scoped baseline", STAGING_DIRECTORY);
+    previous = { owned_files: journal.baseline as OwnedFile[] };
+  }
+  if (previous && (previous.owned_files.some((entry) => !object(entry) || typeof entry.path !== "string" || !safeRelative(entry.path))
+    || new Set(previous.owned_files.map((entry) => entry.path)).size !== previous.owned_files.length)) fail("ownership_reconciliation_required", "invalid/duplicate owned boundaries", STATE_FILE);
+  prepared.before = [];
+  prepared.ownership = [];
+  const before = async (relative: string): Promise<PlannedFile | undefined> => {
+    await safeParents(target, relative);
+    const owned = previous?.owned_files.find((entry) => entry.path === relative);
+    if (owned?.before === "absent") return undefined;
+    const base = owned ? await regular(target, `${STAGING_DIRECTORY}/before/${relative}`) :
+      await metadata(path.join(target, relative)) ? await regular(target, relative) : undefined;
+    if (!base) return undefined;
+    const file = plannedFile(relative, base.bytes, base.mode);
+    if (owned && JSON.stringify(fileIdentity(file)) !== JSON.stringify(owned.before)) fail("baseline_invalid", "private baseline differs from accepted ownership", relative);
+    return file;
+  };
+  const reviewed = new Map(adoption.rule_reviews.map((review) => [review.path, review]));
+  for (const relative of new Set(["AGENT.md", "docs/bindings.md", ...reviewed.keys()])) {
+    const base = await before(relative);
+    if (!base) continue;
+    const review = reviewed.get(relative);
+    if (!review || !review.compatible) fail("rule_conflict", "existing authority requires an exact explicit compatible-rule reconciliation; a pointer cannot override it", relative);
+    if (base.sha256 !== review.sha256 || fileIdentity(base).mode !== review.mode) fail("rule_review_stale", "reviewed rule bytes or mode changed; reconcile and accept a new plan", relative);
+  }
+  const startup = files.find((file) => file.relativePath === "start.mjs")!;
+  startup.relativePath = adoption.startup;
+  const envelope = files.find((file) => file.relativePath === "AGENT.md")!;
+  Object.assign(envelope, plannedFile("AGENT.md", Buffer.from(envelope.bytes.toString("utf8").replace("node start.mjs", `node ${adoption.startup}`))));
+  for (let index = 0; index < files.length; index++) {
+    let file = files[index];
+    const base = await before(file.relativePath);
+    let boundary: OwnedFile["boundary"] = "file";
+    let block: OwnedFile["block"];
+    if (base) {
+      prepared.before.push(base);
+      if (adoption.shared_files.includes(file.relativePath)) {
+        boundary = "block";
+        const begin = file.relativePath === ".gitignore" ? "# BEGIN AGENT FOUNDRY" : "<!-- BEGIN AGENT FOUNDRY -->";
+        const end = file.relativePath === ".gitignore" ? "# END AGENT FOUNDRY" : "<!-- END AGENT FOUNDRY -->";
+        // No delimiter is inferred as ownership, including an apparently valid existing block.
+        if (base.bytes.includes(Buffer.from("BEGIN AGENT FOUNDRY")) || base.bytes.includes(Buffer.from("END AGENT FOUNDRY"))) fail("block_conflict", "existing/malformed/duplicate Foundry delimiters require explicit reconciliation", file.relativePath);
+        const ownedBytes = Buffer.concat([Buffer.from(`${begin}\n`), file.bytes, Buffer.from(`${end}\n`)]);
+        const separator = base.bytes.length && base.bytes.at(-1) !== 10 ? Buffer.from("\n") : Buffer.alloc(0);
+        block = { begin, end, sha256: hash(ownedBytes), context_sha256: base.sha256 };
+        file = files[index] = plannedFile(file.relativePath, Buffer.concat([base.bytes, separator, ownedBytes]), base.mode);
+      } else if (!adoption.adopt_files.includes(file.relativePath) || !base.bytes.equals(file.bytes) || base.mode !== file.mode) {
+        fail("ownership_uncertain", "preexisting file is not owned; only explicitly accepted identical content may be adopted", file.relativePath);
+      }
+    }
+    prepared.ownership.push({ ...fileIdentity(file), boundary, before: base ? fileIdentity(base) : "absent", ...(block ? { block } : {}) });
+  }
+  for (const relative of [...adoption.shared_files, ...adoption.adopt_files]) {
+    if (!files.some((file) => file.relativePath === relative)) fail("configuration_invalid", "selected integration is not a candidate output", relative);
+  }
+  prepared.ownership.sort((a, b) => a.path.localeCompare(b.path, "en"));
+};
+
+const readPayloadFiles = async (sources: Map<string, PlannedFile>, manifest: PayloadManifest, candidate: Record<string, unknown>, config: CreatorConfig, prepared: PreparedPlan): Promise<{ files: PlannedFile[]; nextAction: NonNullable<CreatorEnvelope["next_action"]> }> => {
   const files: PlannedFile[] = [];
   for (const [relative, source] of sources) {
     const destination = relative === "envelope.md" ? "AGENT.md" : relative === "procedures.md" ? ".factory/procedures.md"
@@ -251,6 +369,7 @@ const readPayloadFiles = (sources: Map<string, PlannedFile>, manifest: PayloadMa
   if (sources.size !== lock.files.length + 6) fail("composition_invalid", "unexpected upstream selection");
   files.push(plannedFile("docs/bindings.md", composeBindings(config)));
   files.push(plannedFile(".gitignore", Buffer.from("# Local installer ownership/recovery bytes; not task authority\n/.factory/creator/\n")));
+  if (config.adoption) await integrateAdoption(prepared, files);
   files.sort((a, b) => a.relativePath.localeCompare(b.relativePath, "en"));
   const entries = ["grill-with-docs", "wayfinder", "to-spec", "to-tickets", "implement", "code-review"].map((name) => `.factory/skills/matt-pocock/skills/engineering/${name}/SKILL.md`)
     .concat([".factory/skills/foundry-checkpoint/SKILL.md", ".factory/skills/foundry-resume/SKILL.md"]);
@@ -258,9 +377,10 @@ const readPayloadFiles = (sources: Map<string, PlannedFile>, manifest: PayloadMa
   const nextAction = { procedure: "grill-with-docs", source: entries[0], authority: "Explicit planning selection or a delegation covering its objective and effects; do not start during setup.", started: false as const };
   const provenance = {
     schema_version: 2, profile: "matt-first", candidate, payload: { version: manifest.payload_version, digest: manifest.payload_digest },
-    configuration: config, config_digest: digest(config), startup: "start.mjs", binding: "docs/bindings.md", catalog: ".factory/procedures.md",
+    configuration: config, config_digest: digest(config), startup: config.adoption?.startup ?? "start.mjs", binding: "docs/bindings.md", catalog: ".factory/procedures.md",
     sources: { repository: lock.repository, revision: lock.revision, lock_digest: `sha256:${lockSource!.sha256}`, adaptations: [], license: ".factory/skills/matt-pocock/LICENSE" },
     method_entries: entries, files: files.map(fileIdentity), adapters: config.hosts.map((host) => ({ ...host, discovery: "explicit AGENT.md and indexed readable paths", projections: [] })),
+    ...(config.adoption ? { ownership: prepared.ownership } : {}),
     readiness_record: config.readiness_record,
     next_action: nextAction,
   };
@@ -278,7 +398,8 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   };
   const prepared: PreparedPlan = { envelope, target: target.absolute, targetExisted: target.existed, files: [], options: { ...options }, baseline: target.identity };
   try {
-    if (await metadata(path.join(target.absolute, "MAINTAINERS.md"))) fail("source_self", "never apply the creator to its source SELF", "MAINTAINERS.md");
+    const sourceMarker = await metadata(path.join(target.absolute, "MAINTAINERS.md"));
+    if (sourceMarker?.isFile() && (await regular(target.absolute, "MAINTAINERS.md")).bytes.toString("utf8").startsWith("# MAINTAINERS - Agent Foundry source governance\n")) fail("source_self", "never apply the creator to its source SELF", "MAINTAINERS.md");
     if (!options.configPath) fail("configuration_required", "supply an explicit schema-2 configuration with --config; detection is not acceptance");
     const configFilename = path.resolve(options.configPath!);
     const config = validateConfig(parseJson((await regular(path.dirname(configFilename), path.basename(configFilename))).bytes, "configuration"));
@@ -287,12 +408,13 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
     envelope.config_digest = digest(config);
     envelope.effects = { local_git: config.initialize_git ? "initialize" : "none", external: [], recovery_baseline: "Empty destination; every named output was absent. Private staged bytes and applying/committed journal are retained for inspected recovery; no automatic deletion, restoration or crash-atomicity claim." };
     envelope.readiness = { record: config.readiness_record, required: config.hosts.flatMap((host) => [`${host.id}@${host.version}: independent manual entrypoint/method/resource discovery and passive next-action stop`, `${host.id}@${host.version}: permitted tracker identity/access/write and fresh exact readback`]), observed_by_installer: false };
-    const { files, nextAction } = readPayloadFiles(sources, manifest, candidate, config);
+    const { files, nextAction } = await readPayloadFiles(sources, manifest, candidate, config, prepared);
     const provenance = files.find((file) => file.relativePath === PROVENANCE)!;
     envelope.next_action = nextAction;
     const state: CreatorState = { schema_version: 2, profile: "matt-first", payload_digest: manifest.payload_digest, config_digest: envelope.config_digest,
       candidate_digest: candidate.candidate_digest as string, provenance_digest: `sha256:${provenance.sha256}`,
-      owned_files: files.map((file) => ({ ...fileIdentity(file), boundary: "file", before: "absent" })), local_git: config.initialize_git ? "initialize" : "none" };
+      owned_files: files.map((file) => prepared.ownership?.find((entry) => entry.path === file.relativePath)
+        ?? { ...fileIdentity(file), boundary: "file", before: "absent" }), local_git: config.initialize_git ? "initialize" : "none" };
     prepared.stateBytes = json(state);
     const stateFile = plannedFile(STATE_FILE, prepared.stateBytes, 0o600);
     prepared.files = [...files, stateFile];
@@ -318,7 +440,7 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
       if (stored.mode !== 0o600 || !stored.bytes.equals(prepared.stateBytes)) fail("ownership_reconciliation_required", "state/config/candidate differs; inspect and accept a scoped update/recovery plan", STATE_FILE);
       if (!(await metadata(path.join(target.absolute, STAGING_DIRECTORY)))) fail("journal_invalid", "local ledger is missing its retained committed recovery evidence", STAGING_DIRECTORY);
       prepared.state = state;
-    } else if (target.existed && (await readdir(target.absolute)).length) {
+    } else if (!config.adoption && target.existed && (await readdir(target.absolute)).length) {
       fail("fresh_target_not_empty", "fresh setup requires an empty destination; adoption is not implicit");
     }
     for (const file of prepared.files) {
@@ -328,6 +450,14 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
         if (existingState) fail("owned_file_missing", "owned file missing; recovery requires inspection", file.relativePath);
         envelope.operations.push(operation(file, "create", "accepted fresh file; previous boundary absent"));
       } else {
+        if (!prepared.state && config.adoption) {
+          const owned = prepared.ownership?.find((entry) => entry.path === file.relativePath);
+          if (!owned || owned.before === "absent") fail("ownership_uncertain", "matching bytes do not establish ownership", file.relativePath);
+          const before = prepared.before!.find((entry) => entry.relativePath === file.relativePath)!;
+          envelope.operations.push({ ...operation(file, owned.boundary === "block" ? "change-block" : "adopt", "explicit scoped adoption; protected before bytes/mode/context"),
+            ownership: owned, preview: { encoding: "base64", before: before.bytes.toString("base64"), after: file.bytes.toString("base64") } });
+          continue;
+        }
         if (!prepared.state) fail("ownership_uncertain", "matching bytes do not establish ownership", file.relativePath);
         const current = await regular(target.absolute, file.relativePath);
         if (current.mode !== file.mode || !current.bytes.equals(file.bytes)) fail("owned_file_drift", "owned bytes or mode differ; no overwrite", file.relativePath);
@@ -335,8 +465,27 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
       }
     }
     if (config.initialize_git && prepared.state) await verifyLocalGit(target.absolute);
+    prepared.directories = [];
+    if (config.adoption) {
+      const seen = new Set<string>();
+      for (const file of prepared.files) {
+        const parts = file.relativePath.split("/").slice(0, -1);
+        for (let count = 1; count <= parts.length; count++) {
+          const relative = parts.slice(0, count).join("/");
+          if (seen.has(relative)) continue;
+          seen.add(relative);
+          const entry = await metadata(path.join(target.absolute, relative));
+          if (entry) {
+            if (!entry.isDirectory()) fail("unsafe_path", "touched parent must be a real directory", relative);
+            prepared.directories.push({ path: relative, dev: entry.dev, ino: entry.ino, mode: entry.mode });
+          }
+        }
+      }
+      envelope.effects.recovery_baseline = "Scoped accepted file/block preimages and surrounding context only; unrelated application and Git remain project-owned. Private before/files/displaced evidence retained; no automatic restoration or crash-atomicity.";
+      envelope.effects.recovery_files.push(...(prepared.before ?? []).map((file) => ({ ...fileIdentity(file), path: `${STAGING_DIRECTORY}/before/${file.relativePath}` })));
+    }
     const top = target.existed ? (await readdir(target.absolute)).sort() : [];
-    envelope.plan_digest = digest({ target: target.absolute, baseline: target.identity, top, candidate: candidate.candidate_digest, config: envelope.config_digest, operations: envelope.operations, effects: envelope.effects });
+    envelope.plan_digest = digest({ target: target.absolute, baseline: target.identity, top: config.adoption ? undefined : top, directories: prepared.directories, candidate: candidate.candidate_digest, config: envelope.config_digest, operations: envelope.operations, effects: envelope.effects });
     envelope.status = prepared.state ? "noop" : options.command === "dry-run" ? "dry-run" : "planned";
   } catch (error) {
     if (!(error instanceof CreatorError)) throw error;
@@ -346,6 +495,9 @@ export const preparePlan = async (options: CreatorOptions): Promise<PreparedPlan
   return prepared;
 };
 
+const recoveryBaseline = (prepared: PreparedPlan): string | OwnedFile[] =>
+  prepared.config?.adoption ? prepared.ownership! : "all named destination files absent";
+
 const inspectJournal = async (prepared: PreparedPlan) => {
   const relative = `${STAGING_DIRECTORY}/journal.json`;
   const stored = await regular(prepared.target, relative).catch(() => fail("journal_invalid", "recovery journal is missing or unreadable", relative));
@@ -353,7 +505,7 @@ const inspectJournal = async (prepared: PreparedPlan) => {
   if (stored.mode !== 0o600 || !object(journal) || journal.schema_version !== 2 || journal.profile !== "matt-first" || !Array.isArray(journal.files)
     || journal.files.length > 1000 || !["applying", "committed"].includes(String(journal.status))
     || typeof journal.plan_digest !== "string" || !digestPattern.test(journal.plan_digest)
-    || journal.baseline !== "all named destination files absent"
+    || JSON.stringify(journal.baseline) !== JSON.stringify(recoveryBaseline(prepared))
     || JSON.stringify(journal.candidate) !== JSON.stringify(prepared.envelope.candidate)
     || !Array.isArray(journal.applied)
     || !journal.applied.every((entry, index) => entry === prepared.files[index]?.relativePath)
@@ -390,6 +542,11 @@ const inspectJournal = async (prepared: PreparedPlan) => {
       const staged = await regular(prepared.target, stagedPath).catch(() => fail("journal_invalid", "retained staged recovery file is missing or unreadable", stagedPath));
       if (staged.mode !== parseInt(file.mode, 8) || staged.bytes.length !== file.size || hash(staged.bytes) !== file.sha256) fail("journal_invalid", "retained staged recovery bytes or mode differ", `${STAGING_DIRECTORY}/files/${file.path}`);
     }
+    for (const file of prepared.before ?? []) {
+      const baselinePath = `${STAGING_DIRECTORY}/before/${file.relativePath}`;
+      const baseline = await regular(prepared.target, baselinePath);
+      if (baseline.mode !== file.mode || !baseline.bytes.equals(file.bytes)) fail("baseline_invalid", "retained preimage bytes or mode differ", baselinePath);
+    }
   }
   return { files, applied, pending, recovery: { journal: relative, status: String(journal.status), local_git: String(journal.local_git),
     candidate: journal.candidate, baseline: journal.baseline } };
@@ -411,7 +568,8 @@ export const applyPlan = async (preview: PreparedPlan, acceptedDigest: string): 
   let stageOwned = false;
   const applied: string[] = [];
   const journal = { schema_version: 2, profile: "matt-first", status: "applying", plan_digest: acceptedDigest, candidate: prepared.envelope.candidate,
-    baseline: "all named destination files absent", files: prepared.files.map(fileIdentity), local_git: prepared.config!.initialize_git ? "not-started" : "not-selected", applied };
+    baseline: recoveryBaseline(prepared), files: prepared.files.map(fileIdentity), local_git: prepared.config!.initialize_git ? "not-started" : "not-selected", applied,
+    displaced: [] as string[] };
   const journalPath = `${STAGING_DIRECTORY}/journal.json`;
   const updateJournal = async (): Promise<void> => {
     const held = await journalHandle!.stat();
@@ -441,22 +599,48 @@ export const applyPlan = async (preview: PreparedPlan, acceptedDigest: string): 
       } finally { await parent.close(); }
     } else root = await AnchoredDirectory.open(prepared.target, prepared.baseline);
     await root.matchesRoot(prepared.target);
-    if ((await readdir(root.location)).length) fail("plan_stale", "fresh destination changed before acquisition; existing content is not authorized");
+    if (!prepared.config!.adoption && (await readdir(root.location)).length) fail("plan_stale", "fresh destination changed before acquisition; existing content is not authorized");
+    for (const directory of prepared.directories ?? []) {
+      await root.parent(`${directory.path}/.foundry-pin`, false, async (_leaf, held) => {
+        const entry = await held.handle.stat();
+        if (entry.dev !== directory.dev || entry.ino !== directory.ino || entry.mode !== directory.mode) fail("plan_stale", "accepted parent directory changed", directory.path);
+      });
+    }
     // The staging leaf is acquired exclusively. A competing apply never acquires or cleans another transaction.
     await root.acquire(STAGING_DIRECTORY, 0o700);
     stageOwned = true;
     journalHandle = await root.parent(journalPath, false, (leaf) => open(leaf, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600));
     await updateJournal();
-    for (const file of prepared.files) {
-      await root.parent(`${STAGING_DIRECTORY}/files/${file.relativePath}`, true, async (leaf) => {
+    for (const [prefix, stagedFiles] of [["before", prepared.before ?? []], ["files", prepared.files]] as const) {
+      for (const file of stagedFiles) {
+      await root.parent(`${STAGING_DIRECTORY}/${prefix}/${file.relativePath}`, true, async (leaf) => {
         const staged = await open(leaf, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, file.mode);
         try { await staged.writeFile(file.bytes); await staged.chmod(file.mode); }
         finally { await staged.close(); }
       });
-      await root.verify({ ...file, relativePath: `${STAGING_DIRECTORY}/files/${file.relativePath}` });
+      await root.verify({ ...file, relativePath: `${STAGING_DIRECTORY}/${prefix}/${file.relativePath}` });
+      }
     }
     for (const file of prepared.files) {
       await root.matchesRoot(prepared.target);
+      const before = prepared.before?.find((entry) => entry.relativePath === file.relativePath);
+      if (before) {
+        await root.verify(before);
+        if (before.sha256 !== file.sha256 || before.mode !== file.mode) {
+          // Move, never overwrite/delete the named preimage. A racing replacement is retained
+          // privately and diagnosed; exclusive linking cannot overwrite a new destination.
+          const displaced = `${STAGING_DIRECTORY}/displaced/${file.relativePath}`;
+          await root.parent(displaced, true, (backup) =>
+            root!.parent(file.relativePath, false, (destination) => rename(destination, backup)));
+          journal.displaced.push(file.relativePath);
+          await updateJournal();
+          await root.verify({ ...before, relativePath: displaced });
+        } else {
+          applied.push(file.relativePath);
+          await updateJournal();
+          continue;
+        }
+      }
       await root.parent(`${STAGING_DIRECTORY}/files/${file.relativePath}`, false, (source) =>
         root!.parent(file.relativePath, true, (destination) => link(source, destination)));
       applied.push(file.relativePath);

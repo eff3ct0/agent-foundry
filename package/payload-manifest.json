@@ -254,9 +254,9 @@
     {
       "path": "start.mjs",
       "mode": "100644",
-      "size": 15423,
-      "sha256": "17a622170a238f8ead385a209ac135d2b25402b10ef9f90a41736d006a45731d"
+      "size": 17702,
+      "sha256": "6de4f59a27395084d1f91741e9b9236f5e7cf90fd36696439e0329e59b1a0550"
     }
   ],
-  "payload_digest": "sha256:dd61b04d97a233d2e080c0bd46af1698bb3dfb93fbdd6847d233ba7e77e2480c"
+  "payload_digest": "sha256:46907227a79a09d269b6255ca627d920d164923dedad065b43c90c3521bf7e53"
 }
